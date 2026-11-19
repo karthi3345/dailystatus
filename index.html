@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kathir Studios – Workspace</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar (shared by every screen) -->
+    <aside class="sidebar">
+      <div class="brand" data-go="#/projects">
+        <svg viewBox="0 0 48 42" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ffd36b" /><stop offset="1" stop-color="#e09a12" />
+            </linearGradient>
+          </defs>
+          <path d="M24 2 46 40H2Z" fill="none" stroke="url(#lg)" stroke-width="4" stroke-linejoin="round" />
+          <path d="M24 16 35 36H13Z" fill="none" stroke="url(#lg)" stroke-width="3.2" stroke-linejoin="round" />
+        </svg>
+        <div class="brand-name">Kathir<br />Studios</div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item" data-nav="projects" data-go="#/projects"><span data-icon="folder"></span><span>Projects</span></button>
+        <button class="nav-item" data-nav="worklog" data-go="#/worklog"><span data-icon="checkSquare"></span><span>Daily Work Log</span></button>
+        <button class="nav-item" data-nav="messenger" data-go="#/messenger"><span data-icon="message"></span><span>Messenger</span><i class="nav-dot" id="msgDot"></i></button>
+      </nav>
+
+      <button class="side-user" id="sideUser" title="Set your availability">
+        <span class="av s36" id="sideAvatar"></span>
+        <div><div class="name">Kathir</div><div class="role">Administrator</div></div>
+        <span data-icon="chevDown"></span>
+      </button>
+    </aside>
+
+    <!-- Screen content -->
+    <main class="main" id="main"></main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
