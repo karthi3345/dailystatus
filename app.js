@@ -98,18 +98,14 @@ const THUMBS = {
   fitness: `<svg viewBox="0 0 74 50"><rect width="74" height="50" fill="#2c1e1e"/><rect x="14" y="21" width="46" height="8" rx="2" fill="#bdbdc4"/><rect x="10" y="14" width="8" height="22" rx="2" fill="#f06464"/><rect x="56" y="14" width="8" height="22" rx="2" fill="#f06464"/></svg>`,
 };
 
-/* ---------------- Data store ---------------- */
-let ME = localStorage.getItem('kathir_auth_user') || 'kathir';
+/* ---------------- Dynamic Data store ---------------- */
+let ME = localStorage.getItem('kathir_auth_user') || '';
 let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
-const PEOPLE = {
-  kathir:  { name: 'Kathir',  role: 'Administrator',     availability: 'available', mode: 'office' },
-  arun:    { name: 'Arun',    role: 'Project Lead',      availability: 'available', mode: 'office', today: 'Review sprint & merge' },
-  divya:   { name: 'Divya',   role: 'Frontend',          availability: 'meeting',   mode: 'wfh',    today: 'UI changes & test' },
-  karthik: { name: 'Karthik', role: 'Backend',           availability: 'available', mode: 'office', today: 'API integration' },
-  meena:   { name: 'Meena',   role: 'UI/UX',             availability: 'away',      mode: 'wfh',    today: 'Design feedback' },
-  sathish: { name: 'Sathish', role: 'QA',                availability: 'available', mode: 'office', today: 'Run test cases' },
-};
-const TITLES = { karthik: 'Backend Developer', divya: 'Frontend Developer', arun: 'Project Lead', meena: 'UI/UX Designer', sathish: 'QA Engineer', kathir: 'Administrator' };
+
+const PEOPLE = {};
+const TITLES = {};
+let MEMBER_ROWS = [];
+
 const AVAIL = {
   available: { label: 'Available', cls: 'available' },
   meeting:   { label: 'In a Meeting', cls: 'meeting' },
@@ -129,160 +125,40 @@ const STATUS = {
   hold:     { label: 'On Hold', cls: 'hold' },
 };
 
-const MEMBER_ROWS = ['arun', 'divya', 'karthik', 'meena', 'sathish'];
+const projects = [];
+const workLogs = [];
+const chats = [];
 
-const projects = [
-  {
-    id: 'volgo', name: 'Volgo Student Website', type: 'Web', thumb: 'mountains', status: 'progress',
-    start: '2026-07-01', end: '2026-12-15', team: ['karthik', 'meena', 'arun', 'divya'], extra: 2,
-    totals: { total: 60, completed: 41, inProgress: 12 }, workload: { arun: 50, divya: 45, karthik: 60, meena: 70, sathish: 30 },
-  },
-  {
-    id: 'hotel', name: 'Hotel SaaS Platform', type: 'SaaS', thumb: 'hotel', status: 'progress',
-    start: '2026-08-01', end: '2026-12-31', team: ['arun', 'divya', 'karthik', 'meena', 'sathish'], extra: 3,
-    totals: { total: 128, completed: 54, inProgress: 38 }, avgWorkload: 72,
-    workload: { arun: 70, divya: 60, karthik: 55, meena: 80, sathish: 40 },
-    currentTasks: { arun: 5, divya: 4, karthik: 6, meena: 5, sathish: 3 },
-  },
-  {
-    id: 'unity', name: 'Unity Game – Project X', type: 'Game', thumb: 'game', status: 'review',
-    start: '2026-05-10', end: '2026-12-05', team: ['karthik', 'arun'], extra: 0,
-    totals: { total: 100, completed: 85, inProgress: 10 }, workload: { arun: 40, divya: 20, karthik: 85, meena: 30, sathish: 50 },
-  },
-  {
-    id: 'edits', name: 'Kathir Edits Website', type: 'Web', thumb: 'film', status: 'done',
-    start: '2026-04-01', end: '2026-09-30', team: ['arun', 'meena'], extra: 0,
-    totals: { total: 42, completed: 42, inProgress: 0 }, workload: { arun: 0, divya: 0, karthik: 0, meena: 0, sathish: 0 },
-  },
-  {
-    id: 'cafe', name: 'Brew Café Mobile App', type: 'Mobile', thumb: 'cafe', status: 'progress',
-    start: '2026-09-15', end: '2027-02-28', team: ['divya', 'meena', 'sathish'], extra: 0,
-    totals: { total: 74, completed: 18, inProgress: 21 }, workload: { arun: 20, divya: 55, karthik: 30, meena: 60, sathish: 35 },
-  },
-  {
-    id: 'crm', name: 'CRM Dashboard', type: 'SaaS', thumb: 'crm', status: 'progress',
-    start: '2026-10-01', end: '2027-03-31', team: ['karthik', 'arun', 'sathish'], extra: 1,
-    totals: { total: 96, completed: 22, inProgress: 30 }, workload: { arun: 45, divya: 25, karthik: 65, meena: 15, sathish: 40 },
-  },
-  {
-    id: 'portfolio', name: 'Studio Portfolio Revamp', type: 'Web', thumb: 'portfolio', status: 'done',
-    start: '2026-02-01', end: '2026-05-20', team: ['meena', 'divya'], extra: 0,
-    totals: { total: 30, completed: 30, inProgress: 0 }, workload: { arun: 0, divya: 0, karthik: 0, meena: 0, sathish: 0 },
-  },
-  {
-    id: 'fitness', name: 'FitTrack Fitness App', type: 'Mobile', thumb: 'fitness', status: 'hold',
-    start: '2026-06-01', end: '2027-01-31', team: ['divya', 'karthik'], extra: 0,
-    totals: { total: 64, completed: 13, inProgress: 0 }, workload: { arun: 0, divya: 10, karthik: 10, meena: 0, sathish: 0 },
-  },
-];
-
-/* Hotel SaaS gets the full detail shown in the designs */
-const hotel = projects.find(p => p.id === 'hotel');
-hotel.tasks = [
-  { id: 1, title: 'Design system & UI components', assignee: 'meena',   priority: 'High',   due: '2026-11-20', status: 'progress', desc: 'Tokens, buttons, inputs, cards and table components for the booking and admin apps.' },
-  { id: 2, title: 'API integration – Payment',     assignee: 'karthik', priority: 'High',   due: '2026-11-22', status: 'progress', desc: 'Razorpay + Stripe gateway, webhooks for refunds and failed payments.' },
-  { id: 3, title: 'Room booking flow',             assignee: 'divya',   priority: 'Medium', due: '2026-11-25', status: 'pending',  desc: 'Search → room filter → guest details → payment → confirmation.' },
-  { id: 4, title: 'Admin dashboard',               assignee: 'arun',    priority: 'Medium', due: '2026-11-28', status: 'progress', desc: 'Occupancy, revenue, and branch-level reports for hotel owners.' },
-  { id: 5, title: 'Testing & bug fixes',           assignee: 'sathish', priority: 'High',   due: '2026-12-05', status: 'pending',  desc: 'Regression suite for booking flow, pricing module and payments.' },
-];
-hotel.files = [
-  { name: 'Design & UI',        kind: 'folder', by: 'meena',   date: '2026-11-14', size: '—' },
-  { name: 'Development',        kind: 'folder', by: 'karthik', date: '2026-11-12', size: '—' },
-  { name: 'Requirements',       kind: 'folder', by: 'arun',    date: '2026-11-10', size: '—' },
-  { name: 'Test Cases',         kind: 'folder', by: 'sathish', date: '2026-11-08', size: '—' },
-  { name: 'Project_BRD.pdf',    kind: 'pdf',    by: 'divya',   date: '2026-11-08', size: '2.4 MB' },
-  { name: 'UI_Design.fig',      kind: 'fig',    by: 'meena',   date: '2026-11-11', size: '18.6 MB' },
-  { name: 'API_Collection.zip', kind: 'zip',    by: 'karthik', date: '2026-11-15', size: '4.8 MB' },
-];
-hotel.notes = [
-  { icon: 'pin', title: 'Client Review – Nov 14, 2026', body: 'Client approved the new booking flow UI. Minor changes in the room filter will be shared tomorrow.', by: 'arun', at: 'Nov 14, 10:30 AM' },
-  { icon: 'clipboard', title: 'Sprint Plan – Nov 11, 2026', bullets: ['Complete payment integration', 'Start admin dashboard', 'QA for booking flow'], by: 'meena', at: 'Nov 11, 6:20 PM' },
-  { icon: 'alert', title: 'Pricing Module Update – Nov 8, 2026', body: 'Dynamic pricing logic finalized. Will start implementation in this sprint.', by: 'karthik', at: 'Nov 8, 11:15 AM' },
-];
-hotel.analytics = {
-  productivity: { meena: 92, arun: 78, divya: 72, karthik: 68, sathish: 48 },
-  teamProductivity: 74,
-  time: [['Development', 320, '#8b6cf6'], ['Design', 128, '#4c8dff'], ['Testing', 96, '#2bc46a'], ['Others', 96, '#6e6e78']],
-  trend: [[0, 2], [0.25, 12], [0.5, 20], [0.72, 28], [0.92, 42]],
-};
-
-/* Generic detail data for the other projects */
-const GENERIC_TASKS = ['Requirements & scope', 'UI screens', 'Core feature build', 'Integrations', 'QA & release prep'];
-projects.forEach(p => {
-  if (p.tasks) return;
-  const order = ['done', 'progress', 'progress', 'pending', 'pending'];
-  const shift = p.status === 'done' ? 5 : p.status === 'review' ? 3 : p.status === 'hold' ? 1 : 1;
-  const base = new Date(p.end);
-  p.tasks = GENERIC_TASKS.map((t, i) => ({
-    id: i + 1, title: t, assignee: p.team[i % p.team.length] === 'kathir' ? 'arun' : p.team[i % p.team.length],
-    priority: ['High', 'Medium', 'High', 'Medium', 'Low'][i],
-    due: isoDate(new Date(base.getTime() - (4 - i) * 6 * 864e5)),
-    status: i < shift ? 'done' : order[i] === 'done' ? 'progress' : order[i], desc: `${t} for ${p.name}.`,
-  }));
-  p.files = [
-    { name: 'Design', kind: 'folder', by: p.team[0], date: p.start, size: '—' },
-    { name: 'Requirements.pdf', kind: 'pdf', by: p.team[0], date: p.start, size: '1.2 MB' },
-  ];
-  p.notes = [{ icon: 'pin', title: 'Kickoff', body: `Kickoff completed for ${p.name}. Scope and milestones agreed.`, by: p.team[0], at: fmtShort(p.start) + ', 10:00 AM' }];
-});
-
-/* Freeze the "other tasks" (not listed in the table) so stats stay
-   consistent while listed tasks change status. */
-projects.forEach(p => {
-  const listed = countTasks(p.tasks);
-  p._other = {
-    completed: p.totals.completed - listed.done,
-    inProgress: p.totals.inProgress - listed.progress,
-    pending: (p.totals.total - p.totals.completed - p.totals.inProgress) - listed.pending,
-  };
-});
 function countTasks(list) {
-  return list.reduce((a, t) => { a[t.status === 'review' ? 'progress' : t.status]++; return a; }, { done: 0, progress: 0, pending: 0 });
+  if (!list || !list.length) return { done: 0, progress: 0, pending: 0 };
+  return list.reduce((a, t) => {
+    const st = t.status === 'review' ? 'progress' : (t.status || 'pending');
+    a[st] = (a[st] || 0) + 1;
+    return a;
+  }, { done: 0, progress: 0, pending: 0 });
 }
+
 function projectStats(p) {
-  const l = countTasks(p.tasks);
-  const completed = Math.max(0, p._other.completed + l.done);
-  const inProgress = Math.max(0, p._other.inProgress + l.progress);
-  const pending = Math.max(0, p._other.pending + l.pending);
+  if (!p) return { total: 0, completed: 0, inProgress: 0, pending: 0, pct: 0 };
+  const l = countTasks(p.tasks || []);
+  const otherCompleted = (p._other && p._other.completed) || 0;
+  const otherProgress = (p._other && p._other.inProgress) || 0;
+  const otherPending = (p._other && p._other.pending) || 0;
+  const completed = Math.max(0, otherCompleted + l.done);
+  const inProgress = Math.max(0, otherProgress + l.progress);
+  const pending = Math.max(0, otherPending + l.pending);
   const total = completed + inProgress + pending;
   return { total, completed, inProgress, pending, pct: total ? Math.round((completed / total) * 100) : 0 };
 }
-
-/* Daily work logs (owned by the signed-in user) */
-const workLogs = [
-  { date: '2026-11-17', project: 'hotel', items: ['Integrated pricing module and tested.', 'Fixed API response issue.'], hours: '5h 30m', status: 'done' },
-  { date: '2026-11-16', project: 'unity', items: ['Updated character animation.', 'Optimized scene performance.'], hours: '6h 00m', status: 'progress' },
-  { date: '2026-11-13', project: 'volgo', items: ['Implemented country detail page.', 'SEO meta updates.'], hours: '4h 30m', status: 'done' },
-];
-
-/* Messenger */
-const chats = [
-  {
-    id: 'hotel', kind: 'group', name: 'Project – Hotel SaaS', project: 'hotel', members: 6, starred: true, unread: 0,
-    msgs: [
-      { from: 'divya', time: '10:02 AM', text: "I've updated the dynamic pricing module.\nPlease review the latest build.", file: { name: 'pricing-module-v2.zip', size: '12.4 MB' } },
-      { from: ME, time: '10:18 AM', text: "Great! I'll test it today and share feedback." },
-      { from: 'arun', time: '10:24 AM', text: 'Also, we need the final room images for the Aishwarya Grand branch.' },
-    ],
-  },
-  { id: 'unity', kind: 'group', name: 'Project – Unity Game', project: 'unity', members: 4, unread: 1,
-    msgs: [{ from: 'karthik', time: '9:47 AM', text: 'Build is ready for review.' }] },
-  { id: 'general', kind: 'group', name: 'Team – General', members: 7, unread: 0,
-    msgs: [{ from: 'arun', time: '9:20 AM', text: 'Standup at 11 AM tomorrow.' }] },
-  { id: 'arun', kind: 'dm', person: 'arun', name: 'Arun', unread: 0, timeLabel: 'Yesterday',
-    msgs: [{ from: 'arun', time: 'Yesterday', text: 'Can you check the API logs?' }] },
-  { id: 'meena', kind: 'dm', person: 'meena', name: 'Meena', unread: 0, timeLabel: 'Yesterday',
-    msgs: [{ from: 'meena', time: 'Yesterday', text: 'UI changes are pushed.' }] },
-];
 
 /* App state */
 const state = {
   projectQuery: '', projectFilter: 'all',
   taskQuery: '', taskStatus: 'all', taskAssignee: 'all', taskPriority: 'all', openTasks: new Set(),
   fileQuery: '', fileType: 'all', fileView: 'list',
-  logDate: '2026-11-17', logProject: 'hotel', logHours: '4h 00m', logAttach: null,
-  chatId: 'hotel', chatQuery: '',
-  starredProjects: new Set(['hotel']),
+  logDate: isoDate(new Date()), logProject: '', logHours: '4h 00m', logAttach: null,
+  chatId: '', chatQuery: '',
+  starredProjects: new Set(),
 };
 
 /* ---------------- Helpers ---------------- */
@@ -295,10 +171,18 @@ function fmtShort(s) { const d = parseISO(s); return `${MON[d.getMonth()]} ${d.g
 function fmtLong(s) { const d = parseISO(s); return `${MON[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`; }
 function nowTime() { const d = new Date(); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${m} ${ap}`; }
 const barColor = v => (v >= 75 ? 'red' : v >= 50 && v <= 65 ? '' : 'green');
-const statusBadge = s => `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>`;
+const statusBadge = s => (STATUS[s] ? `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>` : `<span class="badge progress">In Progress</span>`);
 const taskBadge = s => s === 'done' ? '<span class="badge done">Completed</span>' : s === 'pending' ? '<span class="badge pending">Pending</span>' : '<span class="badge progress">In Progress</span>';
-const availBadge = (id) => { const a = AVAIL[PEOPLE[id].availability]; return `<span class="badge avail ${a.cls} clickable" data-profile="${id}">${a.label}</span>`; };
-const modeCell = id => { const m = MODES[PEOPLE[id].mode]; return `<span class="cell-mode">${icon(m.icon, 'sm')}${m.label}</span>`; };
+const availBadge = (id) => {
+  const p = PEOPLE[id];
+  const a = (p && AVAIL[p.availability]) || AVAIL['available'];
+  return `<span class="badge avail ${a.cls} clickable" data-profile="${id}">${a.label}</span>`;
+};
+const modeCell = id => {
+  const p = PEOPLE[id];
+  const m = (p && MODES[p.mode]) || MODES['office'];
+  return `<span class="cell-mode">${icon(m.icon, 'sm')}${m.label}</span>`;
+};
 function ring(pct, size = 118, stroke = 12, color = 'url(#ringGrad)') {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   return `<svg viewBox="0 0 ${size} ${size}"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd36b"/><stop offset="1" stop-color="#e59b12"/></linearGradient></defs>
@@ -369,15 +253,22 @@ function renderProjects() {
       <button class="btn" data-action="project-filter">${icon('filter', 'sm')} Filter${state.projectFilter !== 'all' ? ' · 1' : ''}</button>
     </div>
     <div class="proj-list" id="projList">
-      ${list.length ? list.map(projectRow).join('') : '<div class="card empty">No projects match your search.</div>'}
+      ${list.length ? list.map(projectRow).join('') : `
+        <div class="card empty" style="padding:48px 24px;text-align:center">
+          <div style="font-size:36px;margin-bottom:12px">📁</div>
+          <h3 style="font-size:16px;font-weight:600;margin-bottom:6px">No projects yet</h3>
+          <p style="color:var(--text-2);font-size:13px;margin-bottom:18px">Get started by creating your first project.</p>
+          <button class="btn gold" data-action="new-project" style="margin:0 auto">${icon('plus', 'sm')} Create First Project</button>
+        </div>`}
     </div>
   </section>`;
 }
 function projectRow(p) {
   const s = projectStats(p);
-  const shown = p.team.slice(0, 2);
+  const shown = (p.team || []).slice(0, 2);
+  const thumbSvg = THUMBS[p.thumb] || THUMBS['portfolio'];
   return `<div class="card proj-row" data-open="${p.id}">
-    <div class="thumb">${THUMBS[p.thumb]}</div>
+    <div class="thumb">${thumbSvg}</div>
     <div><div class="proj-name">${esc(p.name)}</div><span class="badge tag">${p.type}</span></div>
     <div><div class="proj-pct">${s.pct}%</div><div class="bar ${s.pct === 100 || s.pct >= 80 ? 'green' : ''}"><i style="width:${s.pct}%"></i></div></div>
     <div class="av-stack team-col">${shown.map(id => av(id)).join('')}${p.extra ? `<span class="av-more">+${p.extra}</span>` : ''}</div>
@@ -390,6 +281,9 @@ function projectRow(p) {
 const TABS = ['overview', 'tasks', 'team', 'analytics', 'files', 'notes'];
 function renderProject(id, tab) {
   const p = projects.find(x => x.id === id);
+  if (!p) {
+    return `<section class="view"><div class="card empty" style="padding:48px 24px;text-align:center"><p style="color:var(--text-2);margin-bottom:12px">Project not found or no longer exists.</p><a class="btn gold" data-go="#/projects">Back to Projects</a></div></section>`;
+  }
   if (!TABS.includes(tab)) tab = 'overview';
   const body = { overview: tabOverview, tasks: tabTasks, team: tabTeam, analytics: tabAnalytics, files: tabFiles, notes: tabNotes }[tab](p);
   return `<section class="view">
@@ -410,17 +304,19 @@ function renderProject(id, tab) {
 }
 
 function teamTable(p, cols) {
-  const rows = MEMBER_ROWS.map(id => {
-    const P = PEOPLE[id], w = p.workload[id] ?? 0;
+  const teamIds = (p.team && p.team.length) ? p.team : (Object.keys(PEOPLE).length ? Object.keys(PEOPLE) : [ME].filter(Boolean));
+  const rows = teamIds.map(id => {
+    const P = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member', today: 'Active' };
+    const w = (p.workload && p.workload[id]) ?? 0;
     return `<tr>
       <td><span class="cell-user">${av(id)}<span class="clickable" data-profile="${id}">${P.name}</span></span></td>
-      <td>${P.role}</td>
+      <td>${P.role || 'Member'}</td>
       <td>${availBadge(id)}</td>
       <td>${modeCell(id)}</td>
-      <td>${cols === 'overview' ? P.today : `${(p.currentTasks || {})[id] ?? p.tasks.filter(t => t.assignee === id && t.status !== 'done').length} Tasks`}</td>
+      <td>${cols === 'overview' ? (P.today || 'Working on tasks') : `${((p.currentTasks || {})[id]) ?? ((p.tasks || []).filter(t => t.assignee === id && t.status !== 'done').length)} Tasks`}</td>
       <td><div class="cell-bar"><div class="bar ${barColor(w)}"><i style="width:${w}%"></i></div><span>${w}%</span></div></td>
     </tr>`;
-  }).join('');
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-2);padding:16px">No team members assigned</td></tr>';
   return `<table><thead><tr><th>Member</th><th>Role</th><th>Availability</th><th>Work Mode</th><th>${cols === 'overview' ? "Today's Task" : 'Current Tasks'}</th><th style="width:22%">${cols === 'overview' ? "Work's Task" : 'Workload'}</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -650,33 +546,33 @@ function renderWorkLog() {
         <button class="btn gold" data-action="log-save">${icon('check', 'sm')} Save Log</button>
       </div>
     </div>
-    <div class="logs-head"><span class="card-title" style="font-size:16px">My Work Logs</span><a class="link clickable" data-go="#/project/${state.logProject}/analytics">View My Reports ${icon('arrowRight', 'xs')}</a></div>
-    <div class="logs">${sorted.map((l, i) => {
-      const ld = parseISO(l.date), p = projects.find(x => x.id === l.project);
+    <div class="logs-head"><span class="card-title" style="font-size:16px">My Work Logs</span></div>
+    <div class="logs">${sorted.length ? sorted.map((l, i) => {
+      const ld = parseISO(l.date), p = projects.find(x => x.id === l.project) || { id: l.project, name: l.project || 'General' };
       return `<div class="log ${l.date === state.logDate ? 'sel' : ''}">
         <div class="log-date"><b>${fmtShort(l.date)}</b><span>${DOW[ld.getDay()]}</span></div>
         <div class="log-rail"><i></i></div>
         <div class="card log-card">
           <span class="log-state ${l.status === 'done' ? 'done' : 'prog'}">${l.status === 'done' ? icon('check') : ''}</span>
-          <div><h4 class="clickable" data-go="#/project/${p.id}/overview">${esc(p.name)}</h4><ul>${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+          <div><h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''}>${esc(p.name)}</h4><ul>${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
             ${l.attach ? `<div class="attach-chip" style="margin-top:6px">${icon('clip', 'xs')}${esc(l.attach)}</div>` : ''}</div>
           <div class="log-side"><span class="log-hours">${icon('clock', 'sm')}${l.hours}</span>
             <span class="clickable" data-log-status="${workLogs.indexOf(l)}" title="Click to toggle">${l.status === 'done' ? '<span class="badge done">Completed</span>' : '<span class="badge review">In Progress</span>'}</span></div>
         </div>
       </div>`;
-    }).join('')}</div>
+    }).join('') : '<div class="card empty" style="padding:32px;text-align:center;color:var(--text-2)">No work logs recorded yet. Write what you worked on above to add your first log!</div>'}</div>
   </section>`;
 }
 
 /* ---------------- Messenger ---------------- */
-function lastMsg(c) { return c.msgs[c.msgs.length - 1]; }
+function lastMsg(c) { return (c && c.msgs && c.msgs.length) ? c.msgs[c.msgs.length - 1] : { time: '', text: '' }; }
 function renderMessenger() {
   const q = state.chatQuery.toLowerCase();
-  const list = chats.filter(c => !q || c.name.toLowerCase().includes(q) || c.msgs.some(m => m.text.toLowerCase().includes(q)));
+  const list = chats.filter(c => !q || c.name.toLowerCase().includes(q) || (c.msgs && c.msgs.some(m => (m.text || '').toLowerCase().includes(q))));
   const c = chats.find(x => x.id === state.chatId) || chats[0];
-  c.unread = 0;
-  const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person].availability === 'available' ? '<i class="online"></i>' : '') : `<span class="group-av">${icon('users', 'sm')}</span>`;
-  const preview = ch => { const m = lastMsg(ch); const who = m.from === ME ? 'You' : PEOPLE[m.from].name; return ch.kind === 'dm' ? esc(m.text.split('\n')[0]) : `${who}: ${esc(m.text.split('\n')[0])}`; };
+  if (c) c.unread = 0;
+  const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person]?.availability === 'available' ? '<i class="online"></i>' : '') : `<span class="group-av">${icon('users', 'sm')}</span>`;
+  const preview = ch => { const m = lastMsg(ch); const who = m.from === ME ? 'You' : ((PEOPLE[m.from]?.name) || m.from || 'User'); return ch.kind === 'dm' ? esc((m.text || '').split('\n')[0]) : `${who}: ${esc((m.text || '').split('\n')[0])}`; };
   return `<section class="view">
     <div class="page-head" style="margin-bottom:16px">
       <div><h1 class="page-title" style="font-size:24px">Messenger</h1><p class="page-sub">Team communication, project discussions and quick support</p></div>
@@ -689,13 +585,14 @@ function renderMessenger() {
       <div class="chat-list">
         <label class="search">${icon('search', 'sm')}<input id="chatSearch" placeholder="Search chats or people..." value="${esc(state.chatQuery)}"/></label>
         <div class="chats">${list.map(ch => `
-          <div class="chat-item ${ch.id === c.id ? 'active' : ''}" data-chat="${ch.id}">
+          <div class="chat-item ${c && ch.id === c.id ? 'active' : ''}" data-chat="${ch.id}">
             ${chatAv(ch)}
             <div style="min-width:0"><div class="t">${esc(ch.name)}</div><div class="p">${preview(ch)}</div></div>
             <div class="right"><span>${ch.timeLabel && lastMsg(ch).time === ch.timeLabel ? ch.timeLabel : lastMsg(ch).time}</span>
               ${ch.unread ? `<span class="unread">${ch.unread}</span>` : `<button class="star ${ch.starred ? 'on' : ''}" data-star-chat="${ch.id}" title="Star">${icon('star', 'xs')}</button>`}</div>
           </div>`).join('') || '<div class="empty">No chats found.</div>'}</div>
       </div>
+      ${c ? `
       <div class="chat-win">
         <div class="chat-head">
           ${c.kind === 'dm' ? av(c.person, 's36') : `<span class="group-av">${icon('users', 'sm')}</span>`}
@@ -708,9 +605,9 @@ function renderMessenger() {
           </div>
         </div>
         <div class="msgs" id="msgs">
-          ${c.msgs.map(m => m.from === ME ? `
+          ${(c.msgs || []).map(m => m.from === ME ? `
             <div class="msg me"><div class="bubble"><div class="meta">${m.time} ${icon('checks', 'xs')}</div>${esc(m.text).replace(/\n/g, '<br>')}</div></div>` : `
-            <div class="msg">${av(m.from, 's36')}<div><div class="who">${PEOPLE[m.from].name}<span>${m.time}</span></div>
+            <div class="msg">${av(m.from, 's36')}<div><div class="who">${(PEOPLE[m.from]?.name) || m.from}<span>${m.time}</span></div>
               <div class="bubble">${esc(m.text).replace(/\n/g, '<br>')}
                 ${m.file ? `<div class="attach"><span style="color:var(--text-2)">${icon('file')}</span><div><div class="n">${esc(m.file.name)}</div><div class="z">${m.file.size}</div></div><button data-action="download" title="Download">${icon('download', 'sm')}</button></div>` : ''}
               </div></div></div>`).join('')}
@@ -721,7 +618,19 @@ function renderMessenger() {
           <label class="msg-input"><input id="msgInput" placeholder="Type a message..." autocomplete="off"/><button type="button" data-action="emoji" title="Emoji">${icon('smile')}</button></label>
           <button class="send" type="submit" title="Send">${icon('send', 'sm')}</button>
         </form>
+      </div>` : `
+      <div class="chat-win" style="display:grid;place-items:center;padding:48px 24px;text-align:center">
+        <div>
+          <div style="font-size:42px;margin-bottom:12px">💬</div>
+          <h3 style="font-size:17px;font-weight:600;margin-bottom:6px">No conversations yet</h3>
+          <p style="color:var(--text-2);font-size:13px;margin-bottom:18px">Start chatting by creating a team group or sending a direct message.</p>
+          <div style="display:flex;gap:10px;justify-content:center">
+            <button class="btn primary" data-action="new-group">${icon('users', 'sm')} Create Group</button>
+            <button class="btn" data-action="new-chat">${icon('edit', 'sm')} New Message</button>
+          </div>
+        </div>
       </div>
+      `}
     </div>
   </section>`;
 }
@@ -766,6 +675,10 @@ function place(el, anchor) {
 }
 function openProfile(id, anchor) {
   closeFloating();
+  if (!ME || !AUTH_TOKEN) {
+    openLoginModal();
+    return;
+  }
   const P = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Developer', availability: 'available', mode: 'office' };
   const el = document.createElement('div');
   el.className = 'pop';
@@ -923,18 +836,24 @@ function handleAction(a, el) {
   const p = currentProject();
   switch (a) {
     case 'new-project':
+      const availableLeads = Object.keys(PEOPLE).length ? Object.keys(PEOPLE) : [ME || 'admin'].filter(Boolean);
       openModal('New Project', [
         { name: 'name', label: 'Project name', required: true, placeholder: 'e.g. Restaurant POS' },
         { name: 'type', label: 'Type', type: 'select', half: true, value: 'Web', options: [['Web', 'Web'], ['SaaS', 'SaaS'], ['Mobile', 'Mobile'], ['Game', 'Game']] },
-        { name: 'lead', label: 'Lead', type: 'select', half: true, value: 'arun', options: MEMBER_ROWS.map(id => [id, PEOPLE[id].name]) },
-        { name: 'start', label: 'Start date', type: 'date', half: true, value: '2026-11-19' },
-        { name: 'end', label: 'End date', type: 'date', half: true, value: '2027-03-31' },
-      ], d => {
+        { name: 'lead', label: 'Lead', type: 'select', half: true, value: availableLeads[0] || (ME || 'admin'), options: availableLeads.map(id => [id, (PEOPLE[id]?.name) || id]) },
+        { name: 'start', label: 'Start date', type: 'date', half: true, value: isoDate(new Date()) },
+        { name: 'end', label: 'End date', type: 'date', half: true, value: isoDate(new Date(Date.now() + 90 * 864e5)) },
+      ], async d => {
         const id = d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
-        const thumb = { Web: 'portfolio', SaaS: 'crm', Mobile: 'cafe', Game: 'game' }[d.type];
-        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: d.end, team: [d.lead], extra: 0,
+        const thumb = { Web: 'portfolio', SaaS: 'crm', Mobile: 'cafe', Game: 'game' }[d.type] || 'portfolio';
+        const lead = d.lead || ME || 'admin';
+        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: d.end, team: [lead], extra: 0,
           totals: { total: 0, completed: 0, inProgress: 0 }, workload: {}, tasks: [], files: [], notes: [], _other: { completed: 0, inProgress: 0, pending: 0 } };
         projects.unshift(np);
+        await fetchFromAPI('/projects/', {
+          method: 'POST',
+          body: JSON.stringify(np)
+        });
         go(`#/project/${id}/overview`); toast('Project created');
       }, 'Create Project');
       break;
@@ -1523,52 +1442,64 @@ async function loadInitialData() {
     updated = true;
   }
 
-  if (Array.isArray(apiProjects) && apiProjects.length) {
+  projects.length = 0;
+  if (Array.isArray(apiProjects)) {
     apiProjects.forEach(ap => {
-      const existing = projects.find(p => p.id === ap.id);
-      if (existing) {
-        existing.status = ap.status || existing.status;
-        if (Array.isArray(ap.tasks) && ap.tasks.length) {
-          existing.tasks = ap.tasks;
-        }
-      }
+      projects.push({
+        id: ap.id,
+        name: ap.name,
+        type: ap.type || 'Web',
+        thumb: ap.thumb || 'portfolio',
+        status: ap.status || 'progress',
+        start: ap.start || isoDate(new Date()),
+        end: ap.end || isoDate(new Date()),
+        team: ap.team || [ME].filter(Boolean),
+        extra: ap.extra || 0,
+        totals: ap.totals || { total: 0, completed: 0, inProgress: 0 },
+        workload: ap.workload || {},
+        tasks: ap.tasks || [],
+        files: ap.files || [],
+        notes: ap.notes || [],
+        analytics: ap.analytics || {},
+        _other: { completed: 0, inProgress: 0, pending: 0 }
+      });
     });
-    updated = true;
   }
 
-  if (Array.isArray(apiLogs) && apiLogs.length) {
-    apiLogs.forEach(l => {
-      const idx = workLogs.findIndex(w => w.date === l.date && w.project === l.project);
-      if (idx >= 0) workLogs[idx] = l;
-      else workLogs.push(l);
-    });
-    updated = true;
+  workLogs.length = 0;
+  if (Array.isArray(apiLogs)) {
+    workLogs.push(...apiLogs);
   }
 
-  if (Array.isArray(apiChats) && apiChats.length) {
-    apiChats.forEach(c => {
-      const existing = chats.find(x => x.id === c.id);
-      if (existing) {
-        existing.name = c.name || existing.name;
-        existing.members = c.members || existing.members;
-        existing.memberList = c.memberList || existing.memberList;
-        if (Array.isArray(c.msgs)) existing.msgs = c.msgs;
-      } else {
-        chats.push(c);
-      }
-    });
-    updated = true;
+  chats.length = 0;
+  if (Array.isArray(apiChats)) {
+    chats.push(...apiChats);
+    if (chats.length && (!state.chatId || !chats.some(c => c.id === state.chatId))) {
+      state.chatId = chats[0].id;
+    }
   }
 
   refreshSide();
-  if (updated) {
-    rerender();
+  rerender();
+
+  if (!AUTH_TOKEN) {
+    setTimeout(() => {
+      openLoginModal();
+    }, 350);
   }
 }
 
 /* ---------------- Boot ---------------- */
 function refreshSide() {
-  const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'Kathir', role: 'Administrator' };
+  if (!ME || !AUTH_TOKEN) {
+    $('#sideAvatar').innerHTML = `<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#2d2d33"/><circle cx="20" cy="16" r="7" fill="#888"/><path d="M8 38c2-8 7-10 12-10s10 2 12 10z" fill="#888"/></svg>`;
+    const info = $('#sideUser > div');
+    if (info) {
+      info.innerHTML = `<div class="name" style="color:var(--gold)">Sign In / Register</div><div class="role">Guest (Click to Login)</div>`;
+    }
+    return;
+  }
+  const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'User', role: 'Team Member' };
   $('#sideAvatar').innerHTML = avatarSVG(ME);
   const info = $('#sideUser > div');
   if (info) {

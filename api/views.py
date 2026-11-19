@@ -183,17 +183,6 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
 class ChatThreadsView(APIView):
     """Returns all chat threads grouped with their messages, and allows creating new groups."""
     def get(self, request):
-        if not ChatThread.objects.exists():
-            defaults = [
-                {'id': 'hotel', 'kind': 'group', 'name': 'Project – Hotel SaaS', 'project': 'hotel', 'members': ['kathir', 'arun', 'divya', 'karthik', 'meena', 'sathish'], 'starred': True},
-                {'id': 'unity', 'kind': 'group', 'name': 'Project – Unity Game', 'project': 'unity', 'members': ['karthik', 'arun', 'kathir', 'meena'], 'starred': False},
-                {'id': 'general', 'kind': 'group', 'name': 'Team – General', 'members': ['kathir', 'arun', 'divya', 'karthik', 'meena', 'sathish'], 'starred': False},
-                {'id': 'arun', 'kind': 'dm', 'person': 'arun', 'name': 'Arun', 'members': ['kathir', 'arun'], 'starred': False},
-                {'id': 'meena', 'kind': 'dm', 'person': 'meena', 'name': 'Meena', 'members': ['kathir', 'meena'], 'starred': False},
-            ]
-            for d in defaults:
-                ChatThread.objects.get_or_create(id=d['id'], defaults=d)
-
         threads = ChatThread.objects.all().order_by('created_at')
         result = []
         for t in threads:
