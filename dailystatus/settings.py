@@ -60,6 +60,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'dailystatus.wsgi.application'
 
 # Database Configuration: Neon PostgreSQL with SQLite fallback
+DEFAULT_NEON_URL = "postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 DATABASE_URL = os.getenv('DATABASE_URL')
 if not DATABASE_URL and os.getenv('POSTGRES_DB') and os.getenv('POSTGRES_PASSWORD'):
     pg_user = os.getenv('POSTGRES_USER', 'postgres')
@@ -68,6 +69,8 @@ if not DATABASE_URL and os.getenv('POSTGRES_DB') and os.getenv('POSTGRES_PASSWOR
     pg_port = os.getenv('POSTGRES_PORT', '5432')
     pg_db = os.getenv('POSTGRES_DB', 'dailystatus_db')
     DATABASE_URL = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+if not DATABASE_URL:
+    DATABASE_URL = DEFAULT_NEON_URL
 
 if DATABASE_URL:
     try:
