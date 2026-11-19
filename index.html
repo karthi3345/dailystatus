@@ -116,38 +116,23 @@
             <label for="regRole">Role</label>
             <div class="lf-input lf-select"><span data-icon="briefcase"></span>
               <select id="regRole">
-  <option value="">Select role</option>
-  <option>Team Lead</option>
-  <option>Developer</option>
-  <option>UI/UX Designer</option>
-  <option>QA Engineer</option>
-  <option>Project Manager</option>
-  <option value="Other">Other (Specify your role)</option>
-</select>
-
-
-<input
-  type="text"
-  id="otherRole"
-  placeholder="Specify your role"
-  style="display:none; margin-top:10px;"
-/>
-
-<script>
-function toggleOtherRole() {
-    const role = document.getElementById("regRole").value;
-    const otherRole = document.getElementById("otherRole");
-
-    otherRole.style.display = role === "Other" ? "block" : "none";
-
-    if (role !== "Other") {
-        otherRole.value = "";
-    }
-}
-</script>
+                <option value="">Select role</option>
+                <option value="Team Lead">Team Lead</option>
+                <option value="Developer">Developer</option>
+                <option value="UI/UX Designer">UI/UX Designer</option>
+                <option value="QA Engineer">QA Engineer</option>
+                <option value="Project Manager">Project Manager</option>
+                <option value="Other">Others</option>
+              </select>
             </div>
             <small class="lf-err" id="regRoleErr"></small>
           </div>
+        </div>
+
+        <div class="lf-field" id="otherRoleField" hidden>
+          <label for="regOtherRole">Specify Role</label>
+          <div class="lf-input"><span data-icon="briefcase"></span><input id="regOtherRole" placeholder="Specify your role (e.g. DevOps Engineer)" /></div>
+          <small class="lf-err" id="regOtherRoleErr"></small>
         </div>
 
         <div class="lf-field">
@@ -218,6 +203,6 @@ function toggleOtherRole() {
     <main class="main" id="main"></main>
   </div>
 
-  <script src="app.js?v=3.6"></script>
+  <script src="app.js?v=3.7"></script>
 </body>
 </html>

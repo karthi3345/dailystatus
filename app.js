@@ -4483,10 +4483,26 @@ function initAuthScreen() {
     });
   }
 
-  // Role select sync
+  // Role select sync & Other option
   const regRole = $('#regRole');
+  const otherRoleField = $('#otherRoleField');
+  const regOtherRole = $('#regOtherRole');
   if (regRole) {
-    const syncRole = () => regRole.classList.toggle('is-empty', !regRole.value);
+    const syncRole = () => {
+      regRole.classList.toggle('is-empty', !regRole.value);
+      if (otherRoleField) {
+        const isOther = regRole.value === 'Other';
+        otherRoleField.hidden = !isOther;
+        if (isOther) {
+          setTimeout(() => regOtherRole?.focus(), 30);
+        } else if (regOtherRole) {
+          regOtherRole.value = '';
+          regOtherRole.closest('.lf-input')?.classList.remove('invalid');
+          const errEl = $('#regOtherRoleErr');
+          if (errEl) errEl.textContent = '';
+        }
+      }
+    };
     syncRole();
     regRole.addEventListener('change', syncRole);
   }
@@ -4610,7 +4626,7 @@ function initAuthScreen() {
       e.preventDefault();
       const name = $('#regName').value.trim();
       const username = ($('#regUsername')?.value || '').trim().toLowerCase();
-      const role = $('#regRole').value;
+      let role = $('#regRole').value;
       const email = $('#regEmail').value.trim();
       const password = $('#regPass').value;
       const confirm_password = $('#regConfirm').value;
@@ -4623,6 +4639,11 @@ function initAuthScreen() {
       if (!/^[a-zA-Z0-9_]+$/.test(username)) return fieldErr('regUsername', 'regUsernameErr', 'Letters, numbers, and underscores only');
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fieldErr('regEmail', 'regEmailErr', 'Enter a valid email');
       if (!role) return fieldErr('regRole', 'regRoleErr', 'Please choose a role');
+      if (role === 'Other') {
+        const specRole = ($('#regOtherRole')?.value || '').trim();
+        if (!specRole) return fieldErr('regOtherRole', 'regOtherRoleErr', 'Please specify your role');
+        role = specRole;
+      }
       if (password.length < 6) return fieldErr('regPass', 'regPassErr', 'Password must be at least 6 characters');
       if (password !== confirm_password) return fieldErr('regConfirm', 'regConfirmErr', 'Passwords do not match');
       if (!terms) {
@@ -4687,7 +4708,7 @@ function initAuthScreen() {
     }
   }
 
-  ['loginEmail', 'loginPass', 'regName', 'regUsername', 'regEmail', 'regPass', 'regConfirm'].forEach(id => {
+  ['loginEmail', 'loginPass', 'regName', 'regUsername', 'regEmail', 'regOtherRole', 'regPass', 'regConfirm'].forEach(id => {
     const el = $('#' + id);
     if (el) {
       el.addEventListener('input', () => {
@@ -4698,6 +4719,7 @@ function initAuthScreen() {
           regName: 'regNameErr',
           regUsername: 'regUsernameErr',
           regEmail: 'regEmailErr',
+          regOtherRole: 'regOtherRoleErr',
           regPass: 'regPassErr',
           regConfirm: 'regConfirmErr'
         };
