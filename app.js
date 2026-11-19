@@ -382,16 +382,18 @@ function getCachedProjects() {
 
 function saveProjectsToCache() {
   try {
-    if (Array.isArray(projects) && projects.length > 0) {
+    if (Array.isArray(projects)) {
       localStorage.setItem('kathir_cached_projects', JSON.stringify(projects));
+      localStorage.setItem('kathir_projects_saved', '1');
     }
   } catch (e) {}
 }
 
 const cachedInitialProjects = getCachedProjects();
-const projects = (cachedInitialProjects && cachedInitialProjects.length)
+const isProjectsSaved = localStorage.getItem('kathir_projects_saved') === '1';
+const projects = (cachedInitialProjects !== null && (cachedInitialProjects.length > 0 || isProjectsSaved))
   ? cachedInitialProjects
-  : JSON.parse(JSON.stringify(SEED_PROJECTS));
+  : (isProjectsSaved ? [] : JSON.parse(JSON.stringify(SEED_PROJECTS)));
 
 const cachedInitialChats = getCachedChats();
 const chats = (cachedInitialChats && cachedInitialChats.length)
@@ -3102,11 +3104,18 @@ document.addEventListener('click', e => {
       ...Object.entries(STATUS).filter(([k]) => k !== p.status).map(([k, s]) => ({ label: `Mark ${s.label}`, icon: 'check', run: () => { p.status = k; rerender(); toast(`${p.name} → ${s.label}`); } })),
       { label: 'Delete project', icon: 'trash', danger: true, run: async () => {
         const delId = p.id;
-        projects.splice(projects.indexOf(p), 1);
+        const pIdx = projects.indexOf(p);
+        if (pIdx !== -1) projects.splice(pIdx, 1);
+        saveProjectsToCache();
         await fetchFromAPI(`/projects/${delId}/`, { method: 'DELETE' });
         const cIdx = chats.findIndex(x => x.project === delId || x.id === 'proj-grp-' + delId);
-        if (cIdx !== -1) chats.splice(cIdx, 1);
-        go('#/projects'); toast('Project deleted');
+        if (cIdx !== -1) {
+          chats.splice(cIdx, 1);
+          saveChatsToCache();
+        }
+        rerender();
+        go('#/projects');
+        toast('Project deleted');
       } },
     ]);
     return;
@@ -4733,7 +4742,7 @@ async function loadInitialData() {
     updated = true;
   }
 
-  if (Array.isArray(apiProjects) && apiProjects.length > 0) {
+  if (Array.isArray(apiProjects)) {
     projects.length = 0;
     apiProjects.forEach(ap => {
       projects.push({
@@ -4755,9 +4764,6 @@ async function loadInitialData() {
         _other: { completed: 0, inProgress: 0, pending: 0 }
       });
     });
-    saveProjectsToCache();
-  } else if (!projects.length) {
-    projects.push(...JSON.parse(JSON.stringify(SEED_PROJECTS)));
     saveProjectsToCache();
   }
 

@@ -215,11 +215,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
 
     def get_queryset(self):
-        try:
-            if not Project.objects.exists():
-                self._seed_default_projects()
-        except Exception:
-            pass
         return Project.objects.all().order_by('id')
 
     def _seed_default_projects(self):
