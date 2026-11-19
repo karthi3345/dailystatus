@@ -157,6 +157,7 @@ const state = {
   taskQuery: '', taskStatus: 'all', taskAssignee: 'all', taskPriority: 'all', openTasks: new Set(),
   fileQuery: '', fileType: 'all', fileView: 'list',
   logDate: isoDate(new Date()), logProject: '', logHours: '4h 00m', logAttach: null,
+  logStatus: 'progress', logDependency: '', logLead: '', logFilter: 'all',
   chatId: '', chatQuery: '',
   starredProjects: new Set(),
 };
@@ -526,16 +527,54 @@ function tabNotes(p) {
 /* ---------------- Daily Work Log ---------------- */
 function renderWorkLog() {
   const d = parseISO(state.logDate);
-  const sorted = [...workLogs].sort((a, b) => b.date.localeCompare(a.date));
-  return `<section class="view" style="max-width:900px">
+  const allLogs = [...workLogs].sort((a, b) => b.date.localeCompare(a.date));
+  const depCount = allLogs.filter(l => l.status === 'dependency' && !l.resolved).length;
+  const filteredLogs = allLogs.filter(l => {
+    if (state.logFilter === 'progress') return l.status === 'progress';
+    if (state.logFilter === 'done') return l.status === 'done';
+    if (state.logFilter === 'dependency') return l.status === 'dependency';
+    return true;
+  });
+
+  const availableLeads = Object.keys(PEOPLE).map(id => `<option value="${id}" ${id === state.logLead ? 'selected' : ''}>${esc(PEOPLE[id].name || id)} (${esc(PEOPLE[id].role || 'Lead')})</option>`).join('');
+
+  return `<section class="view" style="max-width:920px">
     <div class="page-head">
-      <div><h1 class="page-title">Daily Work Log</h1><p class="page-sub">Log your daily tasks, progress and what you worked on</p></div>
+      <div><h1 class="page-title">Daily Work Log</h1><p class="page-sub">Track daily task progress, log hours, and escalate dependencies to team leads</p></div>
       <div class="date-pill">${icon('calendar', 'sm')}<span>${DOW[d.getDay()]}, ${fmtLong(state.logDate)}</span>
         <button data-logday="-1" title="Previous day">${icon('chevLeft', 'sm')}</button><button data-logday="1" title="Next day">${icon('chevRight', 'sm')}</button></div>
     </div>
-    <div class="card composer">
-      <textarea id="logText" placeholder="What did you work on today?"></textarea>
-      <div class="composer-bar">
+    <div class="card composer" style="box-shadow:0 4px 20px rgba(0,0,0,0.25)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div class="log-status-pills" style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:12px;color:var(--text-2);font-weight:600;margin-right:2px">Status:</span>
+          <button type="button" class="btn pill-btn" data-set-log-status="progress" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'progress' ? '#f5b82e' : 'var(--line-2)'};background:${state.logStatus === 'progress' ? 'rgba(245,184,46,.18)' : 'transparent'};color:${state.logStatus === 'progress' ? 'var(--gold)' : 'var(--text-2)'};font-weight:${state.logStatus === 'progress' ? '600' : 'normal'}">⏳ In Progress</button>
+          <button type="button" class="btn pill-btn" data-set-log-status="done" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'done' ? '#5bdc8e' : 'var(--line-2)'};background:${state.logStatus === 'done' ? 'rgba(91,220,142,.18)' : 'transparent'};color:${state.logStatus === 'done' ? '#5bdc8e' : 'var(--text-2)'};font-weight:${state.logStatus === 'done' ? '600' : 'normal'}">✅ Completed</button>
+          <button type="button" class="btn pill-btn" data-set-log-status="dependency" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'dependency' ? '#ff6b6b' : 'var(--line-2)'};background:${state.logStatus === 'dependency' ? 'rgba(255,107,107,.18)' : 'transparent'};color:${state.logStatus === 'dependency' ? '#ff6b6b' : 'var(--text-2)'};font-weight:${state.logStatus === 'dependency' ? '600' : 'normal'}">⚠️ Dependency Needed</button>
+        </div>
+        <span style="font-size:12px;color:var(--text-2)">Member: <b style="color:var(--text)">${esc((PEOPLE[ME]?.name) || ME || 'User')}</b></span>
+      </div>
+
+      <textarea id="logText" placeholder="What did you work on today? Use checklist icon to add bullet tasks."></textarea>
+
+      ${state.logStatus === 'dependency' ? `
+      <div class="dep-composer-panel" style="margin-top:12px;padding:12px 14px;background:rgba(255,107,107,.07);border:1px solid rgba(255,107,107,.35);border-radius:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-weight:600;color:#ff6b6b;font-size:12.5px;display:flex;align-items:center;gap:6px">
+            ⚠️ What is the dependency / blocker needed?
+          </span>
+          <span style="font-size:11px;color:var(--text-2)">Directly sent to Lead for resolution</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 220px;gap:10px">
+          <input type="text" id="logDependency" placeholder="Explain the dependency (e.g. Waiting for Stripe API keys / Need design review)" style="height:38px;padding:0 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:12.5px" value="${esc(state.logDependency || '')}" />
+          <select class="select" id="logLead" title="Assign to Team Lead" style="height:38px;border-radius:8px">
+            <option value="">Select Team Lead</option>
+            ${availableLeads}
+          </select>
+        </div>
+      </div>` : ''}
+
+      <div class="composer-bar" style="margin-top:12px">
         <button class="tool" data-action="log-attach" title="Attach file">${icon('clip')}</button>
         <button class="tool" data-action="log-bullet" title="Add checklist item">${icon('checkSquare')}</button>
         <input type="file" id="logFile" hidden />
@@ -547,21 +586,63 @@ function renderWorkLog() {
         <button class="btn gold" data-action="log-save">${icon('check', 'sm')} Save Log</button>
       </div>
     </div>
-    <div class="logs-head"><span class="card-title" style="font-size:16px">My Work Logs</span></div>
-    <div class="logs">${sorted.length ? sorted.map((l, i) => {
+
+    <div class="logs-head" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <span class="card-title" style="font-size:16px">Work Logs Overview</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn flat" data-log-filter="all" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'all' ? 'color:var(--gold);background:rgba(245,184,46,.15);font-weight:600' : 'color:var(--text-2)'}">All (${allLogs.length})</button>
+        <button class="btn flat" data-log-filter="progress" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'progress' ? 'color:var(--gold);background:rgba(245,184,46,.15);font-weight:600' : 'color:var(--text-2)'}">⏳ In Progress</button>
+        <button class="btn flat" data-log-filter="done" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'done' ? 'color:#5bdc8e;background:rgba(91,220,142,.15);font-weight:600' : 'color:var(--text-2)'}">✅ Completed</button>
+        <button class="btn flat" data-log-filter="dependency" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'dependency' ? 'color:#ff6b6b;background:rgba(255,107,107,.18);font-weight:600' : 'color:var(--text-2)'}">⚠️ Dependencies (${depCount})</button>
+      </div>
+    </div>
+
+    <div class="logs">${filteredLogs.length ? filteredLogs.map((l, i) => {
       const ld = parseISO(l.date), p = projects.find(x => x.id === l.project) || { id: l.project, name: l.project || 'General' };
+      const isDep = l.status === 'dependency';
+      const isDone = l.status === 'done';
       return `<div class="log ${l.date === state.logDate ? 'sel' : ''}">
         <div class="log-date"><b>${fmtShort(l.date)}</b><span>${DOW[ld.getDay()]}</span></div>
         <div class="log-rail"><i></i></div>
-        <div class="card log-card">
-          <span class="log-state ${l.status === 'done' ? 'done' : 'prog'}">${l.status === 'done' ? icon('check') : ''}</span>
-          <div><h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''}>${esc(p.name)}</h4><ul>${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
-            ${l.attach ? `<div class="attach-chip" style="margin-top:6px">${icon('clip', 'xs')}${esc(l.attach)}</div>` : ''}</div>
-          <div class="log-side"><span class="log-hours">${icon('clock', 'sm')}${l.hours}</span>
-            <span class="clickable" data-log-status="${workLogs.indexOf(l)}" title="Click to toggle">${l.status === 'done' ? '<span class="badge done">Completed</span>' : '<span class="badge review">In Progress</span>'}</span></div>
+        <div class="card log-card" style="${isDep && !l.resolved ? 'border-color:rgba(255,107,107,.45);' : ''}">
+          <span class="log-state ${isDone ? 'done' : isDep ? 'prog' : 'prog'}" style="${isDep ? 'background:rgba(255,107,107,.15);color:#ff6b6b;' : ''}">
+            ${isDone ? icon('check') : isDep ? '⚠️' : '⏳'}
+          </span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0">${esc(p.name)}</h4>
+              <span style="font-size:12px;color:var(--text-2)">Logged by: <b style="color:var(--text)">${esc((PEOPLE[l.member]?.name) || l.member || 'Member')}</b></span>
+            </div>
+            <ul style="margin-top:6px">${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+            ${l.attach ? `<div class="attach-chip" style="margin-top:6px">${icon('clip', 'xs')}${esc(l.attach)}</div>` : ''}
+
+            ${(l.dependency || isDep) ? `
+            <div class="dep-callout" style="margin-top:10px;padding:10px 14px;border-radius:8px;background:${l.resolved ? 'rgba(91,220,142,.08)' : 'rgba(255,107,107,.08)'};border-left:4px solid ${l.resolved ? '#5bdc8e' : '#ff6b6b'}">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+                <span style="font-size:12px;font-weight:600;color:${l.resolved ? '#5bdc8e' : '#ff6b6b'};display:flex;align-items:center;gap:4px">
+                  ${l.resolved ? '✓ Dependency Resolved by Team Lead' : '⚠️ Blocker / Dependency Needed'}
+                </span>
+                <span style="font-size:11.5px;color:var(--text-2)">Assigned Lead: <b style="color:var(--text)">${esc((PEOPLE[l.lead]?.name) || l.lead || 'Team Lead')}</b></span>
+              </div>
+              <div style="font-size:12.5px;color:var(--text);margin-top:5px;line-height:1.4">
+                ${esc(l.dependency || 'Dependency needed to continue task.')}
+              </div>
+              ${l.help_note ? `<div style="font-size:11.5px;color:#5bdc8e;margin-top:6px;background:rgba(91,220,142,.1);padding:6px 10px;border-radius:6px"><b>Lead Resolution / Help:</b> ${esc(l.help_note)} <span style="color:var(--text-2);font-size:10.5px">(${esc(l.resolved_at || '')})</span></div>` : ''}
+              <div style="display:flex;gap:8px;margin-top:10px">
+                ${!l.resolved ? `<button class="btn flat" data-action="lead-resolve-dep" data-log-idx="${workLogs.indexOf(l)}" style="height:28px;padding:0 12px;font-size:11.5px;color:#5bdc8e;border:1px solid rgba(91,220,142,.4);display:flex;align-items:center;gap:4px">${icon('check', 'xs')}Resolve / Provide Help</button>` : ''}
+                <button class="btn flat" data-action="chat-lead-dep" data-lead="${l.lead || ''}" data-project="${l.project}" style="height:28px;padding:0 12px;font-size:11.5px;color:var(--gold);border:1px solid rgba(245,184,46,.4);display:flex;align-items:center;gap:4px">${icon('message', 'xs')}Message in Chat</button>
+              </div>
+            </div>` : ''}
+          </div>
+          <div class="log-side">
+            <span class="log-hours">${icon('clock', 'sm')}${l.hours}</span>
+            <button class="badge-btn clickable" data-log-menu="${workLogs.indexOf(l)}" title="Click to change status" style="background:none;border:none;cursor:pointer;padding:0;outline:none">
+              ${isDone ? '<span class="badge done">Completed</span>' : isDep ? '<span class="badge" style="background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.4);color:#ff6b6b;font-weight:600">⚠️ Dependency</span>' : '<span class="badge review">In Progress</span>'}
+            </button>
+          </div>
         </div>
       </div>`;
-    }).join('') : '<div class="card empty" style="padding:32px;text-align:center;color:var(--text-2)">No work logs recorded yet. Write what you worked on above to add your first log!</div>'}</div>
+    }).join('') : '<div class="card empty" style="padding:36px;text-align:center;color:var(--text-2)"><div style="font-size:32px;margin-bottom:8px">📝</div>No work logs match this filter. Write what you worked on above to add a log!</div>'}</div>
   </section>`;
 }
 
@@ -829,6 +910,47 @@ document.addEventListener('click', e => {
   // Work log
   const ld = t.closest('[data-logday]');
   if (ld) { const d = parseISO(state.logDate); d.setDate(d.getDate() + +ld.dataset.logday); state.logDate = isoDate(d); rerender(); return; }
+
+  const sls = t.closest('[data-set-log-status]');
+  if (sls) { state.logStatus = sls.dataset.setLogStatus; rerender(); return; }
+
+  const lf = t.closest('[data-log-filter]');
+  if (lf) { state.logFilter = lf.dataset.logFilter; rerender(); return; }
+
+  const lm = t.closest('[data-log-menu]');
+  if (lm) {
+    e.stopPropagation();
+    const l = workLogs[+lm.dataset.logMenu];
+    if (l) {
+      openMenu(lm, [
+        { label: 'Mark In Progress', icon: 'clock', run: async () => {
+          l.status = 'progress';
+          if (l.id) await fetchFromAPI(`/worklogs/${l.id}/`, { method: 'PATCH', body: JSON.stringify({ status: 'progress' }) });
+          rerender(); toast('Status: In Progress');
+        }},
+        { label: 'Mark Completed', icon: 'check', run: async () => {
+          l.status = 'done';
+          if (l.id) await fetchFromAPI(`/worklogs/${l.id}/`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
+          rerender(); toast('Status: Completed');
+        }},
+        { label: 'Report Dependency Needed', icon: 'alert', run: () => {
+          openModal('Report Dependency / Blocker', [
+            { name: 'dependency', label: 'Dependency / Blocker description', required: true, type: 'textarea', placeholder: 'Explain what dependency or blocker is needed...' },
+            { name: 'lead', label: 'Assign to Team Lead', type: 'select', value: l.lead || '', options: Object.keys(PEOPLE).map(id => [id, `${PEOPLE[id].name || id} (${PEOPLE[id].role || 'Lead'})`]) }
+          ], async d => {
+            l.status = 'dependency';
+            l.dependency = d.dependency;
+            l.lead = d.lead;
+            l.resolved = false;
+            if (l.id) await fetchFromAPI(`/worklogs/${l.id}/`, { method: 'PATCH', body: JSON.stringify({ status: 'dependency', dependency: d.dependency, lead: d.lead, resolved: false }) });
+            rerender(); toast('Dependency reported to Lead!');
+          }, 'Submit Blocker');
+        }}
+      ]);
+    }
+    return;
+  }
+
   const ls = t.closest('[data-log-status]');
   if (ls) { const l = workLogs[+ls.dataset.logStatus]; l.status = l.status === 'done' ? 'progress' : 'done'; rerender(); return; }
 
@@ -994,17 +1116,99 @@ function handleAction(a, el) {
       ta.focus();
       break;
     }
-    case 'log-cancel': $('#logText').value = ''; state.logAttach = null; rerender(); break;
+    case 'log-cancel':
+      $('#logText').value = '';
+      state.logAttach = null;
+      state.logDependency = '';
+      state.logStatus = 'progress';
+      rerender();
+      break;
     case 'log-save': {
       const items = $('#logText').value.split('\n').map(s => s.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean);
       if (!items.length) { $('#logText').focus(); toast('Write what you worked on first'); return; }
-      state.logProject = $('#logProject').value; state.logHours = $('#logHours').value;
-      const existing = workLogs.find(l => l.date === state.logDate && l.project === state.logProject);
-      if (existing) { existing.items.push(...items); if (state.logAttach) existing.attach = state.logAttach; }
-      else workLogs.push({ date: state.logDate, project: state.logProject, items, hours: state.logHours, status: 'progress', attach: state.logAttach });
-      apiCreateWorkLog({ date: state.logDate, project: state.logProject, items, hours: state.logHours, status: 'progress', member: ME });
+      state.logProject = $('#logProject').value;
+      state.logHours = $('#logHours').value;
+      const status = state.logStatus || 'progress';
+      const dependency = status === 'dependency' ? ($('#logDependency')?.value?.trim() || '') : '';
+      const lead = status === 'dependency' ? ($('#logLead')?.value || '') : '';
+
+      if (status === 'dependency' && !dependency) {
+        $('#logDependency')?.focus();
+        toast('Please mention what the dependency or blocker is');
+        return;
+      }
+
+      const logPayload = {
+        date: state.logDate,
+        project: state.logProject,
+        member: ME || 'user',
+        items,
+        hours: state.logHours,
+        status,
+        dependency,
+        lead,
+        resolved: false,
+        attach: state.logAttach
+      };
+
+      const existing = workLogs.find(l => l.date === state.logDate && l.project === state.logProject && l.member === (ME || 'user'));
+      if (existing) {
+        existing.items.push(...items);
+        existing.status = status;
+        if (dependency) existing.dependency = dependency;
+        if (lead) existing.lead = lead;
+        if (state.logAttach) existing.attach = state.logAttach;
+        apiCreateWorkLog(logPayload);
+      } else {
+        workLogs.unshift(logPayload);
+        apiCreateWorkLog(logPayload).then(saved => {
+          if (saved && saved.id) logPayload.id = saved.id;
+        });
+      }
+
       state.logAttach = null;
-      rerender(); toast('Work log saved');
+      state.logDependency = '';
+      $('#logText').value = '';
+      rerender();
+      if (status === 'dependency') {
+        toast('Work log saved & dependency sent to team lead! ⚠️');
+      } else {
+        toast(`Work log saved (${status === 'done' ? 'Completed' : 'In Progress'})`);
+      }
+      break;
+    }
+    case 'lead-resolve-dep': {
+      const logIdx = +el.dataset.logIdx;
+      const l = workLogs[logIdx];
+      if (!l) return;
+      openModal('Resolve Dependency & Provide Help', [
+        { name: 'help_note', label: 'Resolution note / guidance for team member', required: true, type: 'textarea', placeholder: 'Explain how the blocker was resolved (e.g. Added API keys, code review approved, unblocked)' }
+      ], async d => {
+        l.resolved = true;
+        l.status = 'progress';
+        l.help_note = d.help_note;
+        l.resolved_at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (l.id) {
+          await fetchFromAPI(`/worklogs/${l.id}/resolve-dependency/`, {
+            method: 'POST',
+            body: JSON.stringify({ help_note: d.help_note, lead: ME || 'Lead' })
+          });
+        }
+        rerender();
+        toast('Dependency resolved and member unblocked!');
+      }, 'Resolve & Unblock');
+      break;
+    }
+    case 'chat-lead-dep': {
+      const leadId = el.dataset.lead;
+      const projId = el.dataset.project;
+      const c = chats.find(x => x.project === projId || x.id === 'proj-grp-' + projId || (x.kind === 'dm' && x.person === leadId));
+      if (c) {
+        state.chatId = c.id;
+        go('#/messenger/' + c.id);
+      } else {
+        go('#/messenger');
+      }
       break;
     }
     case 'msg-attach': $('#msgFile').click(); break;

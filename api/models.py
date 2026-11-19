@@ -55,10 +55,15 @@ class DailyWorkLog(models.Model):
     project = models.CharField(max_length=50, default='hotel')
     items = models.JSONField(default=list)
     hours = models.CharField(max_length=30, default='0h 00m')
-    status = models.CharField(max_length=30, default='done')
+    status = models.CharField(max_length=30, default='progress')  # 'progress', 'done', 'dependency'
+    dependency = models.TextField(blank=True, default='')
+    lead = models.CharField(max_length=50, blank=True, default='')
+    resolved = models.BooleanField(default=False)
+    resolved_at = models.CharField(max_length=50, blank=True, default='')
+    help_note = models.TextField(blank=True, default='')
 
     def __str__(self):
-        return f"{self.date} - {self.member} ({self.hours})"
+        return f"{self.date} - {self.member} ({self.hours}) [{self.status}]"
 
 
 class ChatThread(models.Model):

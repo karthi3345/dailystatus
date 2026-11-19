@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -249,11 +250,53 @@ class DailyWorkLogViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         date = self.request.query_params.get('date')
         member = self.request.query_params.get('member')
+        status_param = self.request.query_params.get('status')
         if date:
             qs = qs.filter(date=date)
         if member:
             qs = qs.filter(member=member)
+        if status_param:
+            qs = qs.filter(status=status_param)
         return qs
+
+    def perform_create(self, serializer):
+        log = serializer.save()
+        if log.status == 'dependency' and log.dependency:
+            group_id = f"proj-grp-{log.project}"
+            if ChatThread.objects.filter(id=group_id).exists():
+                lead_mention = f"@{log.lead}" if log.lead else "@Lead"
+                ChatMessage.objects.create(
+                    chat_id=group_id,
+                    chat_name=f"Project – {log.project}",
+                    kind='group',
+                    from_member=log.member,
+                    text=f"⚠️ [BLOCKER / DEPENDENCY REPORTED]\n{lead_mention}: I have a dependency/blocker on this project:\n\"{log.dependency}\"\nPlease check and assist! 🚀"
+                )
+
+    @action(detail=True, methods=['post'], url_path='resolve-dependency')
+    def resolve_dependency(self, request, pk=None):
+        import datetime
+        log = self.get_object()
+        help_note = (request.data.get('help_note') or request.data.get('resolution') or '').strip()
+        lead = request.user.username if (request.user and request.user.is_authenticated) else (request.data.get('lead') or 'Lead')
+        log.resolved = True
+        log.status = 'progress'
+        log.help_note = help_note or 'Dependency resolved and unblocked by Team Lead.'
+        log.resolved_at = datetime.datetime.now().strftime('%Y-%m-%d %I:%M %p')
+        log.save()
+
+        # Post resolution notification to project group chat
+        group_id = f"proj-grp-{log.project}"
+        if ChatThread.objects.filter(id=group_id).exists():
+            ChatMessage.objects.create(
+                chat_id=group_id,
+                chat_name=f"Project – {log.project}",
+                kind='group',
+                from_member=lead,
+                text=f"✅ [DEPENDENCY RESOLVED by @{lead}]\nFor @{log.member}: {log.help_note}\nWork log is now unblocked and In Progress! 🚀"
+            )
+
+        return Response(DailyWorkLogSerializer(log).data)
 
 
 class ChatMessageViewSet(viewsets.ModelViewSet):
