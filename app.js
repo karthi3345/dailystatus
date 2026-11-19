@@ -1462,9 +1462,9 @@ function renderMessenger() {
         </div>
         <div class="msgs" id="msgs">
           ${(c.msgs || []).map((m, idx) => {
-            const isMe = m.from === ME || (!m.from && ME === 'raja') || m.from === 'raja';
-            const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'Raja');
-            const senderId = m.from || (isMe ? (ME || 'raja') : 'member');
+            const isMe = (m.from && ME) ? (m.from.toLowerCase() === ME.toLowerCase()) : false;
+            const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'You');
+            const senderId = m.from || (isMe ? ME : 'member');
             const senderName = isMe ? `${myName} (You)` : ((PEOPLE[m.from]?.name) || m.from || 'Member');
             const reactions = m.reactions || {};
             const rxEntries = Object.entries(reactions);
@@ -1585,6 +1585,9 @@ function renderMessenger() {
             <button class="send" type="submit" title="Send">${icon('send', 'sm')}</button>
           </form>
         `}
+        <button type="button" class="chat-scroll-bottom-btn" id="chatScrollBottom" title="Scroll to bottom" style="display:none">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="m12 16-6-6 1.4-1.4 3.6 3.6V4h2v8.2l3.6-3.6L18 10z"/><path fill="currentColor" d="M4 18h16v2H4z"/></svg>
+        </button>
       </div>` : `
       <div class="chat-win" style="display:grid;place-items:center;padding:48px 24px;text-align:center">
         <div>
@@ -1603,7 +1606,24 @@ function renderMessenger() {
 }
 function afterMessenger() {
   const box = $('#msgs');
-  if (box) box.scrollTop = box.scrollHeight;
+  const scrollBtn = $('#chatScrollBottom');
+  if (box) {
+    box.scrollTop = box.scrollHeight;
+    setTimeout(() => { if (box) box.scrollTop = box.scrollHeight; }, 60);
+
+    box.addEventListener('scroll', () => {
+      if (scrollBtn) {
+        const dist = box.scrollHeight - box.scrollTop - box.clientHeight;
+        scrollBtn.style.display = dist > 90 ? 'flex' : 'none';
+      }
+    });
+
+    if (scrollBtn) {
+      scrollBtn.onclick = () => {
+        box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+      };
+    }
+  }
   const main = $('#main');
   main.style.overflow = 'hidden';
   if (state.replyingTo) {
@@ -1646,31 +1666,11 @@ function sendMessage(text, file, voice) {
     if (saved && saved.id) newMsg.id = saved.id;
   });
 
-  // Simulated reply so the conversation feels alive
-  const replier = c.kind === 'dm' ? c.person : (c.id === 'hotel' ? 'divya' : c.id === 'unity' ? 'karthik' : 'arun');
   const box = $('#msgs');
-  setTimeout(() => {
-    if (!location.hash.startsWith('#/messenger') || state.chatId !== c.id) {
-      c.msgs.push({ from: replier, time: nowTime(), text: 'Got it, thanks! 👍', reactions: {} });
-      c.unread++;
-      updateMsgDot();
-      return;
-    }
-    $('#simTyping')?.remove();
-    box?.insertAdjacentHTML('beforeend', `<div class="typing-row" id="simTyping">${av(replier, 's22')} <span style="font-size:12px;color:var(--text-2);font-style:italic"><b>${esc((PEOPLE[replier]?.name) || replier)}</b> is typing…</span></div>`);
-    if (box) box.scrollTop = box.scrollHeight;
-    setTimeout(() => {
-      $('#simTyping')?.remove();
-      c.msgs.push({
-        from: replier,
-        time: nowTime(),
-        text: ['Got it, thanks! 👍', 'Sounds good.', 'Sure, will check and update.', 'Noted 🙌'][Math.floor(Math.random() * 4)],
-        reactions: {}
-      });
-      if (location.hash.startsWith('#/messenger') && state.chatId === c.id) rerender();
-      else { c.unread++; updateMsgDot(); }
-    }, 1200);
-  }, 700);
+  if (box) {
+    box.scrollTop = box.scrollHeight;
+    setTimeout(() => { if (box) box.scrollTop = box.scrollHeight; }, 60);
+  }
 }
 
 async function toggleMessageReaction(c, msgIdx, emoji) {
@@ -1747,6 +1747,7 @@ function openProfile(id, anchor) {
     currentProfileAnchor = (id === ME) ? $('#sideUser') : null;
   }
   const personId = id || ME;
+  const isMe = personId && ME && personId.toLowerCase() === ME.toLowerCase();
   const P = (personId && PEOPLE[personId]) || {
     name: (personId && typeof personId === 'string' && personId.length) ? personId.charAt(0).toUpperCase() + personId.slice(1) : 'Member',
     role: 'Developer',
@@ -1755,21 +1756,65 @@ function openProfile(id, anchor) {
   };
   const modeKey = P.mode || 'office';
   const mInfo = MODES[modeKey] || MODES['office'];
+  const aInfo = AVAIL[P.availability] || AVAIL['available'];
   const el = document.createElement('div');
   el.className = 'pop';
-  el.innerHTML = `
-    <div class="pop-head">${av(personId, 's64')}<div><div class="n" style="display:flex;align-items:center;gap:6px"><span>${esc(P.name)}</span><span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>${P.availability === 'absent' ? `<span class="user-absent-badge" title="Absent Today">${icon('slashCircle', 'xs')}<span>Absent</span></span>` : ''}</div><div class="r">${TITLES[personId] || P.role || 'Member'}</div>${availBadge(personId)}</div></div>
-    <h5>Availability</h5>
-    ${Object.entries(AVAIL).map(([k, a]) => `<button class="opt ${P.availability === k ? 'on' : ''}" data-set-avail="${k}"><i class="sdot ${a.cls}"></i>${a.short || a.label}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
-    <div class="sep"></div>
-    <h5>Work Location</h5>
-    ${Object.entries(MODES).map(([k, m]) => `<button class="opt ${P.mode === k ? 'on' : ''}" data-set-mode="${k}">${icon(m.icon)}${m.long}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
-    <div class="sep"></div>
-    <h5>Account</h5>
-    <button class="opt" data-action="open-login">${icon('user')}Switch Account / Sign In</button>
-    <button class="opt" data-action="open-register">${icon('userPlus')}Register New Account</button>
-    ${AUTH_TOKEN ? `<button class="opt" data-action="auth-logout" style="color:var(--red)">${icon('x')}Log Out</button>` : ''}
-    ${personId !== ME ? `<div class="sep"></div><button class="opt" data-dm="${personId}" style="margin-top:8px">${icon('message')}Send message</button>` : ''}`;
+
+  if (isMe) {
+    el.innerHTML = `
+      <div class="pop-head">
+        ${av(personId, 's64')}
+        <div>
+          <div class="n" style="display:flex;align-items:center;gap:6px">
+            <span>${esc(P.name)} (You)</span>
+            <span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>
+            ${P.availability === 'absent' ? `<span class="user-absent-badge" title="Absent Today">${icon('slashCircle', 'xs')}<span>Absent</span></span>` : ''}
+          </div>
+          <div class="r">${TITLES[personId] || P.role || 'Member'}</div>
+          ${availBadge(personId)}
+        </div>
+      </div>
+      <h5>My Availability</h5>
+      ${Object.entries(AVAIL).map(([k, a]) => `<button class="opt ${P.availability === k ? 'on' : ''}" data-set-avail="${k}"><i class="sdot ${a.cls}"></i>${a.short || a.label}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
+      <div class="sep"></div>
+      <h5>My Work Location</h5>
+      ${Object.entries(MODES).map(([k, m]) => `<button class="opt ${P.mode === k ? 'on' : ''}" data-set-mode="${k}">${icon(m.icon)}${m.long}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
+      <div class="sep"></div>
+      <h5>Account</h5>
+      <button class="opt" data-action="auth-logout" style="color:var(--red);font-weight:600">${icon('x')}Log Out</button>`;
+  } else {
+    el.innerHTML = `
+      <div class="pop-head">
+        ${av(personId, 's64')}
+        <div>
+          <div class="n" style="display:flex;align-items:center;gap:6px">
+            <span>${esc(P.name)}</span>
+            <span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>
+            ${P.availability === 'absent' ? `<span class="user-absent-badge" title="Absent Today">${icon('slashCircle', 'xs')}<span>Absent</span></span>` : ''}
+          </div>
+          <div class="r">${TITLES[personId] || P.role || 'Member'}</div>
+          ${availBadge(personId)}
+        </div>
+      </div>
+      <div style="padding:12px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;margin:10px 0 14px;font-size:12.5px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="color:var(--text-3)">Status</span>
+          <span class="badge avail ${aInfo.cls}">${aInfo.label}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="color:var(--text-3)">Location</span>
+          <span style="color:var(--text);display:flex;align-items:center;gap:5px">${icon(mInfo.icon, 'xs')} ${mInfo.long}</span>
+        </div>
+        ${P.today ? `
+        <div style="border-top:1px solid var(--line-2);padding-top:8px">
+          <span style="color:var(--text-3);display:block;margin-bottom:3px">Focus Today</span>
+          <span style="color:var(--text)">${esc(P.today)}</span>
+        </div>` : ''}
+      </div>
+      <button class="btn gold" data-dm="${personId}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600">
+        ${icon('message', 'sm')} Send Direct Message
+      </button>`;
+  }
   el.dataset.person = personId;
   place(el, anchor || currentProfileAnchor || document.body);
 }
@@ -2735,14 +2780,14 @@ document.addEventListener('click', e => {
     }
     const id = pop.dataset.person, P = (id && PEOPLE[id]) || { name: (id && typeof id === 'string' && id.length) ? id.charAt(0).toUpperCase() + id.slice(1) : 'Member', role: 'Developer', availability: 'available', mode: 'office' };
     const a = t.closest('[data-set-avail]'), m = t.closest('[data-set-mode]'), dm = t.closest('[data-dm]');
-    if (a && P) {
+    if (a && P && id && ME && id.toLowerCase() === ME.toLowerCase()) {
       P.availability = a.dataset.setAvail;
       toast(`${P.name} is now ${AVAIL[P.availability].short || AVAIL[P.availability].label}`);
       apiPatchMember(id, { availability: P.availability });
       rerender();
       openProfile(id, currentProfileAnchor);
     }
-    if (m && P) {
+    if (m && P && id && ME && id.toLowerCase() === ME.toLowerCase()) {
       P.mode = m.dataset.setMode;
       toast(`${P.name}: ${MODES[P.mode].long}`);
       apiPatchMember(id, { mode: P.mode });
