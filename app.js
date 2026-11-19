@@ -2004,7 +2004,7 @@ function openProfile(id, anchor) {
         ${av(personId, 's64')}
         <div style="min-width:0;flex:1">
           <div class="n" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
-            <span>${esc(P.name)} (Active)</span>
+            <span>${esc(P.name)} (You)</span>
             <span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>
           </div>
           <div class="r">${TITLES[personId] || P.role || 'Member'}</div>
@@ -2016,21 +2016,6 @@ function openProfile(id, anchor) {
       <div class="sep"></div>
       <h5>My Work Location</h5>
       ${Object.entries(MODES).map(([k, m]) => `<button class="opt ${P.mode === k ? 'on' : ''}" data-set-mode="${k}">${icon(m.icon)}${m.long}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
-      <div class="sep"></div>
-      <h5>Switch Active User</h5>
-      <div style="display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto;margin-top:6px">
-        ${memberKeys.map(uid => {
-          const mem = PEOPLE[uid] || { name: uid };
-          const active = uid.toLowerCase() === (ME || 'kumar').toLowerCase();
-          return `
-            <button type="button" class="opt ${active ? 'on' : ''}" data-action="switch-user" data-uid="${uid}" style="display:flex;align-items:center;gap:8px;padding:6px 10px;text-align:left;border-radius:8px">
-              ${av(uid, 's22')}
-              <span style="font-weight:600;font-size:12px;flex:1">${esc(mem.name)} ${active ? '(Active)' : ''}</span>
-              ${active ? `<span style="color:var(--gold);font-size:11px;font-weight:bold">✓</span>` : ''}
-            </button>
-          `;
-        }).join('')}
-      </div>
       <div class="sep"></div>
       <h5>Account</h5>
       <button class="opt" data-action="auth-logout" style="color:var(--red);font-weight:600">
@@ -2064,10 +2049,7 @@ function openProfile(id, anchor) {
           <span style="color:var(--text)">${esc(P.today)}</span>
         </div>` : ''}
       </div>
-      <button class="btn gold" data-action="switch-user" data-uid="${personId}" style="width:100%;height:34px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px">
-        Switch Active User to ${esc(P.name)}
-      </button>
-      <button class="btn flat" data-dm="${personId}" style="width:100%;height:34px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px">
+      <button class="btn gold" data-dm="${personId}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600">
         ${icon('message', 'sm')} Send Direct Message
       </button>`;
   }
