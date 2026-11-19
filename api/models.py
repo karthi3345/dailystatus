@@ -80,6 +80,7 @@ class DailyWorkLog(models.Model):
     approved_by = models.CharField(max_length=50, blank=True, default='')
     approved_at = models.CharField(max_length=50, blank=True, default='')
     approval_note = models.TextField(blank=True, default='')
+    target_date = models.CharField(max_length=30, blank=True, default='')
 
     def __str__(self):
         return f"{self.date} - {self.member} ({self.hours}) [{self.status}]"

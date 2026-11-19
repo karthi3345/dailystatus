@@ -143,10 +143,27 @@ const projects = [];
 const workLogs = [];
 const chats = [];
 
+function getTaskEffectiveStatus(t, curDate = state.currentDate || state.logDate || isoDate(new Date())) {
+  if (!t) return 'pending';
+  // If task has due date (e.g. 2026-11-20):
+  // On Nov 19 (< due): Status is 'progress' (In Progress)
+  // On Nov 20 (>= due): Status is 'done' (Completed)
+  if (t.due && /^\d{4}-\d{2}-\d{2}$/.test(t.due)) {
+    if (curDate < t.due) {
+      return 'progress';
+    } else {
+      return 'done';
+    }
+  }
+  return t.status || 'pending';
+}
+
 function countTasks(list) {
   if (!list || !list.length) return { done: 0, progress: 0, pending: 0 };
+  const curDate = state.currentDate || state.logDate || isoDate(new Date());
   return list.reduce((a, t) => {
-    const st = t.status === 'review' ? 'progress' : (t.status || 'pending');
+    const eff = getTaskEffectiveStatus(t, curDate);
+    const st = eff === 'review' ? 'progress' : eff;
     a[st] = (a[st] || 0) + 1;
     return a;
   }, { done: 0, progress: 0, pending: 0 });
@@ -168,10 +185,11 @@ function projectStats(p) {
 /* App state */
 const state = {
   projectQuery: '', projectFilter: 'all',
+  currentDate: isoDate(new Date()),
   taskQuery: '', taskStatus: 'all', taskAssignee: 'all', taskPriority: 'all', taskType: 'all', taskView: 'board', openTasks: new Set(),
   fileQuery: '', fileType: 'all', fileView: 'list',
   logDate: isoDate(new Date()), logProject: '', logHours: '4h 00m', logAttach: null,
-  logStatus: 'progress', logDependency: '', logLead: '', logFilter: 'all',
+  logStatus: 'progress', logDependency: '', logLead: '', logFilter: 'all', logTargetDate: '2026-11-20',
   chatId: '', chatQuery: '',
   replyingTo: null,
   starredProjects: new Set(),
@@ -390,16 +408,26 @@ function tabOverview(p) {
 }
 
 function renderKanbanCard(t) {
+  const curDate = state.currentDate || state.logDate || isoDate(new Date());
+  const effStatus = getTaskEffectiveStatus(t, curDate);
+  const isDone = effStatus === 'done';
   const type = TASK_TYPES[t.task_type] || TASK_TYPES['task'];
   const checklist = Array.isArray(t.checklist) ? t.checklist : [];
   const chkDone = checklist.filter(c => c.done).length;
   const chkTotal = checklist.length;
   const pName = (PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || 'Unassigned';
+  const isScheduled = t.due && /^\d{4}-\d{2}-\d{2}$/.test(t.due);
+  const schedBadge = isScheduled ? (curDate < t.due ?
+    `<span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:10px;padding:1px 5px" title="In Progress on Nov 19, Completes on ${fmtShort(t.due)}">⏳ Due ${fmtShort(t.due)}</span>` :
+    `<span class="badge done" style="font-size:10px;padding:1px 5px" title="Completed on ${fmtShort(t.due)}">✅ Completed ${fmtShort(t.due)}</span>`
+  ) : '';
+
   return `
-  <div class="k-card ${t.status === 'done' ? 'done' : ''}" draggable="true" data-k-task="${t.id}">
+  <div class="k-card ${isDone ? 'done' : ''}" draggable="true" data-k-task="${t.id}">
     <div class="k-card-head">
       <span class="k-type-badge ${t.task_type || 'task'}" title="Type: ${type.label}">${icon(type.icon, 'xs')}<span>${type.label}</span></span>
       ${t.category ? `<span class="k-cat-pill">${esc(t.category)}</span>` : ''}
+      ${schedBadge}
       ${t.approval_status === 'approved' ? `<span class="badge done" style="font-size:10px;padding:1px 5px" title="Approved by Team Lead">✓ Approved</span>` : t.approval_status === 'rejected' ? `<span class="badge" style="background:rgba(239,68,68,.18);color:#ff5c5c;font-size:10px;padding:1px 5px" title="Changes Requested by Lead">✕ Changes Req</span>` : ''}
       <button class="kebab" data-tmenu="${t.id}" style="margin-left:auto">${icon('more', 'sm')}</button>
     </div>
@@ -417,20 +445,24 @@ function renderKanbanCard(t) {
       ${t.due ? `<span class="k-due" title="Due Date">${icon('calendar', 'xs')}${fmtShort(t.due)}</span>` : '<span class="k-due muted">No due date</span>'}
     </div>
     <div class="k-card-actions">
-      ${t.status === 'pending' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">In Progress →</button>` : ''}
-      ${t.status === 'progress' || t.status === 'review' ? `
+      ${effStatus === 'pending' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">In Progress →</button>` : ''}
+      ${effStatus === 'progress' || effStatus === 'review' ? `
         <button class="k-btn-move" data-move-task="${t.id}" data-target-status="pending">← To Do</button>
         <button class="k-btn-move ok" data-move-task="${t.id}" data-target-status="done">Completed ✓</button>
       ` : ''}
-      ${t.status === 'done' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">↩ Reopen</button>` : ''}
+      ${effStatus === 'done' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">↩ Reopen</button>` : ''}
     </div>
   </div>`;
 }
 
 function renderKanbanBoard(p, list) {
-  const todoList = list.filter(t => t.status === 'pending');
-  const inProgressList = list.filter(t => t.status === 'progress' || t.status === 'review');
-  const doneList = list.filter(t => t.status === 'done');
+  const curDate = state.currentDate || state.logDate || isoDate(new Date());
+  const todoList = list.filter(t => getTaskEffectiveStatus(t, curDate) === 'pending');
+  const inProgressList = list.filter(t => {
+    const s = getTaskEffectiveStatus(t, curDate);
+    return s === 'progress' || s === 'review';
+  });
+  const doneList = list.filter(t => getTaskEffectiveStatus(t, curDate) === 'done');
 
   return `
   <div class="kanban-board">
@@ -488,11 +520,14 @@ function renderTaskListView(p, list) {
         const type = TASK_TYPES[t.task_type] || TASK_TYPES['task'];
         const chk = Array.isArray(t.checklist) ? t.checklist : [];
         const chkDone = chk.filter(c => c.done).length;
+        const curDate = state.currentDate || state.logDate || isoDate(new Date());
+        const effStatus = getTaskEffectiveStatus(t, curDate);
+        const isDone = effStatus === 'done';
         return `<tr>
-          <td><span class="chk ${t.status === 'done' ? 'on' : ''}" data-toggle-task="${t.id}">${t.status === 'done' ? icon('check') : ''}</span></td>
+          <td><span class="chk ${isDone ? 'on' : ''}" data-toggle-task="${t.id}">${isDone ? icon('check') : ''}</span></td>
           <td><span class="k-type-badge ${t.task_type || 'task'}">${icon(type.icon, 'xs')} ${type.label}</span></td>
           <td>
-            <div class="task-title ${t.status === 'done' ? 'done' : ''}">
+            <div class="task-title ${isDone ? 'done' : ''}">
               <span class="clickable" data-open-task-modal="${t.id}">${esc(t.title)}</span>
               ${(t.desc || chk.length) ? `<button class="exp ${open ? 'open' : ''}" data-expand="${t.id}">${icon('chevDown', 'xs')}</button>` : ''}
             </div>
@@ -501,8 +536,8 @@ function renderTaskListView(p, list) {
           <td><span class="cell-user">${av(t.assignee)}<span style="display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || 'Member')} ${userModeIcon(t.assignee, 'xs')}</span></span></td>
           <td>${chk.length ? `<span class="badge" style="background:rgba(255,255,255,.05);font-size:11px">${chkDone}/${chk.length}</span>` : '<span class="muted">-</span>'}</td>
           <td><span class="badge ${t.priority ? t.priority.toLowerCase() : 'medium'}">${t.priority || 'Medium'}</span></td>
-          <td>${t.due ? fmtShort(t.due) : '<span class="muted">Ongoing</span>'}</td>
-          <td><span class="clickable" data-cycle-task="${t.id}" title="Click to change status">${taskBadge(t.status)}</span></td>
+          <td>${t.due ? (curDate < t.due ? `<span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:10.5px" title="In Progress until ${fmtShort(t.due)}">⏳ Due ${fmtShort(t.due)}</span>` : `<span class="badge done" style="font-size:10.5px" title="Completed on ${fmtShort(t.due)}">✅ Done ${fmtShort(t.due)}</span>`) : '<span class="muted">Ongoing</span>'}</td>
+          <td><span class="clickable" data-cycle-task="${t.id}" title="Click to change status">${taskBadge(effStatus)}</span></td>
           <td><button class="kebab" data-tmenu="${t.id}">${icon('more', 'sm')}</button></td>
         </tr>${open ? `
           <tr class="task-desc">
@@ -529,12 +564,14 @@ function renderTaskListView(p, list) {
 }
 
 function tabTasks(p) {
+  const curDate = state.currentDate || state.logDate || isoDate(new Date());
   const s = projectStats(p);
   const q = state.taskQuery.toLowerCase();
   const list = p.tasks.filter(t => {
     const assigneeName = (PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || '';
     const matchesQ = !q || t.title.toLowerCase().includes(q) || assigneeName.toLowerCase().includes(q) || (t.category && t.category.toLowerCase().includes(q));
-    const matchesStatus = state.taskStatus === 'all' || (state.taskStatus === 'progress' ? (t.status === 'progress' || t.status === 'review') : t.status === state.taskStatus);
+    const effStatus = getTaskEffectiveStatus(t, curDate);
+    const matchesStatus = state.taskStatus === 'all' || (state.taskStatus === 'progress' ? (effStatus === 'progress' || effStatus === 'review') : effStatus === state.taskStatus);
     const matchesAssignee = state.taskAssignee === 'all' || t.assignee === state.taskAssignee;
     const matchesPriority = state.taskPriority === 'all' || t.priority === state.taskPriority;
     const matchesType = state.taskType === 'all' || (t.task_type || 'task') === state.taskType;
@@ -582,6 +619,21 @@ function tabTasks(p) {
     <div class="view-toggle" style="display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px">
       <button class="icon-btn ${state.taskView === 'board' ? 'active' : ''}" data-taskview="board" title="Kanban Board" style="width:32px;height:30px;border-radius:6px">${icon('grid', 'sm')}</button>
       <button class="icon-btn ${state.taskView === 'list' ? 'active' : ''}" data-taskview="list" title="List View" style="width:32px;height:30px;border-radius:6px">${icon('list', 'sm')}</button>
+    </div>
+
+    <!-- Scheduled Date Preview Switcher (Nov 19 In Progress vs Nov 20 Complete) -->
+    <div class="task-date-pill" style="display:inline-flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:2px 10px;height:34px" title="Change date to view scheduled progress">
+      <span style="font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:5px">
+        ${icon('calendar', 'xs')} <span>Viewing Date:</span>
+      </span>
+      <div style="display:inline-flex;gap:4px">
+        <button type="button" class="btn pill-btn ${curDate === '2026-11-19' ? 'on' : ''}" data-action="set-app-date" data-date="2026-11-19" style="padding:2px 8px;font-size:11px;border-radius:12px;background:${curDate === '2026-11-19' ? 'rgba(245,184,46,.18)' : 'transparent'};color:${curDate === '2026-11-19' ? 'var(--gold)' : 'var(--text-2)'};border:1px solid ${curDate === '2026-11-19' ? '#f5b82e' : 'var(--line-2)'}">
+          Nov 19 (In Progress ⏳)
+        </button>
+        <button type="button" class="btn pill-btn ${curDate === '2026-11-20' ? 'on' : ''}" data-action="set-app-date" data-date="2026-11-20" style="padding:2px 8px;font-size:11px;border-radius:12px;background:${curDate === '2026-11-20' ? 'rgba(91,220,142,.18)' : 'transparent'};color:${curDate === '2026-11-20' ? '#5bdc8e' : 'var(--text-2)'};border:1px solid ${curDate === '2026-11-20' ? '#5bdc8e' : 'var(--line-2)'}">
+          Nov 20 (Complete ✅)
+        </button>
+      </div>
     </div>
 
     <span style="flex:1"></span>
@@ -783,6 +835,15 @@ function renderWorkLog() {
         <span style="font-size:11px;color:var(--gold);margin-left:auto">🛡️ Team Lead sign-off required</span>
       </div>
 
+      <!-- Target Completion Date (In Progress on Nov 19 -> Completed on Nov 20) -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:8px;padding:8px 12px">
+        <span style="font-size:12px;color:var(--text);font-weight:600;display:flex;align-items:center;gap:6px">
+          📅 Target Completion Date:
+        </span>
+        <input type="date" id="logTargetDate" value="${state.logTargetDate || '2026-11-20'}" style="height:32px;padding:0 8px;border-radius:6px;font-size:12px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text)" />
+        <span style="font-size:11.5px;color:var(--gold);margin-left:auto">⏳ Nov 19: In Progress → Nov 20: Complete ✅</span>
+      </div>
+
       <textarea id="logText" placeholder="What did you work on today? Describe tasks, milestones, or deliverables completed..."></textarea>
 
       ${state.logStatus === 'dependency' ? `
@@ -828,7 +889,9 @@ function renderWorkLog() {
     <div class="logs">${filteredLogs.length ? filteredLogs.map((l, i) => {
       const ld = parseISO(l.date), p = projects.find(x => x.id === l.project) || { id: l.project, name: l.project || 'General' };
       const isDep = l.status === 'dependency';
-      const isDone = l.status === 'done';
+      const hasTarget = l.target_date && /^\d{4}-\d{2}-\d{2}$/.test(l.target_date);
+      const isEffDone = l.status === 'done' || (hasTarget && state.logDate >= l.target_date);
+      const isEffProgress = !isEffDone && (l.status === 'progress' || (hasTarget && state.logDate < l.target_date));
       const isApproved = l.approval_status === 'approved';
       const isRejected = l.approval_status === 'rejected';
 
@@ -836,13 +899,17 @@ function renderWorkLog() {
         <div class="log-date"><b>${fmtShort(l.date)}</b><span>${DOW[ld.getDay()]}</span></div>
         <div class="log-rail"><i></i></div>
         <div class="card log-card" style="${isApproved ? 'border-color:rgba(91,220,142,.35);' : isDep && !l.resolved ? 'border-color:rgba(255,107,107,.45);' : ''}">
-          <span class="log-state ${isApproved ? 'done' : isDone ? 'done' : isDep ? 'prog' : 'prog'}" style="${isApproved ? 'background:rgba(91,220,142,.15);color:#5bdc8e;' : isDep ? 'background:rgba(255,107,107,.15);color:#ff6b6b;' : ''}">
-            ${isApproved ? icon('check') : isDone ? icon('check') : isDep ? '⚠️' : '⏳'}
+          <span class="log-state ${isApproved || isEffDone ? 'done' : isDep ? 'prog' : 'prog'}" style="${isApproved || isEffDone ? 'background:rgba(91,220,142,.15);color:#5bdc8e;' : isDep ? 'background:rgba(255,107,107,.15);color:#ff6b6b;' : ''}">
+            ${isApproved || isEffDone ? icon('check') : isDep ? '⚠️' : '⏳'}
           </span>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0;color:var(--gold);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px">📁 Project: ${esc(p.name || l.project || 'General')}</h4>
               <span style="font-size:12px;color:var(--text-2)">Logged by: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[l.member]?.name) || l.member || 'Member')} ${userModeIcon(l.member, 'xs')}</b></span>
+              ${hasTarget ? (state.logDate < l.target_date ?
+                `<span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:11px;padding:2px 8px">⏳ In Progress (Target: ${fmtShort(l.target_date)})</span>` :
+                `<span class="badge done" style="font-size:11px;padding:2px 8px">✅ Completed (${fmtShort(l.target_date)})</span>`
+              ) : ''}
             </div>
             <ul style="margin-top:6px">${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
             ${l.attach ? `<div class="attach-chip" style="margin-top:6px">${icon('clip', 'xs')}${esc(l.attach)}</div>` : ''}
@@ -1651,6 +1718,11 @@ function openJiraTaskModal(p, task, isNew = false) {
                   <input type="date" id="jiraDueInput" value="${task.due || ''}" style="height:30px;font-size:11.5px;flex:1" />
                 </div>
               </div>
+              <div style="font-size:11px;color:var(--text-2);background:rgba(255,255,255,.025);padding:6px 10px;border-radius:6px;line-height:1.45;border-left:3px solid var(--gold);margin-top:2px">
+                <b>📅 Scheduled Date Rule:</b><br>
+                • <b>November 19:</b> Status shows as <span style="color:var(--gold);font-weight:600">⏳ In Progress</span><br>
+                • <b>November 20:</b> Status automatically shows as <span style="color:#5bdc8e;font-weight:600">✅ Completed</span>
+              </div>
             </div>
 
             <!-- Automation & Checklist Accordions -->
@@ -2361,7 +2433,7 @@ document.addEventListener('click', e => {
   if (act) handleAction(act.dataset.action, act);
 });
 
-function handleAction(a, el) {
+async function handleAction(a, el) {
   const p = currentProject();
   switch (a) {
     case 'new-project':
@@ -2552,6 +2624,8 @@ function handleAction(a, el) {
       const dependency = status === 'dependency' ? ($('#logDependency')?.value?.trim() || '') : '';
       const leadApprover = $('#logLeadApprover')?.value || $('#logLead')?.value || 'raja';
       const lead = leadApprover;
+      const targetDate = $('#logTargetDate')?.value || '2026-11-20';
+      state.logTargetDate = targetDate;
 
       if (status === 'dependency' && !dependency) {
         $('#logDependency')?.focus();
@@ -2568,6 +2642,7 @@ function handleAction(a, el) {
         status,
         dependency,
         lead,
+        target_date: targetDate,
         approval_status: 'pending',
         approved_by: '',
         approved_at: '',
@@ -2582,6 +2657,7 @@ function handleAction(a, el) {
         existing.status = status;
         if (dependency) existing.dependency = dependency;
         existing.lead = lead;
+        existing.target_date = targetDate;
         existing.approval_status = 'pending';
         if (state.logAttach) existing.attach = state.logAttach;
         if (existing.id) {
@@ -2590,6 +2666,7 @@ function handleAction(a, el) {
             status: existing.status,
             dependency: existing.dependency,
             lead: existing.lead,
+            target_date: existing.target_date,
             approval_status: 'pending',
             attach: existing.attach
           });
@@ -2758,6 +2835,20 @@ function handleAction(a, el) {
           targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
           targetEl.classList.add('msg-highlight-pulse');
           setTimeout(() => targetEl.classList.remove('msg-highlight-pulse'), 1800);
+        }
+      }
+      break;
+    }
+    case 'set-app-date': {
+      const d = el.dataset.date;
+      if (d) {
+        state.currentDate = d;
+        state.logDate = d;
+        rerender();
+        if (d === '2026-11-20') {
+          toast('📅 Viewing Nov 20: Scheduled tasks now show as Completed! ✅');
+        } else {
+          toast('📅 Viewing Nov 19: Scheduled tasks now show as In Progress! ⏳');
         }
       }
       break;
