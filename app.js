@@ -73,31 +73,9 @@ const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24">${ICON
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/* ---------------- Illustrated avatars ---------------- */
-const LOOKS = {
-  kathir:  { skin: '#c98f62', hair: '#1d1410', beard: true,  bg: '#3a2d22', shirt: '#e8e3da' },
-  arun:    { skin: '#b97f55', hair: '#17110d', beard: true,  bg: '#2d3542', shirt: '#2f6fb0' },
-  divya:   { skin: '#d39a72', hair: '#1a110c', female: true, bg: '#4a3628', shirt: '#c96f4d' },
-  karthik: { skin: '#c48659', hair: '#1a120d', beard: true,  bg: '#3b2f27', shirt: '#efe9df' },
-  meena:   { skin: '#c88e64', hair: '#22150e', female: true, bg: '#3f2a2a', shirt: '#b8425a' },
-  sathish: { skin: '#a8714a', hair: '#141010', beard: false, bg: '#2b3a33', shirt: '#3f7d5c' },
-};
+/* ---------------- Avatars (General Silhouette - FB Style) ---------------- */
 function avatarSVG(id) {
-  const l = LOOKS[id] || { skin: '#c48659', hair: '#222', bg: '#333', shirt: '#888' };
-  const backHair = l.female ? `<path d="M9 19c0-9 5-13 11-13s11 4 11 13v11c-2 2-5 3-11 3S11 32 9 30z" fill="${l.hair}"/>` : '';
-  const topHair = l.female
-    ? `<path d="M12 18c0-6 3.5-9.5 8-9.5s8 3.5 8 9.5c-2-3.5-5-5-8.5-5.2-2.6 1.8-5 3.4-7.5 5.2z" fill="${l.hair}"/>`
-    : `<path d="M12.6 17.5c-.9-6.6 3-9.8 7.6-9.8 4.8 0 8.4 3 7.3 9.8-.8-2.4-2.4-4.2-4.9-4.6-2.6.9-6.4.6-8.2.1-.9 1.1-1.5 2.6-1.8 4.5z" fill="${l.hair}"/>`;
-  const beard = l.beard ? `<path d="M13 19.5c.3 5.6 3.3 8.4 7 8.4s6.7-2.8 7-8.4c-.9 2.4-2.6 3.6-4.2 3.8-1 .2-1.6-.6-2.8-.6s-1.8.8-2.8.6c-1.6-.2-3.3-1.4-4.2-3.8z" fill="${l.hair}" opacity=".9"/>` : '';
-  return `<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="${l.bg}"/>${backHair}
-    <path d="M6 41c1.2-7.5 6.6-10.5 14-10.5S32.8 33.5 34 41z" fill="${l.shirt}"/>
-    <path d="M17 26h6v5.2c-1 1-2 1.4-3 1.4s-2-.4-3-1.4z" fill="${l.skin}" filter="brightness(.9)"/>
-    <ellipse cx="20" cy="18.6" rx="7.3" ry="8.6" fill="${l.skin}"/>
-    <ellipse cx="12.8" cy="19.5" rx="1.3" ry="2" fill="${l.skin}"/><ellipse cx="27.2" cy="19.5" rx="1.3" ry="2" fill="${l.skin}"/>
-    ${topHair}${beard}
-    <circle cx="17.3" cy="18.6" r=".9" fill="#1a120d"/><circle cx="22.7" cy="18.6" r=".9" fill="#1a120d"/>
-    <path d="M16 16.6q1.3-.8 2.6 0M21.4 16.6q1.3-.8 2.6 0" stroke="${l.hair}" stroke-width=".8" fill="none" stroke-linecap="round"/>
-    <path d="M18.2 23.3q1.8 1 3.6 0" stroke="#7a3e2a" stroke-width=".8" fill="none" stroke-linecap="round"/></svg>`;
+  return `<svg viewBox="0 0 40 40" width="100%" height="100%" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#2d303a"/><circle cx="20" cy="14.8" r="6.8" fill="#9ca3af"/><path d="M7.5 38c0-7 5.6-11.8 12.5-11.8s12.5 4.8 12.5 11.8z" fill="#9ca3af"/></svg>`;
 }
 const av = (id, size = 's26', extra = '') => `<span class="av ${size} clickable" data-profile="${id}">${avatarSVG(id)}${extra}</span>`;
 
