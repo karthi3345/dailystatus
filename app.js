@@ -56,6 +56,9 @@ const ICONS = {
   zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
   bookmark: '<path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
   alertCircle: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
 };
 const PLAY = '<svg class="ic" viewBox="0 0 24 24"><path class="fill" d="M7 4.5v15l13-7.5z"/></svg>';
 const PAUSE = '<svg class="ic" viewBox="0 0 24 24"><rect class="fill" x="6" y="4.5" width="4" height="15" rx="1"/><rect class="fill" x="14" y="4.5" width="4" height="15" rx="1"/></svg>';
@@ -139,9 +142,167 @@ const TASK_TYPES = {
   epic:  { label: 'Epic',  icon: 'zap',         cls: 'epic' },
 };
 
-const projects = [];
+const SEED_PROJECTS = [
+  {
+    id: 'runway-rum-mwn689x2',
+    name: 'Runway Rum',
+    type: 'Web',
+    thumb: 'portfolio',
+    status: 'progress',
+    start: '2026-11-19',
+    end: '',
+    team: ['raja', 'karthik', 'samrat'],
+    extra: 0,
+    totals: { total: 3, completed: 2, inProgress: 1 },
+    workload: { raja: 60, samrat: 40 },
+    tasks: [
+      {
+        id: 43,
+        key: 'IPP-3',
+        title: 'Fastsports | tag ID Needed | All Brands',
+        description: 'Tag ID is needed to add the Fastsports addition\nConnect Slack to update',
+        status: 'done',
+        priority: 'Highest',
+        assignee: 'Sakthivel U',
+        reporter: 'Samrat D',
+        subtasks: ['Tag ID setup', 'Slack Webhook linking', 'Quality testing'],
+        checklist: [
+          { text: 'Verified tag endpoints', done: true },
+          { text: 'Checked staging logs', done: true }
+        ],
+        category: 'Web',
+        task_type: 'task',
+        labels: ['All_Projects'],
+        due: '2026-11-20',
+        approval_status: 'approved',
+        approved_by: 'raja',
+        approved_at: '11:30 AM, today',
+        watchers: 2,
+        isWatching: true,
+        comments: [
+          { author: 'Samrat D', time: 'Yesterday 4:15 PM', text: 'Checked staging tags. Ready for production lead approval.' }
+        ],
+        attachments: [],
+        worklogs: []
+      },
+      {
+        id: 42,
+        key: 'IPP-2',
+        title: 'eqfdrwefrwf',
+        description: 'Core billing module sync and offline caching test',
+        status: 'done',
+        priority: 'Medium',
+        assignee: 'raja',
+        reporter: 'Karthik',
+        subtasks: [],
+        checklist: [],
+        category: 'Web',
+        task_type: 'task',
+        labels: ['All_Projects'],
+        due: '',
+        approval_status: 'approved',
+        approved_by: 'raja',
+        approved_at: '9:00 AM, today',
+        watchers: 2,
+        isWatching: true,
+        comments: [],
+        attachments: [],
+        worklogs: []
+      },
+      {
+        id: 44,
+        key: 'IPP-4',
+        title: 'tgtybgy',
+        description: 'Integration test for POS gateway transactions',
+        status: 'pending',
+        priority: 'High',
+        assignee: 'raja',
+        reporter: 'Karthik',
+        subtasks: [],
+        checklist: [],
+        category: 'Web',
+        task_type: 'bug',
+        labels: ['POS'],
+        due: '',
+        approval_status: 'pending',
+        watchers: 1,
+        isWatching: false,
+        comments: [],
+        attachments: [],
+        worklogs: []
+      }
+    ],
+    files: [
+      { name: 'runway-spec-v1.pdf', kind: 'doc', by: 'karthik', date: '2026-11-19', size: '2.4 MB' }
+    ],
+    notes: [
+      { id: 'n1', title: 'Sprint Objectives', text: 'Deliver core brand tag linking by end of sprint.', by: 'raja', date: '2026-11-19' }
+    ],
+    analytics: {},
+    _other: { completed: 0, inProgress: 0, pending: 0 }
+  },
+  {
+    id: 'pos-mwn6norq',
+    name: 'pos',
+    type: 'Web',
+    thumb: 'cafe',
+    status: 'progress',
+    start: '2026-11-19',
+    end: '',
+    team: ['raja', 'karthik'],
+    extra: 0,
+    totals: { total: 2, completed: 1, inProgress: 1 },
+    workload: { raja: 50, karthik: 50 },
+    tasks: [],
+    files: [],
+    notes: [],
+    analytics: {},
+    _other: { completed: 0, inProgress: 0, pending: 0 }
+  }
+];
+
+const SEED_CHATS = [
+  {
+    id: 'proj-grp-runway-rum-mwn689x2',
+    name: 'Runway Rum',
+    kind: 'group',
+    project: 'runway-rum-mwn689x2',
+    members: 3,
+    memberList: ['raja', 'karthik', 'samrat'],
+    starred: true,
+    msgs: [
+      { id: 1, from: 'raja', time: '6:30 AM', text: 'Welcome to the Runway Rum group discussion channel! 🚀', reactions: {} },
+      { id: 2, from: 'samrat', time: '12:00 PM', text: 'hey guys', reactions: {} }
+    ]
+  }
+];
+
+function getCachedProjects() {
+  try {
+    const raw = localStorage.getItem('kathir_cached_projects');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveProjectsToCache() {
+  try {
+    if (Array.isArray(projects) && projects.length > 0) {
+      localStorage.setItem('kathir_cached_projects', JSON.stringify(projects));
+    }
+  } catch (e) {}
+}
+
+const cachedInitialProjects = getCachedProjects();
+const projects = (cachedInitialProjects && cachedInitialProjects.length)
+  ? cachedInitialProjects
+  : JSON.parse(JSON.stringify(SEED_PROJECTS));
+
 const workLogs = [];
-const chats = [];
+const chats = JSON.parse(JSON.stringify(SEED_CHATS));
 
 function getTaskEffectiveStatus(t, curDate = state.currentDate || state.logDate || isoDate(new Date())) {
   if (!t) return 'pending';
@@ -192,6 +353,8 @@ const state = {
   logStatus: 'progress', logDependency: '', logLead: '', logFilter: 'all', logTargetDate: '2026-11-20',
   chatId: '', chatQuery: '',
   replyingTo: null,
+  isRecordingVoice: false,
+  voiceSeconds: 0,
   starredProjects: new Set(),
 };
 
@@ -980,6 +1143,260 @@ function renderWorkLog() {
   </section>`;
 }
 
+/* ---------------- Voice Messaging (WhatsApp style) ---------------- */
+let voiceMediaRecorder = null;
+let voiceAudioChunks = [];
+let voiceTimerInterval = null;
+let voiceRecordSeconds = 0;
+let activeAudioMsgId = null;
+let voicePlaybackAudio = null;
+let voiceAudioInterval = null;
+
+function renderVoicePlayer(v, msgIdx, isMe) {
+  const isPlaying = activeAudioMsgId === msgIdx;
+  const bars = (v.waveform && v.waveform.length) ? v.waveform : [35, 55, 75, 40, 80, 60, 45, 90, 70, 40, 60, 85, 50, 30, 70, 95, 60, 40, 55, 75, 80, 50, 35, 60];
+  const speed = v.speed || '1x';
+  const progressPct = isPlaying ? (v.progressPct || 0) : 0;
+
+  return `
+    <div class="voice-player" data-msg-idx="${msgIdx}">
+      <button type="button" class="voice-play-btn" data-action="toggle-voice-playback" data-msg-idx="${msgIdx}" title="${isPlaying ? 'Pause' : 'Play voice message'}">
+        ${isPlaying ? icon('pause', 'sm') : icon('play', 'sm')}
+      </button>
+      <div class="voice-wave-wrap">
+        <div class="voice-wave-bars">
+          ${bars.map((h, bIdx) => {
+            const barPct = (bIdx / bars.length) * 100;
+            const isActive = isPlaying && barPct <= progressPct;
+            return `<div class="wave-bar ${isActive ? 'active' : ''}" style="height:${h}%;${isActive ? 'background:' + (isMe ? '#1a1506' : 'var(--gold)') : ''}"></div>`;
+          }).join('')}
+        </div>
+        <div class="voice-meta">
+          <span>${isPlaying ? (v.currentTime || '0:00') : (v.duration || '0:05')}</span>
+          <button type="button" class="voice-speed-pill" data-action="toggle-voice-speed" data-msg-idx="${msgIdx}" title="Change playback speed">${speed}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function startVoiceRecording() {
+  voiceAudioChunks = [];
+  voiceRecordSeconds = 0;
+  state.isRecordingVoice = true;
+  state.voiceSeconds = 0;
+  rerender();
+
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.voiceAudioStream = stream;
+      voiceMediaRecorder = new MediaRecorder(stream);
+      voiceMediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) voiceAudioChunks.push(e.data);
+      };
+      voiceMediaRecorder.start(100);
+    }
+  } catch (err) {
+    console.warn('Microphone permission not granted or device not present; using synthetic waveform:', err);
+  }
+
+  clearInterval(voiceTimerInterval);
+  voiceTimerInterval = setInterval(() => {
+    voiceRecordSeconds++;
+    state.voiceSeconds = voiceRecordSeconds;
+    const timerEl = $('#voiceRecTimer');
+    if (timerEl) {
+      const m = Math.floor(voiceRecordSeconds / 60);
+      const s = String(voiceRecordSeconds % 60).padStart(2, '0');
+      timerEl.textContent = `${m}:${s}`;
+    }
+  }, 1000);
+}
+
+function cancelVoiceRecording() {
+  clearInterval(voiceTimerInterval);
+  if (voiceMediaRecorder && voiceMediaRecorder.state !== 'inactive') {
+    try { voiceMediaRecorder.stop(); } catch (e) {}
+  }
+  if (state.voiceAudioStream) {
+    try { state.voiceAudioStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    state.voiceAudioStream = null;
+  }
+  state.isRecordingVoice = false;
+  state.voiceSeconds = 0;
+  voiceAudioChunks = [];
+  rerender();
+}
+
+async function finishVoiceRecording() {
+  clearInterval(voiceTimerInterval);
+  const totalSecs = Math.max(1, voiceRecordSeconds || 1);
+  const m = Math.floor(totalSecs / 60);
+  const s = String(totalSecs % 60).padStart(2, '0');
+  const durStr = `${m}:${s}`;
+
+  let audioUrl = '';
+  if (voiceMediaRecorder && voiceMediaRecorder.state !== 'inactive') {
+    try {
+      voiceMediaRecorder.stop();
+      if (voiceAudioChunks.length) {
+        const blob = new Blob(voiceAudioChunks, { type: 'audio/webm;codecs=opus' });
+        audioUrl = URL.createObjectURL(blob);
+      }
+    } catch (e) {}
+  }
+  if (state.voiceAudioStream) {
+    try { state.voiceAudioStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    state.voiceAudioStream = null;
+  }
+
+  const waveform = Array.from({ length: 24 }, () => Math.floor(25 + Math.random() * 70));
+
+  state.isRecordingVoice = false;
+  state.voiceSeconds = 0;
+
+  sendMessage('', null, {
+    type: 'voice',
+    duration: durStr,
+    seconds: totalSecs,
+    audioUrl,
+    waveform
+  });
+}
+
+function toggleVoicePlayback(msgIdx) {
+  const c = chats.find(x => x.id === state.chatId);
+  if (!c || !c.msgs[msgIdx]) return;
+  const m = c.msgs[msgIdx];
+  const v = m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : null);
+  if (!v) return;
+
+  if (activeAudioMsgId === msgIdx && voicePlaybackAudio) {
+    if (voicePlaybackAudio.paused) {
+      voicePlaybackAudio.play();
+    } else {
+      voicePlaybackAudio.pause();
+    }
+    rerender();
+    return;
+  }
+
+  if (voicePlaybackAudio) {
+    voicePlaybackAudio.pause();
+    voicePlaybackAudio = null;
+  }
+  clearInterval(voiceAudioInterval);
+
+  if (v.audioUrl) {
+    voicePlaybackAudio = new Audio(v.audioUrl);
+  } else {
+    playSynthesizedVoiceTone(v.seconds || 5);
+  }
+
+  activeAudioMsgId = msgIdx;
+  const speedVal = v.speed === '2x' ? 2 : v.speed === '1.5x' ? 1.5 : 1;
+
+  if (voicePlaybackAudio) {
+    voicePlaybackAudio.playbackRate = speedVal;
+    voicePlaybackAudio.play().catch(e => console.log('Audio play note:', e));
+
+    voiceAudioInterval = setInterval(() => {
+      if (!voicePlaybackAudio || voicePlaybackAudio.paused || voicePlaybackAudio.ended) {
+        if (voicePlaybackAudio && voicePlaybackAudio.ended) {
+          activeAudioMsgId = null;
+          clearInterval(voiceAudioInterval);
+          rerender();
+        }
+        return;
+      }
+      const cur = voicePlaybackAudio.currentTime;
+      const dur = voicePlaybackAudio.duration || (v.seconds || 5);
+      const min = Math.floor(cur / 60);
+      const sec = String(Math.floor(cur % 60)).padStart(2, '0');
+      v.currentTime = `${min}:${sec}`;
+      v.progressPct = Math.min(100, (cur / dur) * 100);
+      const playerEl = $(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
+      if (playerEl) playerEl.textContent = v.currentTime;
+      const barsEl = $$(`[data-msg-idx="${msgIdx}"] .wave-bar`);
+      const totalBars = barsEl.length;
+      barsEl.forEach((bar, bIdx) => {
+        const barPct = (bIdx / totalBars) * 100;
+        bar.classList.toggle('active', barPct <= v.progressPct);
+      });
+    }, 150);
+
+    voicePlaybackAudio.onended = () => {
+      activeAudioMsgId = null;
+      clearInterval(voiceAudioInterval);
+      v.progressPct = 0;
+      rerender();
+    };
+  } else {
+    let elapsed = 0;
+    const dur = v.seconds || 5;
+    voiceAudioInterval = setInterval(() => {
+      elapsed += 0.2 * speedVal;
+      if (elapsed >= dur) {
+        activeAudioMsgId = null;
+        clearInterval(voiceAudioInterval);
+        v.progressPct = 0;
+        rerender();
+        return;
+      }
+      const min = Math.floor(elapsed / 60);
+      const sec = String(Math.floor(elapsed % 60)).padStart(2, '0');
+      v.currentTime = `${min}:${sec}`;
+      v.progressPct = Math.min(100, (elapsed / dur) * 100);
+      const playerEl = $(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
+      if (playerEl) playerEl.textContent = v.currentTime;
+      const barsEl = $$(`[data-msg-idx="${msgIdx}"] .wave-bar`);
+      const totalBars = barsEl.length;
+      barsEl.forEach((bar, bIdx) => {
+        const barPct = (bIdx / totalBars) * 100;
+        bar.classList.toggle('active', barPct <= v.progressPct);
+      });
+    }, 200);
+  }
+
+  rerender();
+}
+
+function toggleVoiceSpeed(msgIdx) {
+  const c = chats.find(x => x.id === state.chatId);
+  if (!c || !c.msgs[msgIdx]) return;
+  const m = c.msgs[msgIdx];
+  const v = m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : null);
+  if (!v) return;
+
+  const current = v.speed || '1x';
+  v.speed = current === '1x' ? '1.5x' : current === '1.5x' ? '2x' : '1x';
+  if (voicePlaybackAudio) {
+    voicePlaybackAudio.playbackRate = v.speed === '2x' ? 2 : v.speed === '1.5x' ? 1.5 : 1;
+  }
+  rerender();
+}
+
+function playSynthesizedVoiceTone(durationSecs) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+    osc.frequency.exponentialRampToValueAtTime(280, ctx.currentTime + Math.min(durationSecs, 2));
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + Math.min(durationSecs, 2));
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + Math.min(durationSecs, 2));
+  } catch (e) {}
+}
+
 /* ---------------- Messenger ---------------- */
 function lastMsg(c) { return (c && c.msgs && c.msgs.length) ? c.msgs[c.msgs.length - 1] : { time: '', text: '' }; }
 function renderMessenger() {
@@ -1063,7 +1480,10 @@ function renderMessenger() {
                       </div>
                     ` : ''}
 
-                    <div class="msg-text">${esc(m.text || '').replace(/\n/g, '<br>')}</div>
+                    <!-- Voice Note Player (WhatsApp style) or Text Message -->
+                    ${(m.voice || (m.file_info && m.file_info.type === 'voice')) ? renderVoicePlayer(m.voice || m.file_info, idx, isMe) : `
+                      <div class="msg-text">${esc(m.text || '').replace(/\n/g, '<br>')}</div>
+                    `}
 
                     ${m.file ? `
                       <div class="attach">
@@ -1125,15 +1545,35 @@ function renderMessenger() {
           </div>
         ` : ''}
 
-        <form class="composer-row" id="msgForm">
-          <div class="composer-user-av" title="You are chatting as ${(PEOPLE[ME]?.name) || ME || 'Raja'}">
-            ${av(ME || 'raja', 's36')}
+        ${state.isRecordingVoice ? `
+          <div class="composer-row">
+            <div class="composer-user-av" title="You are recording a voice message as ${(PEOPLE[ME]?.name) || ME || 'Raja'}">
+              ${av(ME || 'raja', 's36')}
+            </div>
+            <div class="voice-rec-live">
+              <span class="voice-rec-dot"></span>
+              <span class="voice-rec-timer" id="voiceRecTimer">0:00</span>
+              <div class="voice-rec-waves">
+                <span class="rec-bar"></span><span class="rec-bar"></span><span class="rec-bar"></span>
+                <span class="rec-bar"></span><span class="rec-bar"></span><span class="rec-bar"></span>
+                <span class="rec-bar"></span><span class="rec-bar"></span><span class="rec-bar"></span>
+              </div>
+              <button type="button" class="voice-rec-cancel" data-action="cancel-voice-rec" title="Cancel recording">${icon('x', 'xs')}</button>
+            </div>
+            <button type="button" class="send" data-action="finish-voice-rec" title="Send Voice Message" style="border:none;cursor:pointer">${icon('send', 'sm')}</button>
           </div>
-          <button type="button" class="plus-btn" data-action="msg-attach" title="Attach">${icon('plus', 'sm')}</button>
-          <input type="file" id="msgFile" hidden />
-          <label class="msg-input"><input id="msgInput" placeholder="${state.replyingTo ? `Reply to ${state.replyingTo.from_name}...` : 'Type a message...'}" autocomplete="off"/><button type="button" data-action="emoji" title="Emoji">${icon('smile')}</button></label>
-          <button class="send" type="submit" title="Send">${icon('send', 'sm')}</button>
-        </form>
+        ` : `
+          <form class="composer-row" id="msgForm">
+            <div class="composer-user-av" title="You are chatting as ${(PEOPLE[ME]?.name) || ME || 'Raja'}">
+              ${av(ME || 'raja', 's36')}
+            </div>
+            <button type="button" class="plus-btn" data-action="msg-attach" title="Attach">${icon('plus', 'sm')}</button>
+            <input type="file" id="msgFile" hidden />
+            <label class="msg-input"><input id="msgInput" placeholder="${state.replyingTo ? `Reply to ${state.replyingTo.from_name}...` : 'Type a message...'}" autocomplete="off"/><button type="button" data-action="emoji" title="Emoji">${icon('smile')}</button></label>
+            <button type="button" class="mic-btn" data-action="start-voice-rec" title="Record Voice Message">${icon('mic', 'sm')}</button>
+            <button class="send" type="submit" title="Send">${icon('send', 'sm')}</button>
+          </form>
+        `}
       </div>` : `
       <div class="chat-win" style="display:grid;place-items:center;padding:48px 24px;text-align:center">
         <div>
@@ -1163,10 +1603,10 @@ function updateMsgDot() {
   $('#msgDot').classList.toggle('hide', !chats.some(c => c.unread));
   if (!location.hash.startsWith('#/messenger')) $('#main').style.overflow = '';
 }
-function sendMessage(text, file) {
+function sendMessage(text, file, voice) {
   const c = chats.find(x => x.id === state.chatId);
   if (!c) return;
-  const msgContent = text || (file ? 'Shared a file' : '');
+  const msgContent = text || (voice ? `🎤 Voice message (${voice.duration || '0:05'})` : file ? 'Shared a file' : '');
   const replyTo = state.replyingTo ? { ...state.replyingTo } : null;
   state.replyingTo = null;
 
@@ -1176,6 +1616,8 @@ function sendMessage(text, file) {
     time: nowTime(),
     text: msgContent,
     file,
+    voice: voice || null,
+    file_info: voice || file || null,
     reply_to: replyTo,
     reactions: {}
   };
@@ -1185,7 +1627,7 @@ function sendMessage(text, file) {
   apiSendMessage(c.id, {
     from_member: ME || 'raja',
     text: msgContent,
-    file_info: file,
+    file_info: voice || file || null,
     time_label: nowTime(),
     reply_to: replyTo,
     reactions: {}
@@ -2069,10 +2511,12 @@ function openJiraTaskModal(p, task, isNew = false) {
         });
         if (created && created.id) p.tasks.push(created);
         else p.tasks.push(task);
+        saveProjectsToCache();
         rerender();
         toast(`Task "${task.title}" created in ${task.status === 'done' ? 'Done' : task.status === 'progress' ? 'In Progress' : 'To Do'}`);
       } catch (err) {
         p.tasks.push(task);
+        saveProjectsToCache();
         rerender();
         toast(`Task created`);
       }
@@ -2558,6 +3002,7 @@ async function handleAction(a, el) {
         const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: endDate, team: teamMembers, extra: 0,
           totals: { total: 0, completed: 0, inProgress: 0 }, workload: {}, tasks: [], files: [], notes: [], _other: { completed: 0, inProgress: 0, pending: 0 } };
         projects.unshift(np);
+        saveProjectsToCache();
         await fetchFromAPI('/projects/', {
           method: 'POST',
           body: JSON.stringify(np)
@@ -2915,6 +3360,28 @@ async function handleAction(a, el) {
           setTimeout(() => targetEl.classList.remove('msg-highlight-pulse'), 1800);
         }
       }
+      break;
+    }
+    case 'start-voice-rec': {
+      startVoiceRecording();
+      break;
+    }
+    case 'cancel-voice-rec': {
+      cancelVoiceRecording();
+      break;
+    }
+    case 'finish-voice-rec': {
+      finishVoiceRecording();
+      break;
+    }
+    case 'toggle-voice-playback': {
+      const idx = +el.dataset.msgIdx;
+      toggleVoicePlayback(idx);
+      break;
+    }
+    case 'toggle-voice-speed': {
+      const idx = +el.dataset.msgIdx;
+      toggleVoiceSpeed(idx);
       break;
     }
     case 'set-app-date': {
@@ -3686,6 +4153,7 @@ async function apiCreateTask(taskData) {
 }
 
 async function apiPatchTask(taskId, patchData) {
+  saveProjectsToCache();
   if (!taskId || isNaN(taskId)) return null;
   return await fetchFromAPI(`/tasks/${taskId}/`, {
     method: 'PATCH',
@@ -3694,6 +4162,7 @@ async function apiPatchTask(taskId, patchData) {
 }
 
 async function apiDeleteTask(taskId) {
+  saveProjectsToCache();
   if (!taskId || isNaN(taskId)) return null;
   return await fetchFromAPI(`/tasks/${taskId}/`, {
     method: 'DELETE'
@@ -3768,8 +4237,8 @@ async function loadInitialData() {
     updated = true;
   }
 
-  projects.length = 0;
-  if (Array.isArray(apiProjects)) {
+  if (Array.isArray(apiProjects) && apiProjects.length > 0) {
+    projects.length = 0;
     apiProjects.forEach(ap => {
       projects.push({
         id: ap.id,
@@ -3790,19 +4259,25 @@ async function loadInitialData() {
         _other: { completed: 0, inProgress: 0, pending: 0 }
       });
     });
+    saveProjectsToCache();
+  } else if (!projects.length) {
+    projects.push(...JSON.parse(JSON.stringify(SEED_PROJECTS)));
+    saveProjectsToCache();
   }
 
-  workLogs.length = 0;
-  if (Array.isArray(apiLogs)) {
+  if (Array.isArray(apiLogs) && apiLogs.length > 0) {
+    workLogs.length = 0;
     workLogs.push(...apiLogs);
   }
 
-  chats.length = 0;
-  if (Array.isArray(apiChats)) {
+  if (Array.isArray(apiChats) && apiChats.length > 0) {
+    chats.length = 0;
     chats.push(...apiChats);
     if (chats.length && (!state.chatId || !chats.some(c => c.id === state.chatId))) {
       state.chatId = chats[0].id;
     }
+  } else if (!chats.length) {
+    chats.push(...JSON.parse(JSON.stringify(SEED_CHATS)));
   }
 
   refreshSide();
