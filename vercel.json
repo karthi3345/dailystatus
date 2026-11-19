@@ -13,7 +13,10 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "dailystatus/wsgi.py"
+      "dest": "dailystatus/wsgi.py",
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate"
+      }
     }
   ],
   "env": {
