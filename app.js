@@ -1472,7 +1472,7 @@ function renderVoicePlayer(v, msgIdx, isMe) {
           ${bars.map((h, bIdx) => {
             const barPct = (bIdx / bars.length) * 100;
             const isActive = isPlaying && barPct <= progressPct;
-            return `<div class="wave-bar ${isActive ? 'active' : ''}" style="height:${h}%;${isActive ? 'background:' + (isMe ? '#1a1506' : 'var(--gold)') : ''}"></div>`;
+            return `<div class="wave-bar ${isActive ? 'active' : ''}" style="height:${h}%;${isActive ? 'background:var(--gold)' : ''}"></div>`;
           }).join('')}
         </div>
         <div class="voice-meta">
