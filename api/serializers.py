@@ -19,6 +19,10 @@ class TaskSerializer(serializers.ModelSerializer):
     attachments = serializers.ListField(required=False, default=list)
     comments = serializers.ListField(required=False, default=list)
     worklogs = serializers.ListField(required=False, default=list)
+    approver = serializers.CharField(required=False, allow_blank=True, default='')
+    approval_status = serializers.CharField(required=False, default='none')
+    approved_by = serializers.CharField(required=False, allow_blank=True, default='')
+    approved_at = serializers.CharField(required=False, allow_blank=True, default='')
 
     class Meta:
         model = Task

@@ -52,6 +52,10 @@ class Task(models.Model):
     due = models.CharField(max_length=30, blank=True, default='')
     status = models.CharField(max_length=30, default='pending')
     desc = models.TextField(blank=True, default='')
+    approver = models.CharField(max_length=50, blank=True, default='')
+    approval_status = models.CharField(max_length=30, default='none')  # none, pending, approved, rejected
+    approved_by = models.CharField(max_length=50, blank=True, default='')
+    approved_at = models.CharField(max_length=50, blank=True, default='')
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
@@ -72,6 +76,10 @@ class DailyWorkLog(models.Model):
     resolved = models.BooleanField(default=False)
     resolved_at = models.CharField(max_length=50, blank=True, default='')
     help_note = models.TextField(blank=True, default='')
+    approval_status = models.CharField(max_length=30, default='pending')  # 'pending', 'approved', 'rejected'
+    approved_by = models.CharField(max_length=50, blank=True, default='')
+    approved_at = models.CharField(max_length=50, blank=True, default='')
+    approval_note = models.TextField(blank=True, default='')
 
     def __str__(self):
         return f"{self.date} - {self.member} ({self.hours}) [{self.status}]"
