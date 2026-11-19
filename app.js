@@ -89,7 +89,7 @@ function avatarSVG(id) {
     ? `<path d="M12 18c0-6 3.5-9.5 8-9.5s8 3.5 8 9.5c-2-3.5-5-5-8.5-5.2-2.6 1.8-5 3.4-7.5 5.2z" fill="${l.hair}"/>`
     : `<path d="M12.6 17.5c-.9-6.6 3-9.8 7.6-9.8 4.8 0 8.4 3 7.3 9.8-.8-2.4-2.4-4.2-4.9-4.6-2.6.9-6.4.6-8.2.1-.9 1.1-1.5 2.6-1.8 4.5z" fill="${l.hair}"/>`;
   const beard = l.beard ? `<path d="M13 19.5c.3 5.6 3.3 8.4 7 8.4s6.7-2.8 7-8.4c-.9 2.4-2.6 3.6-4.2 3.8-1 .2-1.6-.6-2.8-.6s-1.8.8-2.8.6c-1.6-.2-3.3-1.4-4.2-3.8z" fill="${l.hair}" opacity=".9"/>` : '';
-  return `<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="${l.bg}"/>${backHair}
+  return `<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="${l.bg}"/>${backHair}
     <path d="M6 41c1.2-7.5 6.6-10.5 14-10.5S32.8 33.5 34 41z" fill="${l.shirt}"/>
     <path d="M17 26h6v5.2c-1 1-2 1.4-3 1.4s-2-.4-3-1.4z" fill="${l.skin}" filter="brightness(.9)"/>
     <ellipse cx="20" cy="18.6" rx="7.3" ry="8.6" fill="${l.skin}"/>
@@ -484,7 +484,77 @@ function parseISO(s) { if (!s || typeof s !== 'string') return new Date(); const
 function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function fmtShort(s) { if (!s || s === 'none' || s === 'ongoing') return 'Ongoing'; const d = parseISO(s); return (d && !isNaN(d.getTime())) ? `${MON[d.getMonth()]} ${d.getDate()}` : 'Ongoing'; }
 function fmtLong(s) { if (!s || s === 'none' || s === 'ongoing') return 'Ongoing'; const d = parseISO(s); return (d && !isNaN(d.getTime())) ? `${MON[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` : 'Ongoing'; }
-function nowTime() { const d = new Date(); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${m} ${ap}`; }
+function nowTime() {
+  const d = new Date();
+  const timeStr = d.toLocaleTimeString('en-US', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  return `${timeStr} IST`;
+}
+function nowISTDate() {
+  const d = new Date();
+  return d.toLocaleDateString('en-US', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+function formatMsgTime(t) {
+  if (!t) return '';
+  let str = String(t).trim();
+  if (!str.includes('IST')) str = `${str} IST`;
+  return str;
+}
+function getMsgDateLabel(m) {
+  if (!m) return `Today, ${nowISTDate()}`;
+  let dateStr = m.date;
+  if (!dateStr && m.created_at) {
+    try {
+      const d = new Date(m.created_at);
+      dateStr = d.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) {}
+  }
+  if (!dateStr) {
+    dateStr = nowISTDate();
+  }
+  const todayStr = nowISTDate();
+  if (dateStr === todayStr) {
+    return `Today, ${dateStr}`;
+  }
+  return dateStr;
+}
+function ensureAllTeamDMs() {
+  const allIds = new Set([...Object.keys(PEOPLE), ...MEMBER_ROWS]);
+  allIds.forEach(id => {
+    if (!id) return;
+    const cleanId = String(id).toLowerCase().trim();
+    if (ME && cleanId === ME.toLowerCase().trim()) return;
+    const dmId = `dm-${cleanId}`;
+    const pName = (PEOPLE[cleanId]?.name) || (PEOPLE[id]?.name) || (cleanId.charAt(0).toUpperCase() + cleanId.slice(1));
+    let existing = chats.find(c => c.kind === 'dm' && (c.id === dmId || (c.person && c.person.toLowerCase() === cleanId)));
+    if (!existing) {
+      chats.push({
+        id: dmId,
+        name: pName,
+        kind: 'dm',
+        person: cleanId,
+        project: null,
+        members: 2,
+        memberList: [ME || 'user', cleanId],
+        starred: false,
+        unread: 0,
+        msgs: []
+      });
+    } else {
+      if (!existing.person) existing.person = cleanId;
+      if (!existing.name) existing.name = pName;
+    }
+  });
+}
 const barColor = v => (v >= 75 ? 'red' : v >= 50 && v <= 65 ? '' : 'green');
 const statusBadge = s => (STATUS[s] ? `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>` : `<span class="badge progress">In Progress</span>`);
 const taskBadge = s => s === 'done' ? '<span class="badge done">Completed</span>' : s === 'pending' ? '<span class="badge pending">Pending</span>' : '<span class="badge progress">In Progress</span>';
@@ -1508,12 +1578,43 @@ function playSynthesizedVoiceTone(durationSecs) {
 /* ---------------- Messenger ---------------- */
 function lastMsg(c) { return (c && c.msgs && c.msgs.length) ? c.msgs[c.msgs.length - 1] : { time: '', text: '' }; }
 function renderMessenger() {
+  ensureAllTeamDMs();
   const q = state.chatQuery.toLowerCase();
   const list = chats.filter(c => !q || c.name.toLowerCase().includes(q) || (c.msgs && c.msgs.some(m => (m.text || '').toLowerCase().includes(q))));
   const c = chats.find(x => x.id === state.chatId) || chats[0];
   if (c) c.unread = 0;
   const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person]?.availability === 'available' ? '<i class="online"></i>' : (PEOPLE[ch.person]?.availability === 'absent' ? '<i class="absent-dot"></i>' : '')) : `<span class="group-av">${icon('users', 'sm')}</span>`;
-  const preview = ch => { const m = lastMsg(ch); const who = m.from === ME ? 'You' : ((PEOPLE[m.from]?.name) || m.from || 'User'); return ch.kind === 'dm' ? esc((m.text || '').split('\n')[0]) : `${who}: ${esc((m.text || '').split('\n')[0])}`; };
+  const preview = ch => {
+    const m = lastMsg(ch);
+    if (!m || !m.text) return ch.kind === 'dm' ? 'Start a conversation...' : 'No messages yet';
+    const who = m.from === ME ? 'You' : ((PEOPLE[m.from]?.name) || m.from || 'User');
+    return ch.kind === 'dm' ? esc((m.text || '').split('\n')[0]) : `${who}: ${esc((m.text || '').split('\n')[0])}`;
+  };
+
+  const renderChatItem = ch => {
+    const lm = lastMsg(ch);
+    const timeDisplay = lm.time ? formatMsgTime(ch.timeLabel && lm.time === ch.timeLabel ? ch.timeLabel : lm.time) : '';
+    return `
+      <div class="chat-item ${c && ch.id === c.id ? 'active' : ''}" data-chat="${ch.id}">
+        ${chatAv(ch)}
+        <div style="min-width:0">
+          <div class="t" style="display:flex;align-items:center;gap:6px">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ch.name)}</span>
+            ${ch.project ? `<span style="font-size:9.5px;padding:1px 6px;background:rgba(245,184,46,.15);color:var(--gold);border-radius:4px;flex-shrink:0;font-weight:600">Project</span>` : ch.kind === 'group' ? `<span style="font-size:9.5px;padding:1px 6px;background:rgba(255,255,255,.07);color:var(--text-2);border-radius:4px;flex-shrink:0">Group</span>` : ''}
+          </div>
+          <div class="p">${preview(ch)}</div>
+        </div>
+        <div class="right">
+          <span>${timeDisplay}</span>
+          ${ch.unread ? `<span class="unread">${ch.unread}</span>` : `<button class="star ${ch.starred ? 'on' : ''}" data-star-chat="${ch.id}" title="Star">${icon('star', 'xs')}</button>`}
+        </div>
+      </div>
+    `;
+  };
+
+  const channels = list.filter(ch => ch.kind !== 'dm');
+  const dms = list.filter(ch => ch.kind === 'dm');
+
   return `<section class="view">
     <div class="page-head" style="margin-bottom:16px">
       <div><h1 class="page-title" style="font-size:24px">Messenger</h1><p class="page-sub">Team communication, project discussions and quick support</p></div>
@@ -1525,24 +1626,22 @@ function renderMessenger() {
     <div class="card msgr">
       <div class="chat-list">
         <label class="search">${icon('search', 'sm')}<input id="chatSearch" placeholder="Search chats or people..." value="${esc(state.chatQuery)}"/></label>
-        <div class="chats">${list.map(ch => `
-          <div class="chat-item ${c && ch.id === c.id ? 'active' : ''}" data-chat="${ch.id}">
-            ${chatAv(ch)}
-            <div style="min-width:0">
-              <div class="t" style="display:flex;align-items:center;gap:6px">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ch.name)}</span>
-                ${ch.project ? `<span style="font-size:9.5px;padding:1px 6px;background:rgba(245,184,46,.15);color:var(--gold);border-radius:4px;flex-shrink:0;font-weight:600">Project</span>` : ch.kind === 'group' ? `<span style="font-size:9.5px;padding:1px 6px;background:rgba(255,255,255,.07);color:var(--text-2);border-radius:4px;flex-shrink:0">Group</span>` : ''}
-              </div>
-              <div class="p">${preview(ch)}</div>
-            </div>
-            <div class="right"><span>${ch.timeLabel && lastMsg(ch).time === ch.timeLabel ? ch.timeLabel : lastMsg(ch).time}</span>
-              ${ch.unread ? `<span class="unread">${ch.unread}</span>` : `<button class="star ${ch.starred ? 'on' : ''}" data-star-chat="${ch.id}" title="Star">${icon('star', 'xs')}</button>`}</div>
-          </div>`).join('') || '<div class="empty">No chats found.</div>'}</div>
+        <div class="chats">
+          ${channels.length > 0 ? `
+            <div class="chat-section-hdr"><span>Channels & Projects</span></div>
+            ${channels.map(renderChatItem).join('')}
+          ` : ''}
+          <div class="chat-section-hdr" style="${channels.length > 0 ? 'margin-top:10px' : ''}">
+            <span>Direct Messages</span>
+            <button class="btn-xs-gold" data-action="new-dm-prompt" title="Start new direct message">+ New DM</button>
+          </div>
+          ${dms.length > 0 ? dms.map(renderChatItem).join('') : '<div class="empty" style="padding:14px;font-size:12px;color:var(--text-3)">No direct messages found.</div>'}
+        </div>
       </div>
       ${c ? `
       <div class="chat-win">
         <div class="chat-head">
-          ${c.kind === 'dm' ? `<span class="clickable" data-profile="${c.person}">${av(c.person, 's36')}</span>` : `<span class="group-av">${icon(c.project ? 'portfolio' : 'users', 'sm')}</span>`}
+          ${c.kind === 'dm' ? av(c.person, 's40') : `<span class="group-av">${icon(c.project ? 'portfolio' : 'users', 'sm')}</span>`}
           <div>
             <div class="t" style="display:flex;align-items:center;gap:6px">
               <span>${esc(c.name)}</span>
@@ -1558,27 +1657,52 @@ function renderMessenger() {
           </div>
         </div>
         <div class="msgs" id="msgs">
-          ${(c.msgs || []).map((m, idx) => {
-            const isMe = (m.from && ME) ? (m.from.toLowerCase() === ME.toLowerCase()) : false;
-            const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'You');
-            const senderId = m.from || (isMe ? ME : 'member');
-            const senderName = isMe ? `${myName} (You)` : ((PEOPLE[m.from]?.name) || m.from || 'Member');
-            const reactions = m.reactions || {};
-            const rxEntries = Object.entries(reactions);
-
-            return `
-            <div class="msg ${isMe ? 'me' : ''}" id="msg-item-${idx}" data-msg-idx="${idx}">
-              ${av(senderId, 's36')}
-              <div class="msg-content-wrap">
-                <div class="who">
-                  <span style="font-weight:600;color:${isMe ? 'var(--gold)' : '#60a5fa'}">${esc(senderName)}</span>
-                  ${userModeIcon(senderId, 'xs')}
-                  <span class="time-tag" style="${isMe ? 'margin-right:4px' : 'margin-left:auto'}">${m.time || ''}</span>
+          ${(() => {
+            if (!c.msgs || !c.msgs.length) {
+              return `
+                <div style="text-align:center;padding:50px 18px;color:var(--text-3);margin:auto">
+                  <div style="margin-bottom:12px;display:flex;justify-content:center">${c.kind === 'dm' ? av(c.person, 's64') : `<span class="group-av" style="width:64px;height:64px">${icon(c.project ? 'portfolio' : 'users')}</span>`}</div>
+                  <div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:4px">${c.kind === 'dm' ? `Direct chat with ${esc(c.name)}` : `Welcome to ${esc(c.name)}`}</div>
+                  <div style="font-size:12.5px;max-width:320px;margin:0 auto">Send a message below to start chatting with Mumbai IST timestamps! 💬</div>
                 </div>
+              `;
+            }
+            let lastDateLabel = null;
+            return (c.msgs || []).map((m, idx) => {
+              const isMe = (m.from && ME) ? (m.from.toLowerCase() === ME.toLowerCase()) : false;
+              const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'You');
+              const senderId = m.from || (isMe ? ME : 'member');
+              const senderName = isMe ? `${myName} (You)` : ((PEOPLE[m.from]?.name) || m.from || 'Member');
+              const reactions = m.reactions || {};
+              const rxEntries = Object.entries(reactions);
 
-                <div class="bubble-container">
-                  <div class="bubble">
-                    ${isMe ? `<div class="meta">${m.time} ${icon('checks', 'xs')}</div>` : ''}
+              const curDateLabel = getMsgDateLabel(m);
+              let dateDividerHtml = '';
+              if (curDateLabel !== lastDateLabel) {
+                lastDateLabel = curDateLabel;
+                dateDividerHtml = `
+                  <div class="chat-date-divider">
+                    <span class="chat-date-pill">📅 ${esc(curDateLabel)}</span>
+                  </div>
+                `;
+              }
+
+              const msgTime = formatMsgTime(m.time);
+
+              return `
+              ${dateDividerHtml}
+              <div class="msg ${isMe ? 'me' : ''}" id="msg-item-${idx}" data-msg-idx="${idx}">
+                ${av(senderId, 's36')}
+                <div class="msg-content-wrap">
+                  <div class="who">
+                    <span style="font-weight:600;color:${isMe ? 'var(--gold)' : '#60a5fa'}">${esc(senderName)}</span>
+                    ${userModeIcon(senderId, 'xs')}
+                    <span class="time-tag" style="${isMe ? 'margin-right:4px' : 'margin-left:auto'}">${msgTime}</span>
+                  </div>
+
+                  <div class="bubble-container">
+                    <div class="bubble">
+                      ${isMe ? `<div class="meta">${msgTime} ${icon('checks', 'xs')}</div>` : ''}
 
                     <!-- Quoted Message (WhatsApp Style Reply Preview) -->
                     ${m.reply_to ? `
@@ -1634,7 +1758,8 @@ function renderMessenger() {
                 ` : ''}
               </div>
             </div>`;
-          }).join('')}
+          }).join('');
+        })()}
         </div>
 
         <!-- WhatsApp Reply Preview Banner -->
@@ -1742,6 +1867,7 @@ function sendMessage(text, file, voice) {
     id: Date.now(),
     from: ME || 'raja',
     time: nowTime(),
+    date: nowISTDate(),
     text: msgContent,
     file,
     voice: voice || null,
@@ -3454,7 +3580,8 @@ async function handleAction(a, el) {
     case 'open-login': openLoginModal(); break;
     case 'open-register': openRegisterModal(); break;
     case 'auth-logout': handleLogout(); break;
-    case 'new-chat': openNewDirectMessageModal(); break;
+    case 'new-chat':
+    case 'new-dm-prompt': openNewDirectMessageModal(); break;
   }
 }
 
@@ -4002,16 +4129,16 @@ function openRegisterModal() {
         <form id="regForm">
           <div class="field">
             <label>Full Name</label>
-            <input type="text" id="regName" required placeholder="e.g. Karthik Raja" autofocus autocomplete="name" />
+            <input type="text" id="modalRegName" required placeholder="e.g. Karthik Raja" autofocus autocomplete="name" />
           </div>
           <div class="field-row">
             <div class="field">
               <label>Username</label>
-              <input type="text" id="regUsername" required placeholder="e.g. karthik3345" autocomplete="username" />
+              <input type="text" id="modalRegUsername" required placeholder="e.g. karthik3345" autocomplete="username" />
             </div>
             <div class="field">
               <label>Role / Title</label>
-              <input type="text" id="regRole" placeholder="e.g. Developer" value="Developer" />
+              <input type="text" id="modalRegRole" placeholder="e.g. Developer" value="Developer" />
             </div>
           </div>
           <div class="field">
@@ -4019,13 +4146,13 @@ function openRegisterModal() {
               <label style="margin:0">Email Address</label>
               <span style="font-size:11px;color:var(--gold)">Personal emails welcome</span>
             </div>
-            <input type="email" id="regEmail" required placeholder="e.g. yourname@gmail.com" autocomplete="email" />
+            <input type="email" id="modalRegEmail" required placeholder="e.g. yourname@gmail.com" autocomplete="email" />
           </div>
           <div class="field" style="position:relative">
             <label>Password (min 6 characters)</label>
             <div style="position:relative;display:flex;align-items:center">
-              <input type="password" id="regPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
-              <button type="button" onclick="togglePwdVis(this, 'regPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
+              <input type="password" id="modalRegPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
+              <button type="button" onclick="togglePwdVis(this, 'modalRegPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
                 <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
@@ -4033,8 +4160,8 @@ function openRegisterModal() {
           <div class="field" style="position:relative">
             <label>Confirm Password</label>
             <div style="position:relative;display:flex;align-items:center">
-              <input type="password" id="regConfirmPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
-              <button type="button" onclick="togglePwdVis(this, 'regConfirmPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
+              <input type="password" id="modalRegConfirmPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
+              <button type="button" onclick="togglePwdVis(this, 'modalRegConfirmPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
                 <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
@@ -4054,8 +4181,8 @@ function openRegisterModal() {
   document.body.insertAdjacentHTML('beforeend', modalHtml);
 
   // Live password matching indicator
-  const p1 = $('#regPassword');
-  const p2 = $('#regConfirmPassword');
+  const p1 = $('#modalRegPassword');
+  const p2 = $('#modalRegConfirmPassword');
   const note = $('#pwdMatchNote');
   const checkMatch = () => {
     if (!p2.value) {
@@ -4078,12 +4205,12 @@ function openRegisterModal() {
 
   $('#regForm').onsubmit = async (e) => {
     e.preventDefault();
-    const name = $('#regName').value.trim();
-    const username = $('#regUsername').value.trim().toLowerCase();
-    const email = $('#regEmail').value.trim().toLowerCase();
-    const role = $('#regRole').value.trim() || 'Developer';
-    const password = $('#regPassword').value;
-    const confirmPassword = $('#regConfirmPassword').value;
+    const name = $('#modalRegName').value.trim();
+    const username = $('#modalRegUsername').value.trim().toLowerCase();
+    const email = $('#modalRegEmail').value.trim().toLowerCase();
+    const role = $('#modalRegRole').value.trim() || 'Developer';
+    const password = $('#modalRegPassword').value;
+    const confirmPassword = $('#modalRegConfirmPassword').value;
     const errBox = $('#authErr');
     const submitBtn = $('#btnRegister');
     errBox.style.display = 'none';
@@ -4520,32 +4647,32 @@ function initAuthScreen() {
   }
 
   // Role select sync & Other option
-  const regRole = $('#regRole');
-  const otherRoleField = $('#otherRoleField');
-  const regOtherRole = $('#regOtherRole');
-
   window.handleOtherRole = function(val) {
-    if (!regRole) return;
-    const v = val !== undefined ? val : regRole.value;
-    regRole.classList.toggle('is-empty', !v);
+    const roleEl = document.getElementById('regRole');
+    const f = document.getElementById('otherRoleField');
+    const inp = document.getElementById('regOtherRole');
+    if (!roleEl) return;
+    const v = val !== undefined ? val : roleEl.value;
+    roleEl.classList.toggle('is-empty', !v);
     const isOther = (v === 'Other') || (typeof v === 'string' && v.toLowerCase().includes('other'));
-    if (otherRoleField) {
-      otherRoleField.style.display = isOther ? 'block' : 'none';
+    if (f) {
+      f.style.setProperty('display', isOther ? 'block' : 'none', 'important');
       if (isOther) {
-        otherRoleField.removeAttribute('hidden');
-        setTimeout(() => regOtherRole?.focus(), 30);
+        f.removeAttribute('hidden');
+        if (inp) setTimeout(() => inp.focus(), 40);
       } else {
-        otherRoleField.setAttribute('hidden', '');
-        if (regOtherRole) {
-          regOtherRole.value = '';
-          regOtherRole.closest('.lf-input')?.classList.remove('invalid');
-          const errEl = $('#regOtherRoleErr');
+        f.setAttribute('hidden', '');
+        if (inp) {
+          inp.value = '';
+          inp.closest('.lf-input')?.classList.remove('invalid');
+          const errEl = document.getElementById('regOtherRoleErr');
           if (errEl) errEl.textContent = '';
         }
       }
     }
   };
 
+  const regRole = document.getElementById('regRole');
   if (regRole) {
     window.handleOtherRole();
     regRole.addEventListener('change', () => window.handleOtherRole());

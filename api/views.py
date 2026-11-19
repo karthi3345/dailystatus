@@ -407,6 +407,15 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         msg = serializer.save()
+        if not msg.time_label:
+            try:
+                import zoneinfo, datetime
+                ist_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
+                now_ist = datetime.datetime.now(ist_tz)
+                msg.time_label = now_ist.strftime('%I:%M %p').lstrip('0') + ' IST'
+                msg.save(update_fields=['time_label'])
+            except Exception:
+                pass
         chat_id = msg.chat_id
         if not ChatThread.objects.filter(id=chat_id).exists():
             creator = msg.from_member or (self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin')
@@ -452,6 +461,29 @@ class ChatThreadsView(APIView):
         result = []
         for t in threads:
             msgs = ChatMessage.objects.filter(chat_id=t.id).order_by('created_at')
+            m_list = []
+            for m in msgs:
+                try:
+                    import zoneinfo
+                    ist_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
+                    ist_dt = m.created_at.astimezone(ist_tz)
+                    t_label = m.time_label or ist_dt.strftime('%I:%M %p').lstrip('0')
+                    d_label = ist_dt.strftime('%d %b %Y')
+                except Exception:
+                    t_label = m.time_label or '12:00 PM'
+                    d_label = '19 Nov 2026'
+                if 'IST' not in t_label:
+                    t_label = f"{t_label} IST"
+                m_list.append({
+                    'id': m.id,
+                    'from': m.from_member,
+                    'time': t_label,
+                    'date': d_label,
+                    'text': m.text,
+                    'file': m.file_info,
+                    'reply_to': m.reply_to,
+                    'reactions': m.reactions or {}
+                })
             result.append({
                 'id': t.id,
                 'kind': t.kind,
@@ -462,18 +494,7 @@ class ChatThreadsView(APIView):
                 'memberList': t.members or [],
                 'starred': t.starred,
                 'unread': 0,
-                'msgs': [
-                    {
-                        'id': m.id,
-                        'from': m.from_member,
-                        'time': m.time_label or m.created_at.strftime('%I:%M %p').lstrip('0'),
-                        'text': m.text,
-                        'file': m.file_info,
-                        'reply_to': m.reply_to,
-                        'reactions': m.reactions or {}
-                    }
-                    for m in msgs
-                ]
+                'msgs': m_list
             })
         return Response(result)
 

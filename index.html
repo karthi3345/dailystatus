@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Volgo Updates – Workspace</title>
-  <link rel="stylesheet" href="styles.css?v=3.7" />
+  <link rel="stylesheet" href="styles.css?v=3.8" />
 </head>
 <body>
   <!-- Fullscreen Login & Register Screen (Volgo Updates) -->
@@ -126,12 +126,13 @@
               </select>
             </div>
             <small class="lf-err" id="regRoleErr"></small>
-
-            <div id="otherRoleField" style="display: none; margin-top: 10px;">
-              <div class="lf-input"><span data-icon="briefcase"></span><input id="regOtherRole" placeholder="Specify your role (e.g. DevOps Engineer)" /></div>
-              <small class="lf-err" id="regOtherRoleErr"></small>
-            </div>
           </div>
+        </div>
+
+        <div class="lf-field" id="otherRoleField" style="display: none; margin-bottom: 12px;">
+          <label for="regOtherRole">Specify your role</label>
+          <div class="lf-input"><span data-icon="briefcase"></span><input id="regOtherRole" placeholder="Specify your role (e.g. DevOps Engineer)" /></div>
+          <small class="lf-err" id="regOtherRoleErr"></small>
         </div>
 
         <div class="lf-field">
@@ -210,8 +211,14 @@
       var v = val !== undefined ? val : (r ? r.value : '');
       var isOther = (v === 'Other') || (v && v.toLowerCase().indexOf('other') !== -1);
       if (f) {
-        f.style.display = isOther ? 'block' : 'none';
-        if (isOther && inp) { setTimeout(function() { inp.focus(); }, 30); }
+        f.style.setProperty('display', isOther ? 'block' : 'none', 'important');
+        if (isOther) {
+          f.removeAttribute('hidden');
+          if (inp) { setTimeout(function() { inp.focus(); }, 40); }
+        } else {
+          f.setAttribute('hidden', '');
+          if (inp) { inp.value = ''; }
+        }
       }
     };
     window.handleLogProjectChange = function(val) {
@@ -224,6 +231,6 @@
       }
     };
   </script>
-  <script src="app.js?v=4.5"></script>
+  <script src="app.js?v=4.6"></script>
 </body>
 </html>
