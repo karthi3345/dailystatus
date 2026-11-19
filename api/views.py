@@ -371,6 +371,19 @@ class DailyWorkLogViewSet(viewsets.ModelViewSet):
 
         return Response(DailyWorkLogSerializer(log).data)
 
+    @action(detail=True, methods=['post'], url_path='approve')
+    def approve(self, request, pk=None):
+        import zoneinfo, datetime
+        log = self.get_object()
+        approver = request.data.get('approved_by') or (request.user.username if (request.user and request.user.is_authenticated) else 'Team Lead')
+        ist_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
+        now_ist = datetime.datetime.now(ist_tz)
+        log.approval_status = 'approved'
+        log.approved_by = approver
+        log.approved_at = now_ist.strftime('%d %b %Y, %I:%M %p').lstrip('0') + ' IST'
+        log.save()
+        return Response(DailyWorkLogSerializer(log).data)
+
 
 class ChatMessageViewSet(viewsets.ModelViewSet):
     queryset = ChatMessage.objects.all()

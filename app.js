@@ -1209,7 +1209,7 @@ function renderWorkLog() {
     state.logProject = availableProjects[0].id;
   }
 
-  return `<section class="view" style="max-width:920px">
+  return `<section class="view" style="max-width:1120px">
     <div class="page-head" style="margin-bottom:20px">
       <div>
         <h1 class="page-title">Daily Work Log</h1>
@@ -1285,39 +1285,123 @@ function renderWorkLog() {
       </div>
     </div>
 
-    <!-- Work Logs History -->
-    <div class="logs-head" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <span class="card-title" style="font-size:16px;font-weight:600">Work Logs History (${allLogs.length})</span>
-      <span style="font-size:12px;color:var(--text-2)">Showing recorded daily logs</span>
-    </div>
-
-    <div class="logs">${allLogs.length ? allLogs.map((l, i) => {
-      const ld = parseISO(l.date), p = projects.find(x => x.id === l.project) || { id: l.project, name: l.project || 'General' };
-      const itemsList = Array.isArray(l.items) ? l.items : (l.items ? [l.items] : []);
-
-      return `<div class="log ${l.date === state.logDate ? 'sel' : ''}">
-        <div class="log-date"><b>${fmtShort(l.date)}</b><span>${DOW[ld.getDay()]}</span></div>
-        <div class="log-rail"><i></i></div>
-        <div class="card log-card" style="padding:14px 16px">
-          <span class="log-state done" style="background:rgba(245,184,46,.15);color:var(--gold);border:1px solid rgba(245,184,46,.3)">
-            ${icon('checkSquare', 'xs')}
-          </span>
-          <div style="min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-              <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0;color:var(--gold);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px">
-                📁 Project: ${esc(p.name || l.project || 'General')}
-              </h4>
-              <span style="font-size:12px;color:var(--text-2)">Logged by: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[l.member]?.name) || l.member || 'Member')} ${userModeIcon(l.member, 'xs')}</b></span>
-            </div>
-            ${itemsList.length ? `<ul style="margin-top:6px">${itemsList.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
-          </div>
-          <div class="log-side">
-            <span class="log-hours">${icon('clock', 'xs')}${esc(l.hours || '4h 00m')}</span>
-            <button type="button" class="btn flat" data-action="delete-worklog" data-log-idx="${i}" title="Delete log" style="height:24px;padding:0 8px;font-size:11px;color:var(--text-3);opacity:0.6">✕</button>
-          </div>
+    <!-- Work Logs History (Tabular Column Basis) -->
+    <div class="card" style="padding:0;overflow:hidden;border-radius:12px;margin-top:24px;box-shadow:0 4px 20px rgba(0,0,0,0.25);border:1px solid var(--line-2)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--line-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:var(--panel-1)">
+        <div>
+          <h3 style="font-size:15px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px">
+            📋 Work Logs History
+            <span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:11px">${allLogs.length} Records</span>
+          </h3>
+          <p style="font-size:12px;color:var(--text-2);margin:3px 0 0">Tabular column breakdown of logged work, hours, tasks, and approval status</p>
         </div>
-      </div>`;
-    }).join('') : '<div class="card empty" style="padding:36px;text-align:center;color:var(--text-2)"><div style="font-size:32px;margin-bottom:8px">📝</div>No work logs found. Write what you worked on above to add a log!</div>'}</div>
+      </div>
+
+      <div class="table-wrap" style="overflow-x:auto">
+        <table class="table" style="width:100%;border-collapse:collapse;text-align:left;font-size:13px">
+          <thead>
+            <tr style="background:var(--panel-2);border-bottom:1px solid var(--line-2);font-size:11.5px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.5px">
+              <th style="padding:12px 16px;font-weight:600;white-space:nowrap">Date</th>
+              <th style="padding:12px 14px;font-weight:600;white-space:nowrap">Member</th>
+              <th style="padding:12px 14px;font-weight:600;white-space:nowrap">Project</th>
+              <th style="padding:12px 14px;font-weight:600;white-space:nowrap">Hours</th>
+              <th style="padding:12px 14px;font-weight:600;min-width:280px">Work Done / Tasks</th>
+              <th style="padding:12px 14px;font-weight:600;white-space:nowrap">Status</th>
+              <th style="padding:12px 16px;text-align:right;font-weight:600;white-space:nowrap">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${allLogs.length ? allLogs.map((l) => {
+              const origIdx = workLogs.indexOf(l);
+              const ld = parseISO(l.date);
+              const p = projects.find(x => x.id === l.project) || { id: l.project, name: l.project || 'General' };
+              const itemsList = Array.isArray(l.items) ? l.items : (l.items ? [l.items] : []);
+              const isApproved = l.approval_status === 'approved';
+
+              return `
+                <tr style="border-bottom:1px solid var(--line-2);${l.date === state.logDate ? 'background:rgba(245,184,46,0.04);' : ''}">
+                  <!-- 1. Date -->
+                  <td style="padding:12px 16px;white-space:nowrap;vertical-align:top">
+                    <span style="font-weight:600;color:var(--text);display:block">${fmtShort(l.date)}</span>
+                    <span style="font-size:11px;color:var(--text-3)">${DOW[ld.getDay()]}</span>
+                  </td>
+
+                  <!-- 2. Member -->
+                  <td style="padding:12px 14px;white-space:nowrap;vertical-align:top">
+                    <div style="display:inline-flex;align-items:center;gap:8px">
+                      ${av(l.member, 's26')}
+                      <span style="font-weight:500;color:var(--text);display:inline-flex;align-items:center;gap:4px">
+                        ${esc((PEOPLE[l.member]?.name) || l.member || 'Member')}
+                        ${userModeIcon(l.member, 'xs')}
+                      </span>
+                    </div>
+                  </td>
+
+                  <!-- 3. Project -->
+                  <td style="padding:12px 14px;vertical-align:top">
+                    <span class="badge" style="background:rgba(245,184,46,.12);color:var(--gold);border:1px solid rgba(245,184,46,.25);font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap">
+                      📁 ${esc(p.name || l.project || 'General')}
+                    </span>
+                  </td>
+
+                  <!-- 4. Hours -->
+                  <td style="padding:12px 14px;white-space:nowrap;vertical-align:top">
+                    <span style="display:inline-flex;align-items:center;gap:5px;font-weight:600;color:var(--text);font-size:12.5px">
+                      ${icon('clock', 'xs')} ${esc(l.hours || '4h 00m')}
+                    </span>
+                  </td>
+
+                  <!-- 5. Work Done / Tasks -->
+                  <td style="padding:12px 14px;vertical-align:top">
+                    <div style="color:var(--text);line-height:1.5;max-width:380px">
+                      ${itemsList.length ? itemsList.map(t => `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:3px"><span style="color:var(--gold);font-size:10px">•</span><span>${esc(t)}</span></div>`).join('') : '<i style="color:var(--text-3)">No work description</i>'}
+                    </div>
+                  </td>
+
+                  <!-- 6. Status / Approval -->
+                  <td style="padding:12px 14px;white-space:nowrap;vertical-align:top">
+                    ${isApproved ? `
+                      <span class="badge done" style="display:inline-flex;align-items:center;gap:4px" title="Approved by ${esc(l.approved_by || 'Lead')} at ${esc(l.approved_at || '')}">
+                        ✅ Approved
+                      </span>
+                      ${l.approved_by ? `<div style="font-size:10.5px;color:var(--text-3);margin-top:2px">by ${esc((PEOPLE[l.approved_by]?.name) || l.approved_by)}</div>` : ''}
+                    ` : `
+                      <span class="badge progress" style="display:inline-flex;align-items:center;gap:4px">
+                        ⏳ Pending
+                      </span>
+                    `}
+                  </td>
+
+                  <!-- 7. Actions (Approve, Edit, Delete) -->
+                  <td style="padding:12px 16px;text-align:right;white-space:nowrap;vertical-align:top">
+                    <div style="display:inline-flex;align-items:center;justify-content:flex-end;gap:6px">
+                      ${!isApproved ? `
+                        <button type="button" class="btn-xs-gold" data-action="lead-approve-log" data-log-idx="${origIdx}" title="Approve this work log" style="display:inline-flex;align-items:center;gap:4px;height:26px">
+                          ✅ Approve
+                        </button>
+                      ` : ''}
+                      <button type="button" class="btn flat" data-action="edit-worklog" data-log-idx="${origIdx}" title="Edit work log" style="height:26px;padding:0 8px;font-size:11.5px;color:var(--gold);display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(245,184,46,.25);border-radius:6px">
+                        ✏️ Edit
+                      </button>
+                      <button type="button" class="btn flat" data-action="delete-worklog" data-log-idx="${origIdx}" title="Delete log" style="height:26px;padding:0 7px;font-size:11.5px;color:var(--red);opacity:0.75;border-radius:6px">
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('') : `
+              <tr>
+                <td colspan="7" style="padding:36px;text-align:center;color:var(--text-2)">
+                  <div style="font-size:32px;margin-bottom:8px">📝</div>
+                  No work logs found. Enter your work hours and tasks above to create a log!
+                </td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </section>`;
 }
 
@@ -3389,12 +3473,14 @@ async function handleAction(a, el) {
       const logIdx = +el.dataset.logIdx;
       const l = workLogs[logIdx];
       if (!l) return;
+      const approverName = (PEOPLE[ME]?.name) || ME || 'Team Lead';
       l.approval_status = 'approved';
-      l.approved_by = ME || 'raja';
-      l.approved_at = `${nowTime()}, today`;
+      l.approved_by = approverName;
+      l.approved_at = `${nowTime()}, ${nowISTDate()}`;
       l.approval_note = l.approval_note || 'Work verified and approved by Team Lead.';
+      saveWorkLogsToCache();
       if (l.id) {
-        await apiPatchWorkLog(l.id, {
+        apiPatchWorkLog(l.id, {
           approval_status: 'approved',
           approved_by: l.approved_by,
           approved_at: l.approved_at,
@@ -3402,7 +3488,59 @@ async function handleAction(a, el) {
         });
       }
       rerender();
-      toast(`Job work log approved by Team Lead (${(PEOPLE[l.approved_by] && PEOPLE[l.approved_by].name) || l.approved_by})! ✅`);
+      toast(`Work log approved by ${approverName}! ✅`);
+      break;
+    }
+    case 'edit-worklog': {
+      const logIdx = +el.dataset.logIdx;
+      const l = workLogs[logIdx];
+      if (!l) return;
+
+      const pOptions = projects.filter(p => p && p.name).map(p => [p.id, p.name]);
+      if (l.project && !pOptions.some(([id]) => id === l.project)) {
+        pOptions.push([l.project, l.project]);
+      }
+      pOptions.push(['__other__', 'Other (Specify project name)']);
+
+      const itemsText = Array.isArray(l.items) ? l.items.join('\n') : (l.items || '');
+
+      openModal('Edit Daily Work Log', [
+        { name: 'date', label: 'Date', type: 'date', value: l.date, required: true, half: true },
+        { name: 'hours', label: 'Hours Worked', type: 'select', value: l.hours || '4h 00m', options: ['1h 00m', '2h 00m', '3h 00m', '4h 00m', '4h 30m', '5h 00m', '5h 30m', '6h 00m', '7h 00m', '8h 00m', '9h 00m', '10h 00m'].map(h => [h, h]), half: true },
+        { name: 'project', label: 'Project Name', type: 'select', value: l.project, options: pOptions },
+        { name: 'otherProject', label: 'If Other, specify project name', type: 'text', placeholder: 'Enter custom project name...', value: '' },
+        { name: 'items', label: 'Work Done / Tasks Completed (one per line)', type: 'textarea', value: itemsText, required: true, placeholder: 'Describe what you worked on...' }
+      ], async data => {
+        let finalProject = data.project;
+        if (finalProject === '__other__' && data.otherProject && data.otherProject.trim()) {
+          finalProject = data.otherProject.trim();
+        }
+
+        const newItems = (data.items || '').split('\n').map(s => s.trim()).filter(Boolean);
+        if (!newItems.length) {
+          toast('Please enter at least one task or description of work done.');
+          return false;
+        }
+
+        l.date = data.date;
+        l.hours = data.hours;
+        l.project = finalProject;
+        l.items = newItems;
+
+        saveWorkLogsToCache();
+
+        if (l.id) {
+          apiPatchWorkLog(l.id, {
+            date: l.date,
+            hours: l.hours,
+            project: l.project,
+            items: l.items
+          });
+        }
+
+        rerender();
+        toast('Work log updated successfully! ✅');
+      }, 'Save Changes');
       break;
     }
     case 'lead-reject-log': {
