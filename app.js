@@ -501,7 +501,13 @@ function renderProject(id, tab) {
     return `<section class="view"><div class="card empty" style="padding:48px 24px;text-align:center"><p style="color:var(--text-2);margin-bottom:12px">Project not found or no longer exists.</p><a class="btn gold" data-go="#/projects">Back to Projects</a></div></section>`;
   }
   if (!TABS.includes(tab)) tab = 'overview';
-  const body = { overview: tabOverview, tasks: tabTasks, team: tabTeam, analytics: tabAnalytics, files: tabFiles, notes: tabNotes }[tab](p);
+  let body = '';
+  try {
+    body = { overview: tabOverview, tasks: tabTasks, team: tabTeam, analytics: tabAnalytics, files: tabFiles, notes: tabNotes }[tab](p);
+  } catch (err) {
+    console.error('Error rendering project tab:', err);
+    body = `<div class="card empty" style="padding:48px 24px;text-align:center"><p style="color:var(--text-2);margin-bottom:12px">Unable to display ${tab}.</p></div>`;
+  }
   return `<section class="view">
     <div class="crumbs"><a data-go="#/projects">Projects</a>${icon('chevRight', 'xs')}<span>${esc(p.name)}</span></div>
     <div class="page-head" style="margin-bottom:0">
@@ -837,26 +843,79 @@ function tabTeam(p) {
 
 function tabAnalytics(p) {
   const s = projectStats(p);
-  const a = p.analytics || {
-    productivity: Object.fromEntries(MEMBER_ROWS.map(id => [id, Math.max(20, 100 - (p.workload[id] || 0) / 2 - 10)])),
-    teamProductivity: 70,
-    time: [['Development', 200, '#8b6cf6'], ['Design', 90, '#4c8dff'], ['Testing', 60, '#2bc46a'], ['Others', 50, '#6e6e78']],
-    trend: [[0, 0], [0.3, s.pct * 0.3], [0.6, s.pct * 0.65], [0.92, s.pct]],
+  const pAnalytics = (p.analytics && typeof p.analytics === 'object' && Object.keys(p.analytics).length > 0) ? p.analytics : {};
+
+  // Safe time breakdown
+  const timeData = (Array.isArray(pAnalytics.time) && pAnalytics.time.length) ? pAnalytics.time : [
+    ['Development', Math.max(40, s.completed * 45 + 30), '#8b6cf6'],
+    ['Design & UI', 65, '#4c8dff'],
+    ['QA & Testing', Math.max(20, s.inProgress * 25 + 20), '#2bc46a'],
+    ['Operations', 35, '#f5b82e']
+  ];
+  const totalH = timeData.reduce((x, t) => x + (Number(t[1]) || 0), 0) || 1;
+
+  // Safe progress trend
+  const trendData = (Array.isArray(pAnalytics.trend) && pAnalytics.trend.length) ? pAnalytics.trend : [
+    [0, 0],
+    [0.32, Math.round(s.pct * 0.35)],
+    [0.65, Math.round(s.pct * 0.72)],
+    [0.92, s.pct]
+  ];
+
+  // Safe team productivity mapping
+  const teamMembers = (p.team && Array.isArray(p.team) && p.team.length) ? p.team : (MEMBER_ROWS.length ? MEMBER_ROWS : ['raja', 'karthik']);
+  const prodMap = {};
+  teamMembers.forEach(id => {
+    if (pAnalytics.productivity && pAnalytics.productivity[id] !== undefined) {
+      prodMap[id] = Number(pAnalytics.productivity[id]) || 60;
+    } else {
+      const assigned = (p.tasks || []).filter(t => t.assignee === id || t.assignee === (PEOPLE[id]?.name));
+      const done = assigned.filter(t => t.status === 'done').length;
+      const base = assigned.length ? Math.round((done / assigned.length) * 100) : (id === ME ? 85 : 75);
+      prodMap[id] = Math.max(35, Math.min(100, base));
+    }
+  });
+
+  const a = {
+    teamProductivity: pAnalytics.teamProductivity || Math.round(Object.values(prodMap).reduce((acc, v) => acc + v, 0) / (Object.values(prodMap).length || 1)),
+    time: timeData,
+    trend: trendData,
+    productivity: prodMap
   };
-  const totalH = a.time.reduce((x, t) => x + t[1], 0);
-  const dist = [['Completed', s.completed, '#2bc46a'], ['In Progress', s.inProgress, '#f5b82e'], ['Pending', s.pending, '#f06464']];
-  // Donut
-  const R = 50, C = 2 * Math.PI * R; let off = 0;
-  const segs = dist.map(([, v, col]) => { const len = s.total ? (v / s.total) * C : 0; const seg = `<circle cx="65" cy="65" r="${R}" fill="none" stroke="${col}" stroke-width="20" stroke-dasharray="${Math.max(0, len - 2)} ${C}" stroke-dashoffset="${-off}"/>`; off += len; return seg; }).join('');
+
+  const dist = [
+    ['Completed', s.completed, '#2bc46a'],
+    ['In Progress', s.inProgress, '#f5b82e'],
+    ['Pending', s.pending, '#f06464']
+  ];
+
+  // Donut chart
+  const R = 50, C = 2 * Math.PI * R;
+  let off = 0;
+  const segs = dist.map(([, v, col]) => {
+    const len = s.total ? (v / s.total) * C : 0;
+    const seg = `<circle cx="65" cy="65" r="${R}" fill="none" stroke="${col}" stroke-width="20" stroke-dasharray="${Math.max(0, len - 2)} ${C}" stroke-dashoffset="${-off}"/>`;
+    off += len;
+    return seg;
+  }).join('');
+
   // Line chart
   const W = 380, H = 170, L = 34, B = 22, T = 10, plotW = W - L - 6, plotH = H - B - T;
-  const pts = a.trend.map(([x, y]) => [L + x * plotW, T + plotH - (y / 100) * plotH]);
-  pts[pts.length - 1] = [L + a.trend[a.trend.length - 1][0] * plotW, T + plotH - (s.pct / 100) * plotH];
+  const pts = a.trend.map(([x, y]) => [L + x * plotW, T + plotH - ((Math.min(100, Math.max(0, y))) / 100) * plotH]);
+  if (pts.length) {
+    pts[pts.length - 1] = [L + a.trend[a.trend.length - 1][0] * plotW, T + plotH - (s.pct / 100) * plotH];
+  } else {
+    pts.push([L, T + plotH], [L + plotW, T + plotH - (s.pct / 100) * plotH]);
+  }
   const line = pts.map(pt => pt.join(',')).join(' ');
   const area = `${L},${T + plotH} ${line} ${pts[pts.length - 1][0]},${T + plotH}`;
-  const last = pts[pts.length - 1];
-  const grid = [0, 25, 50, 75, 100].map(v => { const y = T + plotH - (v / 100) * plotH; return `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${y + 3}" fill="#85858e" font-size="9" text-anchor="end">${v}%</text>`; }).join('');
+  const last = pts[pts.length - 1] || [L + plotW, T];
+  const grid = [0, 25, 50, 75, 100].map(v => {
+    const y = T + plotH - (v / 100) * plotH;
+    return `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${y + 3}" fill="#85858e" font-size="9" text-anchor="end">${v}%</text>`;
+  }).join('');
   const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => `<text x="${L + 14 + i * ((plotW - 28) / 4)}" y="${H - 4}" fill="#85858e" font-size="9" text-anchor="middle">${m}</text>`).join('');
+
   return `
   <div class="card an-stats">
     <div class="an-stat"><div class="mini-ring">${ring(s.pct, 52, 7)}</div><div><b>${s.pct}%</b><span>Project Progress</span></div></div>
@@ -873,7 +932,7 @@ function tabAnalytics(p) {
         <polyline points="${line}" fill="none" stroke="#f5b82e" stroke-width="2"/>
         ${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.4" fill="#f5b82e" stroke="#141417" stroke-width="1.5"/>`).join('')}
         <line x1="${last[0]}" x2="${last[0]}" y1="${last[1]}" y2="${T + plotH}" stroke="#f5b82e" stroke-dasharray="3 3" opacity=".6"/>
-        <g transform="translate(${last[0] - 22},${last[1] - 42})"><rect width="44" height="32" rx="6" fill="#1c1c20" stroke="#f5b82e" stroke-opacity=".6"/><text x="22" y="15" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">${s.pct}%</text><text x="22" y="26" fill="#b9b9c0" font-size="8.5" text-anchor="middle">Nov 17</text></g>
+        <g transform="translate(${Math.max(10, Math.min(W - 54, last[0] - 22))},${Math.max(6, last[1] - 42)})"><rect width="44" height="32" rx="6" fill="#1c1c20" stroke="#f5b82e" stroke-opacity=".6"/><text x="22" y="15" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">${s.pct}%</text><text x="22" y="26" fill="#b9b9c0" font-size="8.5" text-anchor="middle">Today</text></g>
       </svg></div>
     </div>
     <div class="card an-card"><div class="card-title" style="margin-bottom:12px">Task Distribution</div>
@@ -885,7 +944,10 @@ function tabAnalytics(p) {
   </div>
   <div class="an-grid">
     <div class="card an-card"><div class="card-title" style="margin-bottom:10px">Team Productivity</div>
-      ${Object.entries(a.productivity).sort((x, y) => y[1] - x[1]).map(([id, v]) => `<div class="prod-row">${av(id, 's22')}<span>${PEOPLE[id].name}</span><div class="bar"><i style="width:${v}%"></i></div><span>${Math.round(v)}%</span></div>`).join('')}
+      ${Object.entries(a.productivity).sort((x, y) => y[1] - x[1]).map(([id, v]) => {
+        const pName = (PEOPLE[id] && PEOPLE[id].name) || (typeof id === 'string' ? id.charAt(0).toUpperCase() + id.slice(1) : 'Member');
+        return `<div class="prod-row">${av(id, 's22')}<span>${esc(pName)}</span><div class="bar"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></div><span>${Math.round(v)}%</span></div>`;
+      }).join('')}
     </div>
     <div class="card an-card"><div style="display:flex;justify-content:space-between"><span class="card-title">Time Breakdown</span><span style="color:var(--text-2);font-size:12px">Total: ${totalH} hrs</span></div>
       <div class="stack-bar">${a.time.map(([, h, col]) => `<i style="width:${(h / totalH) * 100}%;background:${col}"></i>`).join('')}</div>
