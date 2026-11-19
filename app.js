@@ -184,6 +184,12 @@ const modeCell = id => {
   const m = (p && MODES[p.mode]) || MODES['office'];
   return `<span class="cell-mode">${icon(m.icon, 'sm')}${m.label}</span>`;
 };
+const userModeIcon = (id, cls = 'xs') => {
+  const p = id ? PEOPLE[id] : null;
+  const modeKey = (p && p.mode) || 'office';
+  const m = MODES[modeKey] || MODES['office'];
+  return `<span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, cls)}</span>`;
+};
 function ring(pct, size = 118, stroke = 12, color = 'url(#ringGrad)') {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   return `<svg viewBox="0 0 ${size} ${size}"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd36b"/><stop offset="1" stop-color="#e59b12"/></linearGradient></defs>
@@ -311,7 +317,7 @@ function teamTable(p, cols) {
     const P = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member', today: 'Active' };
     const w = (p.workload && p.workload[id]) ?? 0;
     return `<tr>
-      <td><span class="cell-user">${av(id)}<span class="clickable" data-profile="${id}">${P.name}</span></span></td>
+      <td><span class="cell-user">${av(id)}<span class="clickable" data-profile="${id}" style="display:inline-flex;align-items:center;gap:4px">${esc(P.name)} ${userModeIcon(id, 'xs')}</span></span></td>
       <td>${P.role || 'Member'}</td>
       <td>${availBadge(id)}</td>
       <td>${modeCell(id)}</td>
@@ -384,7 +390,7 @@ function tabTasks(p) {
       return `<tr>
         <td><span class="chk ${t.status === 'done' ? 'on' : ''}" data-toggle-task="${t.id}">${t.status === 'done' ? icon('check') : ''}</span></td>
         <td><div class="task-title ${t.status === 'done' ? 'done' : ''}"><span>${esc(t.title)}</span><button class="exp ${open ? 'open' : ''}" data-expand="${t.id}">${icon('chevDown', 'xs')}</button></div></td>
-        <td><span class="cell-user">${av(t.assignee)}${PEOPLE[t.assignee].name}</span></td>
+        <td><span class="cell-user">${av(t.assignee)}<span style="display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || 'Member')} ${userModeIcon(t.assignee, 'xs')}</span></span></td>
         <td><span class="badge ${t.priority.toLowerCase()}">${t.priority}</span></td>
         <td>${fmtShort(t.due)}</td>
         <td><span class="clickable" data-cycle-task="${t.id}" title="Click to change status">${taskBadge(t.status)}</span></td>
@@ -487,9 +493,9 @@ function tabFiles(p) {
   const list = p.files.filter(f => (!q || f.name.toLowerCase().includes(q)) && (state.fileType === 'all' || (state.fileType === 'folder' ? f.kind === 'folder' : f.kind !== 'folder')));
   const opt = (v, l) => `<option value="${v}" ${state.fileType === v ? 'selected' : ''}>${l}</option>`;
   const body = !list.length ? '<div class="empty">No files found.</div>' : state.fileView === 'grid'
-    ? `<div class="file-grid">${list.map((f, i) => `<div class="file-tile"><span class="file-ic">${FILE_IC[f.kind]}</span><div style="font-weight:500">${esc(f.name)}</div><div class="meta">${PEOPLE[f.by].name} · ${fmtShort(f.date)} · ${f.size}</div></div>`).join('')}</div>`
+    ? `<div class="file-grid">${list.map((f, i) => `<div class="file-tile"><span class="file-ic">${FILE_IC[f.kind]}</span><div style="font-weight:500">${esc(f.name)}</div><div class="meta" style="display:inline-flex;align-items:center;gap:3px">${esc((PEOPLE[f.by] && PEOPLE[f.by].name) || f.by)} ${userModeIcon(f.by, 'xs')} · ${fmtShort(f.date)} · ${f.size}</div></div>`).join('')}</div>`
     : `<table><thead><tr><th>Name</th><th>Uploaded By</th><th>Date</th><th>Size</th><th style="width:40px"></th></tr></thead><tbody>
-      ${list.map(f => `<tr><td><span class="file-name"><span class="file-ic">${FILE_IC[f.kind]}</span>${esc(f.name)}</span></td><td><span class="cell-user">${av(f.by)}${PEOPLE[f.by].name}</span></td><td>${fmtShort(f.date)}</td><td>${f.size}</td><td><button class="kebab" data-fmenu="${esc(f.name)}">${icon('more', 'sm')}</button></td></tr>`).join('')}
+      ${list.map(f => `<tr><td><span class="file-name"><span class="file-ic">${FILE_IC[f.kind]}</span>${esc(f.name)}</span></td><td><span class="cell-user">${av(f.by)}<span style="display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[f.by] && PEOPLE[f.by].name) || f.by)} ${userModeIcon(f.by, 'xs')}</span></span></td><td>${fmtShort(f.date)}</td><td>${f.size}</td><td><button class="kebab" data-fmenu="${esc(f.name)}">${icon('more', 'sm')}</button></td></tr>`).join('')}
     </tbody></table>`;
   return `
   <div class="files-head">
@@ -552,7 +558,7 @@ function renderWorkLog() {
           <button type="button" class="btn pill-btn" data-set-log-status="done" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'done' ? '#5bdc8e' : 'var(--line-2)'};background:${state.logStatus === 'done' ? 'rgba(91,220,142,.18)' : 'transparent'};color:${state.logStatus === 'done' ? '#5bdc8e' : 'var(--text-2)'};font-weight:${state.logStatus === 'done' ? '600' : 'normal'}">✅ Completed</button>
           <button type="button" class="btn pill-btn" data-set-log-status="dependency" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'dependency' ? '#ff6b6b' : 'var(--line-2)'};background:${state.logStatus === 'dependency' ? 'rgba(255,107,107,.18)' : 'transparent'};color:${state.logStatus === 'dependency' ? '#ff6b6b' : 'var(--text-2)'};font-weight:${state.logStatus === 'dependency' ? '600' : 'normal'}">⚠️ Dependency Needed</button>
         </div>
-        <span style="font-size:12px;color:var(--text-2)">Member: <b style="color:var(--text)">${esc((PEOPLE[ME]?.name) || ME || 'User')}</b></span>
+        <span style="font-size:12px;color:var(--text-2)">Member: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[ME]?.name) || ME || 'User')} ${userModeIcon(ME, 'xs')}</b></span>
       </div>
 
       <textarea id="logText" placeholder="What did you work on today? Use checklist icon to add bullet tasks."></textarea>
@@ -611,7 +617,7 @@ function renderWorkLog() {
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0">${esc(p.name)}</h4>
-              <span style="font-size:12px;color:var(--text-2)">Logged by: <b style="color:var(--text)">${esc((PEOPLE[l.member]?.name) || l.member || 'Member')}</b></span>
+              <span style="font-size:12px;color:var(--text-2)">Logged by: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[l.member]?.name) || l.member || 'Member')} ${userModeIcon(l.member, 'xs')}</b></span>
             </div>
             <ul style="margin-top:6px">${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
             ${l.attach ? `<div class="attach-chip" style="margin-top:6px">${icon('clip', 'xs')}${esc(l.attach)}</div>` : ''}
@@ -622,7 +628,7 @@ function renderWorkLog() {
                 <span style="font-size:12px;font-weight:600;color:${l.resolved ? '#5bdc8e' : '#ff6b6b'};display:flex;align-items:center;gap:4px">
                   ${l.resolved ? '✓ Dependency Resolved by Team Lead' : '⚠️ Blocker / Dependency Needed'}
                 </span>
-                <span style="font-size:11.5px;color:var(--text-2)">Assigned Lead: <b style="color:var(--text)">${esc((PEOPLE[l.lead]?.name) || l.lead || 'Team Lead')}</b></span>
+                <span style="font-size:11.5px;color:var(--text-2)">Assigned Lead: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[l.lead]?.name) || l.lead || 'Team Lead')} ${userModeIcon(l.lead, 'xs')}</b></span>
               </div>
               <div style="font-size:12.5px;color:var(--text);margin-top:5px;line-height:1.4">
                 ${esc(l.dependency || 'Dependency needed to continue task.')}
@@ -678,7 +684,7 @@ function renderMessenger() {
       <div class="chat-win">
         <div class="chat-head">
           ${c.kind === 'dm' ? av(c.person, 's36') : `<span class="group-av">${icon('users', 'sm')}</span>`}
-          <div><div class="t">${esc(c.name)}</div><div class="s">${c.kind === 'dm' ? (AVAIL[PEOPLE[c.person]?.availability]?.label || 'Available') : `${(c.memberList ? c.memberList.length : c.members) || 1} Members`}</div></div>
+          <div><div class="t" style="display:flex;align-items:center;gap:6px"><span>${esc(c.name)}</span>${c.kind === 'dm' && c.person ? userModeIcon(c.person, 'sm') : ''}</div><div class="s">${c.kind === 'dm' ? (AVAIL[PEOPLE[c.person]?.availability]?.label || 'Available') : `${(c.memberList ? c.memberList.length : c.members) || 1} Members`}</div></div>
           <div class="acts">
             ${c.kind === 'group' ? `<button class="btn flat" data-action="add-group-member" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="Add Employee to this Group">${icon('userPlus', 'xs')}Add Member</button>` : ''}
             <button title="Call" data-action="call">${icon('phone', 'sm')}</button>
@@ -689,7 +695,7 @@ function renderMessenger() {
         <div class="msgs" id="msgs">
           ${(c.msgs || []).map(m => m.from === ME ? `
             <div class="msg me"><div class="bubble"><div class="meta">${m.time} ${icon('checks', 'xs')}</div>${esc(m.text).replace(/\n/g, '<br>')}</div></div>` : `
-            <div class="msg">${av(m.from, 's36')}<div><div class="who">${(PEOPLE[m.from]?.name) || m.from}<span>${m.time}</span></div>
+            <div class="msg">${av(m.from, 's36')}<div><div class="who" style="display:flex;align-items:center;gap:4px"><span>${(PEOPLE[m.from]?.name) || m.from}</span>${userModeIcon(m.from, 'xs')}<span style="margin-left:auto">${m.time}</span></div>
               <div class="bubble">${esc(m.text).replace(/\n/g, '<br>')}
                 ${m.file ? `<div class="attach"><span style="color:var(--text-2)">${icon('file')}</span><div><div class="n">${esc(m.file.name)}</div><div class="z">${m.file.size}</div></div><button data-action="download" title="Download">${icon('download', 'sm')}</button></div>` : ''}
               </div></div></div>`).join('')}
@@ -746,9 +752,15 @@ function sendMessage(text, file) {
 
 /* ---------------- Floating UI: profile card, menus, modal ---------------- */
 function closeFloating() { $$('.pop, .menu').forEach(e => e.remove()); }
+let currentProfileAnchor = null;
 function place(el, anchor) {
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+  if (anchor && !anchor.nodeType && r.top !== undefined && r.left !== undefined) {
+    el.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.left)) + 'px';
+    el.style.top = Math.max(12, Math.min(innerHeight - h - 12, r.top)) + 'px';
+    return;
+  }
   let left = r.left, top = r.bottom + 6;
   if (left + w > innerWidth - 12) left = r.right - w;
   if (top + h > innerHeight - 12) top = r.top - h - 6;
@@ -761,6 +773,11 @@ function openProfile(id, anchor) {
     openLoginModal();
     return;
   }
+  if (anchor && anchor.nodeType) {
+    currentProfileAnchor = anchor;
+  } else if (!currentProfileAnchor || !document.body.contains(currentProfileAnchor)) {
+    currentProfileAnchor = (id === ME) ? $('#sideUser') : null;
+  }
   const personId = id || ME;
   const P = (personId && PEOPLE[personId]) || {
     name: (personId && typeof personId === 'string' && personId.length) ? personId.charAt(0).toUpperCase() + personId.slice(1) : 'Member',
@@ -768,10 +785,12 @@ function openProfile(id, anchor) {
     availability: 'available',
     mode: 'office'
   };
+  const modeKey = P.mode || 'office';
+  const mInfo = MODES[modeKey] || MODES['office'];
   const el = document.createElement('div');
   el.className = 'pop';
   el.innerHTML = `
-    <div class="pop-head">${av(id, 's64')}<div><div class="n">${P.name}</div><div class="r">${TITLES[id] || P.role || 'Member'}</div>${availBadge(id)}</div></div>
+    <div class="pop-head">${av(personId, 's64')}<div><div class="n" style="display:flex;align-items:center;gap:6px"><span>${esc(P.name)}</span><span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span></div><div class="r">${TITLES[personId] || P.role || 'Member'}</div>${availBadge(personId)}</div></div>
     <h5>Availability</h5>
     ${Object.entries(AVAIL).map(([k, a]) => `<button class="opt ${P.availability === k ? 'on' : ''}" data-set-avail="${k}"><i class="sdot ${a.cls}"></i>${a.short || a.label}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
     <div class="sep"></div>
@@ -782,9 +801,9 @@ function openProfile(id, anchor) {
     <button class="opt" data-action="open-login">${icon('user')}Switch Account / Sign In</button>
     <button class="opt" data-action="open-register">${icon('userPlus')}Register New Account</button>
     ${AUTH_TOKEN ? `<button class="opt" data-action="auth-logout" style="color:var(--red)">${icon('x')}Log Out</button>` : ''}
-    ${id !== ME ? `<div class="sep"></div><button class="opt" data-dm="${id}" style="margin-top:8px">${icon('message')}Send message</button>` : ''}`;
-  el.dataset.person = id;
-  place(el, anchor);
+    ${personId !== ME ? `<div class="sep"></div><button class="opt" data-dm="${personId}" style="margin-top:8px">${icon('message')}Send message</button>` : ''}`;
+  el.dataset.person = personId;
+  place(el, anchor || currentProfileAnchor || document.body);
 }
 function openMenu(anchor, items) {
   closeFloating();
@@ -1254,7 +1273,11 @@ function handleAction(a, el) {
 }
 
 function reopenProfileAt(id, rect) {
-  const fake = { getBoundingClientRect: () => ({ left: rect.left, right: rect.right, top: rect.top - 6, bottom: rect.top - 6 }) };
+  if (currentProfileAnchor && document.body.contains(currentProfileAnchor)) {
+    openProfile(id, currentProfileAnchor);
+    return;
+  }
+  const fake = { getBoundingClientRect: () => rect };
   openProfile(id, fake);
 }
 
@@ -1970,10 +1993,12 @@ function refreshSide() {
     return;
   }
   const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'User', role: 'Team Member' };
+  const modeKey = (currentPerson && currentPerson.mode) || 'office';
+  const m = MODES[modeKey] || MODES['office'];
   $('#sideAvatar').innerHTML = avatarSVG(ME);
   const info = $('#sideUser > div');
   if (info) {
-    info.innerHTML = `<div class="name">${esc(currentPerson.name)}</div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Member')}</div>`;
+    info.innerHTML = `<div class="name" style="display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(currentPerson.name)}</span><span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, 'xs')}</span></div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Member')}</div>`;
   }
 }
 hydrateIcons();
