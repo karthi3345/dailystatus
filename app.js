@@ -269,19 +269,100 @@ const SEED_PROJECTS = [
 
 const SEED_CHATS = [
   {
+    id: 'proj-grp-decewcdvcd-mwn5l8l5',
+    name: 'decewcdvcd',
+    kind: 'group',
+    project: 'decewcdvcd-mwn5l8l5',
+    members: 1,
+    memberList: ['raja'],
+    starred: false,
+    msgs: [
+      { id: 21, from: 'raja', time: '6:23 AM', text: 'Welcome to the decewcdvcd group discussion channel! 🚀', reactions: {} },
+      { id: 27, from: 'raja', time: '1:05 PM', text: 'nothing needs to chnage', reply_to: { id: 21, from: 'raja', text: 'Welcome to the decewcdvcd group discussion channel! 🚀', from_name: 'You' }, reactions: { '👍': ['raja'] } },
+      { id: 32, from: 'raja', time: '1:18 PM', text: 'PROCESS NOT DONE WELL', reply_to: { id: 27, from: 'raja', text: 'nothing needs to chnage', from_name: 'You' }, reactions: {} },
+      { id: 34, from: 'raja', time: '1:59 PM', text: 'Shared a file', file: { name: 'vercel.json', size: '0.0 MB' }, reactions: {} },
+      { id: 35, from: 'raja', time: '2:02 PM', text: '👌', reactions: {} },
+      { id: 40, from: 'kumar', time: '3:16 PM', text: 'hi', reactions: {} }
+    ]
+  },
+  {
     id: 'proj-grp-runway-rum-mwn689x2',
     name: 'Volgo Updates',
     kind: 'group',
     project: 'runway-rum-mwn689x2',
-    members: 3,
-    memberList: ['raja', 'karthik', 'samrat'],
+    members: 2,
+    memberList: ['rfergteg', 'raja'],
     starred: true,
     msgs: [
-      { id: 1, from: 'raja', time: '6:30 AM', text: 'Welcome to the Volgo Updates group discussion channel! 🚀', reactions: {} },
-      { id: 2, from: 'samrat', time: '12:00 PM', text: 'hey guys', reactions: {} }
+      { id: 22, from: 'raja', time: '6:30 AM', text: 'Welcome to the Volgo Updates group discussion channel! 🚀', reactions: {} },
+      { id: 23, from: 'raja', time: '12:00 PM', text: 'hey guys', reactions: {} },
+      { id: 25, from: 'raja', time: '12:42 PM', text: 'hey guys why there is no upadte here?', reactions: {} },
+      { id: 28, from: 'raja', time: '1:15 PM', text: 'hi', reactions: {} },
+      { id: 29, from: 'raja', time: '1:16 PM', text: 'sadcdcsdf', reactions: {} },
+      { id: 33, from: 'raja', time: '1:39 PM', text: 'yes', reply_to: { id: 25, from: 'raja', text: 'hey guys why there is no upadte here?', from_name: 'You' }, reactions: {} }
+    ]
+  },
+  {
+    id: 'proj-grp-pos-mwn6norq',
+    name: 'pos',
+    kind: 'group',
+    project: 'pos-mwn6norq',
+    members: 2,
+    memberList: ['mathi', 'raja'],
+    starred: false,
+    msgs: [
+      { id: 24, from: 'raja', time: '6:42 AM', text: 'Welcome to the pos group discussion channel! 🚀', reactions: {} },
+      { id: 30, from: 'raja', time: '1:17 PM', text: 'hi', reactions: {} },
+      { id: 31, from: 'raja', time: '1:17 PM', text: 'i need api', reactions: { '❤️': ['raja'] } },
+      { id: 37, from: 'raja', time: '2:02 PM', text: 'yh66uh', reactions: {} },
+      { id: 38, from: 'raja', time: '2:02 PM', text: 'yhujuj', reactions: {} },
+      { id: 39, from: 'kumar', time: '3:08 PM', text: 'hi', reactions: {} },
+      { id: 42, from: 'kumar', time: '3:19 PM', text: 'hey', reactions: {} }
+    ]
+  },
+  {
+    id: 'hotel',
+    name: 'hotel',
+    kind: 'group',
+    project: null,
+    members: 1,
+    memberList: ['raja'],
+    starred: false,
+    msgs: [
+      { id: 26, from: 'raja', time: '01:00 PM', text: 'I am replying to your earlier question with WhatsApp style reply!', reactions: { '❤️': ['raja'] } },
+      { id: 36, from: 'raja', time: '2:02 PM', text: 'hi', reactions: {} }
     ]
   }
 ];
+
+function getCachedChats() {
+  try {
+    const raw = localStorage.getItem('kathir_cached_chats');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsed.forEach(c => {
+          if (c.name === 'Runway Rum') c.name = 'Volgo Updates';
+          if (Array.isArray(c.msgs)) {
+            c.msgs.forEach(m => {
+              if (m.text && m.text.includes('Runway Rum')) m.text = m.text.replace(/Runway Rum/g, 'Volgo Updates');
+            });
+          }
+        });
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveChatsToCache() {
+  try {
+    if (Array.isArray(chats) && chats.length > 0) {
+      localStorage.setItem('kathir_cached_chats', JSON.stringify(chats));
+    }
+  } catch (e) {}
+}
 
 function getCachedProjects() {
   try {
@@ -312,8 +393,12 @@ const projects = (cachedInitialProjects && cachedInitialProjects.length)
   ? cachedInitialProjects
   : JSON.parse(JSON.stringify(SEED_PROJECTS));
 
+const cachedInitialChats = getCachedChats();
+const chats = (cachedInitialChats && cachedInitialChats.length)
+  ? cachedInitialChats
+  : JSON.parse(JSON.stringify(SEED_CHATS));
+
 const workLogs = [];
-const chats = JSON.parse(JSON.stringify(SEED_CHATS));
 
 function getTaskEffectiveStatus(t, curDate = state.currentDate || state.logDate || isoDate(new Date())) {
   if (!t) return 'pending';
@@ -1715,6 +1800,7 @@ function sendMessage(text, file, voice) {
     reactions: {}
   };
   c.msgs.push(newMsg);
+  saveChatsToCache();
   rerender();
 
   apiSendMessage(c.id, {
@@ -1725,7 +1811,10 @@ function sendMessage(text, file, voice) {
     reply_to: replyTo,
     reactions: {}
   }).then(saved => {
-    if (saved && saved.id) newMsg.id = saved.id;
+    if (saved && saved.id) {
+      newMsg.id = saved.id;
+      saveChatsToCache();
+    }
   });
 
   const box = $('#msgs');
@@ -1753,6 +1842,7 @@ async function toggleMessageReaction(c, msgIdx, emoji) {
     users.push(current);
     m.reactions[emoji] = users;
   }
+  saveChatsToCache();
   rerender();
   if (m.id) {
     await fetchFromAPI(`/messages/${m.id}/react/`, {
@@ -2874,6 +2964,7 @@ document.addEventListener('click', e => {
           msgs: []
         };
         chats.unshift(c);
+        saveChatsToCache();
         fetchFromAPI('/chats/', {
           method: 'POST',
           body: JSON.stringify({ kind: 'dm', person: targetId, created_by: ME })
@@ -3144,6 +3235,7 @@ async function handleAction(a, el) {
             };
             if (!chats.find(c => c.id === groupChat.id)) chats.unshift(groupChat);
           }
+          saveChatsToCache();
         } catch (e) {
           console.warn('Could not sync chats:', e);
         }
@@ -3193,6 +3285,7 @@ async function handleAction(a, el) {
           msgs: [{ from: lead, time: nowTime(), text: `Welcome to the ${name} group discussion channel! 🚀` }]
         };
         chats.unshift(c);
+        saveChatsToCache();
         fetchFromAPI('/chats/', {
           method: 'POST',
           body: JSON.stringify({ id: c.id, name, kind: 'group', project: pid, members: team, initial_message: c.msgs[0].text })
@@ -4417,11 +4510,13 @@ async function loadInitialData() {
       }
       chats.push(chatCopy);
     });
+    saveChatsToCache();
     if (chats.length && (!state.chatId || !chats.some(c => c.id === state.chatId))) {
       state.chatId = chats[0].id;
     }
   } else if (!chats.length) {
     chats.push(...JSON.parse(JSON.stringify(SEED_CHATS)));
+    saveChatsToCache();
   }
 
   refreshSide();
