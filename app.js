@@ -165,10 +165,10 @@ const state = {
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-function parseISO(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+function parseISO(s) { if (!s || typeof s !== 'string') return new Date(); const parts = s.split('-').map(Number); if (parts.length < 3 || isNaN(parts[0])) return new Date(); return new Date(parts[0], parts[1] - 1, parts[2]); }
 function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
-function fmtShort(s) { const d = parseISO(s); return `${MON[d.getMonth()]} ${d.getDate()}`; }
-function fmtLong(s) { const d = parseISO(s); return `${MON[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`; }
+function fmtShort(s) { if (!s || s === 'none' || s === 'ongoing') return 'Ongoing'; const d = parseISO(s); return (d && !isNaN(d.getTime())) ? `${MON[d.getMonth()]} ${d.getDate()}` : 'Ongoing'; }
+function fmtLong(s) { if (!s || s === 'none' || s === 'ongoing') return 'Ongoing'; const d = parseISO(s); return (d && !isNaN(d.getTime())) ? `${MON[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` : 'Ongoing'; }
 function nowTime() { const d = new Date(); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${m} ${ap}`; }
 const barColor = v => (v >= 75 ? 'red' : v >= 50 && v <= 65 ? '' : 'green');
 const statusBadge = s => (STATUS[s] ? `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>` : `<span class="badge progress">In Progress</span>`);
@@ -291,7 +291,7 @@ function renderProject(id, tab) {
     <div class="page-head" style="margin-bottom:0">
       <div>
         <div class="detail-title"><h1>${esc(p.name)}</h1>${statusBadge(p.status)}</div>
-        <div class="dates">${icon('calendar', 'sm')} ${fmtLong(p.start).replace(/^(\w+ \d+), (\d+)$/, '$1, $2')} – ${fmtLong(p.end)}</div>
+        <div class="dates">${icon('calendar', 'sm')} ${fmtLong(p.start).replace(/^(\w+ \d+), (\d+)$/, '$1, $2')}${p.end ? ' – ' + fmtLong(p.end) : ' – Ongoing (No end date)'}</div>
       </div>
       <div class="head-actions">
         <button class="icon-btn ${state.starredProjects.has(p.id) ? 'starred' : ''}" data-action="star-project" data-id="${p.id}" title="Star">${icon('star', 'sm')}</button>
@@ -324,7 +324,7 @@ function teamTable(p, cols) {
 function tabOverview(p) {
   const s = projectStats(p);
   const phase = s.pct >= 100 ? 4 : p.status === 'review' ? 2 : 1;
-  const steps = [['Kickoff', fmtShort(p.start)], ['Development', `(${s.pct}%)`], ['Testing', ''], ['Release', fmtShort(p.end)]];
+  const steps = [['Kickoff', fmtShort(p.start)], ['Development', `(${s.pct}%)`], ['Testing', ''], ['Release', p.end ? fmtShort(p.end) : 'Ongoing']];
   const fill = phase >= 4 ? 75 : phase * 25;
   return `
   <div class="ov-top">
@@ -707,7 +707,7 @@ function openMenu(anchor, items) {
   el.addEventListener('click', e => { const b = e.target.closest('[data-mi]'); if (!b) return; el.remove(); items[b.dataset.mi].run(); });
   place(el, anchor);
 }
-function openModal(title, fields, onSubmit, submitLabel = 'Save') {
+function openModal(title, fields, onSubmit, submitLabel = 'Save', onMount = null) {
   const ov = document.createElement('div');
   ov.className = 'overlay';
   const f = fields.map(fd => {
@@ -715,7 +715,8 @@ function openModal(title, fields, onSubmit, submitLabel = 'Save') {
       ? `<select class="select" name="${fd.name}">${fd.options.map(([v, l]) => `<option value="${v}" ${v === fd.value ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`
       : fd.type === 'textarea' ? `<textarea name="${fd.name}" placeholder="${fd.placeholder || ''}">${fd.value || ''}</textarea>`
       : `<input name="${fd.name}" type="${fd.type || 'text'}" value="${fd.value || ''}" placeholder="${fd.placeholder || ''}" ${fd.required ? 'required' : ''}/>`;
-    return `<div class="field" ${fd.half ? 'data-half' : ''}><label>${fd.label}</label>${input}</div>`;
+    const label = fd.labelHtml || `<label>${fd.label}</label>`;
+    return `<div class="field" ${fd.half ? 'data-half' : ''} ${fd.id ? `id="${fd.id}"` : ''}>${label}${input}</div>`;
   });
   // pair up "half" fields
   let html = '', i = 0;
@@ -730,6 +731,7 @@ function openModal(title, fields, onSubmit, submitLabel = 'Save') {
     const data = Object.fromEntries(new FormData(e.target).entries());
     if (onSubmit(data) !== false) close();
   });
+  if (typeof onMount === 'function') onMount(ov);
 }
 const currentProject = () => { const m = location.hash.match(/^#\/project\/([^/]+)/); return m && projects.find(p => p.id === m[1]); };
 
@@ -849,13 +851,35 @@ function handleAction(a, el) {
         { name: 'name', label: 'Project name', required: true, placeholder: 'e.g. Restaurant POS' },
         { name: 'type', label: 'Type', type: 'select', half: true, value: 'Web', options: [['Web', 'Web'], ['SaaS', 'SaaS'], ['Mobile', 'Mobile'], ['Game', 'Game']] },
         { name: 'lead', label: 'Lead', type: 'select', half: true, value: availableLeads[0] || (ME || 'admin'), options: availableLeads.map(id => [id, (PEOPLE[id]?.name) || id]) },
-        { name: 'start', label: 'Start date', type: 'date', half: true, value: isoDate(new Date()) },
-        { name: 'end', label: 'End date', type: 'date', half: true, value: isoDate(new Date(Date.now() + 90 * 864e5)) },
+        {
+          name: 'start',
+          half: true,
+          labelHtml: `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <label style="margin:0">Start date</label>
+              <label class="tick-no-end" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--gold);cursor:pointer;font-weight:500;user-select:none" title="Tick mark: project has no end date">
+                <input type="checkbox" id="noEndTick" name="noEndDate" style="accent-color:var(--gold);cursor:pointer;width:15px;height:15px;margin:0" />
+                <span>No end date</span>
+              </label>
+            </div>`,
+          type: 'date',
+          value: isoDate(new Date())
+        },
+        {
+          name: 'end',
+          id: 'fieldEndDate',
+          half: true,
+          labelHtml: `<label id="lblEndDate" style="margin-bottom:6px">End date</label>`,
+          type: 'date',
+          value: isoDate(new Date(Date.now() + 90 * 864e5))
+        },
       ], async d => {
         const id = d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
         const thumb = { Web: 'portfolio', SaaS: 'crm', Mobile: 'cafe', Game: 'game' }[d.type] || 'portfolio';
         const lead = d.lead || ME || 'admin';
-        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: d.end, team: [lead], extra: 0,
+        const noEnd = d.noEndDate === 'on' || d.noEndDate === true || !d.end;
+        const endDate = noEnd ? '' : d.end;
+        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: endDate, team: [lead], extra: 0,
           totals: { total: 0, completed: 0, inProgress: 0 }, workload: {}, tasks: [], files: [], notes: [], _other: { completed: 0, inProgress: 0, pending: 0 } };
         projects.unshift(np);
         await fetchFromAPI('/projects/', {
@@ -885,7 +909,30 @@ function handleAction(a, el) {
           console.warn('Could not sync chats:', e);
         }
         go(`#/project/${id}/overview`); toast(`Project "${d.name}" and messenger group created!`);
-      }, 'Create Project');
+      }, 'Create Project', ov => {
+        const chk = ov.querySelector('#noEndTick');
+        const endFld = ov.querySelector('#fieldEndDate');
+        const endInput = ov.querySelector('input[name="end"]');
+        const endLbl = ov.querySelector('#lblEndDate');
+        if (chk && endFld && endInput) {
+          chk.addEventListener('change', () => {
+            if (chk.checked) {
+              endInput.disabled = true;
+              endInput.dataset.savedVal = endInput.value;
+              endInput.value = '';
+              endFld.style.opacity = '0.35';
+              endFld.style.pointerEvents = 'none';
+              if (endLbl) endLbl.innerHTML = `End date <span style="font-size:11px;color:var(--text-2);font-weight:normal">(Not needed)</span>`;
+            } else {
+              endInput.disabled = false;
+              endInput.value = endInput.dataset.savedVal || isoDate(new Date(Date.now() + 90 * 864e5));
+              endFld.style.opacity = '1';
+              endFld.style.pointerEvents = 'auto';
+              if (endLbl) endLbl.innerHTML = `End date`;
+            }
+          });
+        }
+      });
       break;
     case 'open-project-chat': {
       const pid = el?.dataset?.id || p?.id;
