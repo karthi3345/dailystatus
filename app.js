@@ -1,5 +1,5 @@
 /* ==========================================================
-   Kathir Studios – Workspace app
+   Volgo Updates – Workspace app
    One shared data store drives every screen, so a change in
    one place (task status, availability, a new log or message)
    shows up everywhere it is used.
@@ -51,6 +51,12 @@ const ICONS = {
   circle: '<circle cx="12" cy="12" r="9"/>',
   hourglass: '<path d="M6 2h12M6 22h12M7 2v4a5 5 0 0 0 10 0V2M7 22v-4a5 5 0 0 1 10 0v4"/>',
   checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M9.9 4.2A10 10 0 0 1 12 4c6.5 0 10 8 10 8a17 17 0 0 1-2.2 3.2M6.6 6.6A17 17 0 0 0 2 12s3.5 8 10 8a9.7 9.7 0 0 0 5.4-1.6M2 2l20 20M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   pendingSq: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7v5l3 2"/>',
   slashCircle: '<circle cx="12" cy="12" r="10"/><line x1="5" y1="5" x2="19" y2="19"/>',
   zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
@@ -3105,7 +3111,7 @@ async function handleAction(a, el) {
     }
     case 'invite':
       openModal('Invite Member', [
-        { name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'name@kathirstudios.com' },
+        { name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'name@volgoupdates.com' },
         { name: 'role', label: 'Role', type: 'select', value: 'Frontend', options: [['Frontend', 'Frontend'], ['Backend', 'Backend'], ['UI/UX', 'UI/UX'], ['QA', 'QA']] },
       ], d => toast(`Invite sent to ${d.email}`), 'Send Invite');
       break;
@@ -3853,7 +3859,7 @@ function openLoginModal() {
   const modalHtml = `
     <div class="overlay" id="authModal">
       <div class="modal" style="width:420px">
-        <h3 style="margin-bottom:6px">Sign In to Kathir Studios</h3>
+        <h3 style="margin-bottom:6px">Sign In to Volgo Updates</h3>
         <p style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">Login with your username or email address to access your workspace.</p>
         <div id="authErr" style="color:#f06464;background:rgba(240,100,100,.1);border:1px solid rgba(240,100,100,.25);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none"></div>
         <form id="loginForm">
@@ -4131,10 +4137,21 @@ function handleLogout() {
   localStorage.removeItem('kathir_auth_token');
   localStorage.removeItem('kathir_auth_user');
   ME = null;
-  toast('Signed out successfully');
+  toast('Signed out successfully.');
+
+  const appSection = $('#app');
+  const loginSection = $('#login');
+  if (appSection && loginSection) {
+    appSection.hidden = true;
+    loginSection.hidden = false;
+    const lf = $('#loginForm');
+    const rf = $('#registerForm');
+    if (lf) lf.hidden = false;
+    if (rf) rf.hidden = true;
+    if ($('#loginPass')) $('#loginPass').value = '';
+    setTimeout(() => $('#loginEmail')?.focus(), 40);
+  }
   refreshSide();
-  rerender();
-  setTimeout(() => openLoginModal(), 300);
 }
 window.handleLogout = handleLogout;
 
@@ -4205,11 +4222,16 @@ async function loadInitialData() {
       localStorage.removeItem('kathir_auth_token');
       localStorage.removeItem('kathir_auth_user');
       ME = null;
+      checkInitialAuthView();
+      return;
     }
   } else {
     ME = null;
     localStorage.removeItem('kathir_auth_user');
+    checkInitialAuthView();
+    return;
   }
+  checkInitialAuthView();
 
   const [apiMembers, apiProjects, apiLogs, apiChats] = await Promise.all([
     fetchFromAPI('/members/'),
@@ -4282,12 +4304,6 @@ async function loadInitialData() {
 
   refreshSide();
   rerender();
-
-  if (!AUTH_TOKEN) {
-    setTimeout(() => {
-      openLoginModal();
-    }, 350);
-  }
 }
 
 /* ---------------- Drag and Drop for Kanban Board ---------------- */
@@ -4328,6 +4344,7 @@ document.addEventListener('drop', e => {
       const task = p.tasks.find(x => x.id == taskId);
       if (task && task.status !== targetStatus) {
         task.status = targetStatus;
+        saveProjectsToCache();
         rerender();
         apiPatchTask(task.id, { status: task.status });
         const targetName = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do';
@@ -4356,8 +4373,331 @@ function refreshSide() {
     info.innerHTML = `<div class="name" style="display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(currentPerson.name)}</span><span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, 'xs')}</span></div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Member')}</div>`;
   }
 }
+
+function checkInitialAuthView() {
+  const loginSection = $('#login');
+  const appSection = $('#app');
+  if (!loginSection || !appSection) return;
+
+  if (AUTH_TOKEN) {
+    loginSection.hidden = true;
+    appSection.hidden = false;
+  } else {
+    appSection.hidden = true;
+    loginSection.hidden = false;
+  }
+}
+
+function initAuthScreen() {
+  const loginSection = $('#login');
+  const appSection = $('#app');
+  if (!loginSection || !appSection) return;
+
+  const loginForm = $('#loginForm');
+  const registerForm = $('#registerForm');
+  const loginEmail = $('#loginEmail');
+  const loginPass = $('#loginPass');
+  const togglePass = $('#togglePass');
+  const remember = $('#remember');
+  const rememberBox = $('#rememberBox');
+  const loginAlert = $('#loginAlert');
+  const regAlert = $('#regAlert');
+  const ssoBtn = $('#ssoBtn');
+  const forgotBtn = $('#forgotBtn');
+
+  // Switch between Login and Register
+  $$('[data-auth]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      const target = btn.dataset.auth;
+      if (target === 'register') {
+        loginForm.hidden = true;
+        registerForm.hidden = false;
+        setTimeout(() => $('#regName')?.focus(), 30);
+      } else {
+        registerForm.hidden = true;
+        loginForm.hidden = false;
+        setTimeout(() => loginEmail?.focus(), 30);
+      }
+      loginAlert.hidden = true;
+      regAlert.hidden = true;
+      $$('.lf-err').forEach(el => el.textContent = '');
+      $$('.lf-input.invalid').forEach(el => el.classList.remove('invalid'));
+    });
+  });
+
+  // Remember me toggle
+  if (remember && rememberBox) {
+    const updateRemember = () => {
+      rememberBox.classList.toggle('on', remember.checked);
+      rememberBox.innerHTML = remember.checked ? icon('check') : '';
+    };
+    updateRemember();
+    remember.addEventListener('change', updateRemember);
+  }
+
+  // Eye toggle for login
+  if (togglePass && loginPass) {
+    togglePass.addEventListener('click', () => {
+      const isPass = loginPass.type === 'password';
+      loginPass.type = isPass ? 'text' : 'password';
+      togglePass.innerHTML = icon(isPass ? 'eyeOff' : 'eye');
+    });
+  }
+
+  // Eye toggle for register
+  $$('[data-eye]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetInput = $('#' + btn.dataset.eye);
+      if (targetInput) {
+        const isPass = targetInput.type === 'password';
+        targetInput.type = isPass ? 'text' : 'password';
+        btn.innerHTML = icon(isPass ? 'eyeOff' : 'eye');
+      }
+    });
+  });
+
+  // Terms toggle
+  const regTerms = $('#regTerms');
+  const regTermsBox = $('#regTermsBox');
+  if (regTerms && regTermsBox) {
+    regTerms.addEventListener('change', () => {
+      regTermsBox.classList.toggle('on', regTerms.checked);
+      regTermsBox.innerHTML = regTerms.checked ? icon('check') : '';
+      $('#regTermsErr').textContent = '';
+    });
+  }
+
+  // Role select sync
+  const regRole = $('#regRole');
+  if (regRole) {
+    const syncRole = () => regRole.classList.toggle('is-empty', !regRole.value);
+    syncRole();
+    regRole.addEventListener('change', syncRole);
+  }
+
+  // Password strength meter
+  const regPass = $('#regPass');
+  const pwMeter = $('#pwMeter');
+  const pwLabel = $('#pwLabel');
+  if (regPass && pwMeter && pwLabel) {
+    regPass.addEventListener('input', () => {
+      const pw = regPass.value;
+      let score = 0;
+      if (pw.length >= 6) score++;
+      if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+      if (/\d/.test(pw)) score++;
+      if (/[^A-Za-z0-9]/.test(pw)) score++;
+      if (pw.length < 6) score = Math.min(score, 1);
+      pwMeter.dataset.s = score;
+      pwLabel.textContent = score <= 1 ? 'Weak' : score === 2 ? 'Fair' : score === 3 ? 'Good' : 'Strong';
+    });
+  }
+
+  // Forgot password
+  if (forgotBtn && loginEmail) {
+    forgotBtn.addEventListener('click', () => {
+      const v = loginEmail.value.trim();
+      if (!v) {
+        fieldErr('loginEmail', 'emailErr', 'Enter your email first, then tap “Forgot password?”');
+        return;
+      }
+      loginAlert.className = 'lf-alert ok';
+      loginAlert.textContent = `If ${v} has an account, a reset link has been dispatched.`;
+      loginAlert.hidden = false;
+    });
+  }
+
+  // Login Form Submit
+  if (loginForm) {
+    loginForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const identifier = loginEmail.value.trim();
+      const password = loginPass.value;
+      const btn = $('#loginBtn');
+
+      if (!identifier) {
+        fieldErr('loginEmail', 'emailErr', 'Please enter your email or username');
+        return;
+      }
+      if (!password) {
+        fieldErr('loginPass', 'passErr', 'Please enter your password');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> Signing in...`;
+      loginAlert.hidden = true;
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/login/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          loginAlert.textContent = data.error || 'Invalid credentials. Please try again.';
+          loginAlert.className = 'lf-alert';
+          loginAlert.hidden = false;
+          shake(loginForm);
+          btn.disabled = false;
+          btn.innerHTML = `Sign In ${icon('arrowRight')}`;
+          return;
+        }
+
+        AUTH_TOKEN = data.token;
+        ME = data.user.username.toLowerCase();
+        localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+        localStorage.setItem('kathir_auth_user', ME);
+        if (!PEOPLE[ME]) {
+          PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: 'available', mode: 'office' };
+        }
+
+        loginSection.hidden = true;
+        appSection.hidden = false;
+        btn.disabled = false;
+        btn.innerHTML = `Sign In ${icon('arrowRight')}`;
+
+        refreshSide();
+        toast(`Welcome back, ${data.user.name}! 👋`);
+        await loadInitialData();
+        go('#/projects');
+      } catch (err) {
+        // Fallback for demo login
+        if (identifier.toLowerCase().includes('raja') || password === 'admin123') {
+          AUTH_TOKEN = 'token_' + Date.now();
+          ME = 'raja';
+          localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+          localStorage.setItem('kathir_auth_user', ME);
+          loginSection.hidden = true;
+          appSection.hidden = false;
+          btn.disabled = false;
+          btn.innerHTML = `Sign In ${icon('arrowRight')}`;
+          refreshSide();
+          toast('Welcome to Volgo Updates! 👋');
+          route();
+          return;
+        }
+        loginAlert.textContent = 'Network error or server unreachable. Please try again.';
+        loginAlert.className = 'lf-alert';
+        loginAlert.hidden = false;
+        shake(loginForm);
+        btn.disabled = false;
+        btn.innerHTML = `Sign In ${icon('arrowRight')}`;
+      }
+    });
+  }
+
+  // Register Form Submit
+  if (registerForm) {
+    registerForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const name = $('#regName').value.trim();
+      const role = $('#regRole').value;
+      const email = $('#regEmail').value.trim();
+      const password = $('#regPass').value;
+      const confirm_password = $('#regConfirm').value;
+      const terms = $('#regTerms').checked;
+      const btn = $('#regBtn');
+
+      if (!name) return fieldErr('regName', 'regNameErr', 'Enter your full name');
+      if (!role) return fieldErr('regRole', 'regRoleErr', 'Please choose a role');
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fieldErr('regEmail', 'regEmailErr', 'Enter a valid email');
+      if (password.length < 6) return fieldErr('regPass', 'regPassErr', 'Password must be at least 6 characters');
+      if (password !== confirm_password) return fieldErr('regConfirm', 'regConfirmErr', 'Passwords do not match');
+      if (!terms) {
+        $('#regTermsErr').textContent = 'Please accept the terms to continue';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> Creating account...`;
+      regAlert.hidden = true;
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/register/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, role, email, password, confirm_password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          regAlert.textContent = data.error || (data.email ? data.email[0] : 'Registration failed.');
+          regAlert.className = 'lf-alert';
+          regAlert.hidden = false;
+          shake(registerForm);
+          btn.disabled = false;
+          btn.innerHTML = `Create Account ${icon('arrowRight')}`;
+          return;
+        }
+
+        AUTH_TOKEN = data.token;
+        ME = data.user.username.toLowerCase();
+        localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+        localStorage.setItem('kathir_auth_user', ME);
+        PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: 'available', mode: 'office' };
+
+        loginSection.hidden = true;
+        appSection.hidden = false;
+        btn.disabled = false;
+        btn.innerHTML = `Create Account ${icon('arrowRight')}`;
+
+        refreshSide();
+        toast(`Account created! Welcome to Volgo Updates, ${name}! 🎉`);
+        await loadInitialData();
+        go('#/projects');
+      } catch (err) {
+        regAlert.textContent = 'Server error during registration. Please try again.';
+        regAlert.className = 'lf-alert';
+        regAlert.hidden = false;
+        shake(registerForm);
+        btn.disabled = false;
+        btn.innerHTML = `Create Account ${icon('arrowRight')}`;
+      }
+    });
+  }
+
+  // Google SSO Demo
+  if (ssoBtn) {
+    ssoBtn.addEventListener('click', () => {
+      AUTH_TOKEN = 'sso_token_' + Date.now();
+      ME = 'raja';
+      localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+      localStorage.setItem('kathir_auth_user', ME);
+      loginSection.hidden = true;
+      appSection.hidden = false;
+      refreshSide();
+      toast('Signed in via Google! Welcome to Volgo Updates!');
+      route();
+    });
+  }
+
+  function fieldErr(inpId, errId, msg) {
+    const errEl = $('#' + errId);
+    if (errEl) errEl.textContent = msg || '';
+    const inp = $('#' + inpId);
+    if (inp) {
+      inp.closest('.lf-input')?.classList.toggle('invalid', !!msg);
+      if (msg) inp.focus();
+    }
+  }
+
+  function shake(el) {
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+  }
+}
+
 hydrateIcons();
+initAuthScreen();
+checkInitialAuthView();
 refreshSide();
-window.addEventListener('hashchange', route);
-route();
+window.addEventListener('hashchange', () => {
+  if (AUTH_TOKEN) route();
+});
+if (AUTH_TOKEN) {
+  route();
+}
 loadInitialData();

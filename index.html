@@ -6,11 +6,164 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Kathir Studios – Workspace</title>
-  <link rel="stylesheet" href="styles.css?v=3.2" />
+  <title>Volgo Updates – Workspace</title>
+  <link rel="stylesheet" href="styles.css?v=3.3" />
 </head>
 <body>
-  <div class="app">
+  <!-- Fullscreen Login & Register Screen (Volgo Updates) -->
+  <section class="login" id="login">
+    <div class="login-card">
+      <!-- Brand side -->
+      <div class="login-brand">
+        <div class="brand">
+          <svg viewBox="0 0 48 42" aria-hidden="true">
+            <defs>
+              <linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#ffd36b" /><stop offset="1" stop-color="#e09a12" />
+              </linearGradient>
+            </defs>
+            <path d="M24 2 46 40H2Z" fill="none" stroke="url(#lg2)" stroke-width="4" stroke-linejoin="round" />
+            <path d="M24 16 35 36H13Z" fill="none" stroke="url(#lg2)" stroke-width="3.2" stroke-linejoin="round" />
+          </svg>
+          <div class="brand-name">Volgo<br />Updates</div>
+        </div>
+        <div class="login-hero">
+          <h2>Every project, every teammate, <span>one workspace.</span></h2>
+          <p>Track progress, log your daily work and talk to your team without switching tools.</p>
+        </div>
+        <div class="login-preview">
+          <div class="lp-row">
+            <div class="lp-ring"><b>85%</b></div>
+            <div class="lp-info">
+              <div class="lp-title">Runway Rum</div>
+              <div class="lp-sub">Development · 3 tasks</div>
+              <div class="bar"><i style="width:85%"></i></div>
+            </div>
+          </div>
+          <div class="lp-stats">
+            <div><b>8</b><span>Projects</span></div>
+            <div><b>5</b><span>In Progress</span></div>
+            <div><b>4</b><span>Available</span></div>
+          </div>
+        </div>
+        <div class="login-foot">© 2026 Volgo Updates</div>
+      </div>
+
+      <!-- Form side: Login -->
+      <form class="login-form" id="loginForm" novalidate>
+        <h1>Welcome back</h1>
+        <p class="page-sub">Sign in to continue to your workspace</p>
+
+        <div class="lf-field">
+          <label for="loginEmail">Email or Username</label>
+          <div class="lf-input">
+            <span data-icon="mail"></span>
+            <input id="loginEmail" type="text" autocomplete="username" placeholder="you@volgoupdates.com or username" />
+          </div>
+          <small class="lf-err" id="emailErr"></small>
+        </div>
+
+        <div class="lf-field">
+          <div class="lf-label-row">
+            <label for="loginPass">Password</label>
+            <button type="button" class="link" id="forgotBtn">Forgot password?</button>
+          </div>
+          <div class="lf-input">
+            <span data-icon="lock"></span>
+            <input id="loginPass" type="password" autocomplete="current-password" placeholder="Enter your password" />
+            <button type="button" class="lf-eye" id="togglePass" title="Show password"><span data-icon="eye"></span></button>
+          </div>
+          <small class="lf-err" id="passErr"></small>
+        </div>
+
+        <label class="lf-remember">
+          <input type="checkbox" id="remember" checked />
+          <span class="chk on" id="rememberBox"></span>
+          Keep me signed in
+        </label>
+
+        <div class="lf-alert" id="loginAlert" hidden></div>
+        <button class="btn gold lf-submit" type="submit" id="loginBtn">Sign In <span data-icon="arrowRight"></span></button>
+
+        <div class="lf-divider"><span>or</span></div>
+        <button type="button" class="btn lf-sso" id="ssoBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2-1.9 3.2-4.7 3.2-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14.2a6.6 6.6 0 0 1 0-4.3V7H2.1a11 11 0 0 0 0 10z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3 .6 4.2 1.6l3.1-3.1A11 11 0 0 0 2.1 7l3.7 2.9C6.7 7.3 9.1 5.4 12 5.4z"/></svg>
+          Continue with Google
+        </button>
+
+        <p class="lf-switch">Don't have an account? <button type="button" class="link" data-auth="register">Create one</button></p>
+        <p class="lf-demo">Demo login: <b>raja</b> / <b>admin123</b></p>
+      </form>
+
+      <!-- Form side: Register -->
+      <form class="login-form" id="registerForm" novalidate hidden>
+        <h1>Create your account</h1>
+        <p class="page-sub">Join the Volgo Updates workspace</p>
+
+        <div class="lf-grid">
+          <div class="lf-field">
+            <label for="regName">Full name</label>
+            <div class="lf-input"><span data-icon="user"></span><input id="regName" autocomplete="name" placeholder="Your name" /></div>
+            <small class="lf-err" id="regNameErr"></small>
+          </div>
+          <div class="lf-field">
+            <label for="regRole">Role</label>
+            <div class="lf-input lf-select"><span data-icon="briefcase"></span>
+              <select id="regRole">
+                <option value="">Select role</option>
+                <option>Team Lead</option>
+                <option>Developer</option>
+                <option>UI/UX Designer</option>
+                <option>QA Engineer</option>
+                <option>Project Manager</option>
+              </select>
+            </div>
+            <small class="lf-err" id="regRoleErr"></small>
+          </div>
+        </div>
+
+        <div class="lf-field">
+          <label for="regEmail">Work email</label>
+          <div class="lf-input"><span data-icon="mail"></span><input id="regEmail" type="email" autocomplete="email" placeholder="you@volgoupdates.com" /></div>
+          <small class="lf-err" id="regEmailErr"></small>
+        </div>
+
+        <div class="lf-field">
+          <label for="regPass">Password</label>
+          <div class="lf-input">
+            <span data-icon="lock"></span>
+            <input id="regPass" type="password" autocomplete="new-password" placeholder="At least 6 characters" />
+            <button type="button" class="lf-eye" data-eye="regPass" title="Show password"><span data-icon="eye"></span></button>
+          </div>
+          <div class="pw-meter" id="pwMeter"><i></i><i></i><i></i><i></i><span id="pwLabel"></span></div>
+          <small class="lf-err" id="regPassErr"></small>
+        </div>
+
+        <div class="lf-field">
+          <label for="regConfirm">Confirm password</label>
+          <div class="lf-input">
+            <span data-icon="lock"></span>
+            <input id="regConfirm" type="password" autocomplete="new-password" placeholder="Re-enter password" />
+            <button type="button" class="lf-eye" data-eye="regConfirm" title="Show password"><span data-icon="eye"></span></button>
+          </div>
+          <small class="lf-err" id="regConfirmErr"></small>
+        </div>
+
+        <label class="lf-remember" style="margin-bottom:4px">
+          <input type="checkbox" id="regTerms" />
+          <span class="chk" id="regTermsBox"></span>
+          <span>I agree to the <span class="link">Terms</span> and <span class="link">Privacy Policy</span></span>
+        </label>
+        <small class="lf-err" id="regTermsErr" style="margin:0 0 12px"></small>
+
+        <div class="lf-alert" id="regAlert" hidden></div>
+        <button class="btn gold lf-submit" type="submit" id="regBtn" style="margin-top:10px">Create Account <span data-icon="arrowRight"></span></button>
+        <p class="lf-switch">Already have an account? <button type="button" class="link" data-auth="login">Sign in</button></p>
+      </form>
+    </div>
+  </section>
+
+  <div class="app" id="app" hidden>
     <!-- Sidebar (shared by every screen) -->
     <aside class="sidebar">
       <div class="brand" data-go="#/projects">
@@ -43,6 +196,6 @@
     <main class="main" id="main"></main>
   </div>
 
-  <script src="app.js?v=3.2"></script>
+  <script src="app.js?v=3.3"></script>
 </body>
 </html>
