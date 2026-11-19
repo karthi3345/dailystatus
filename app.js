@@ -30,6 +30,8 @@ const ICONS = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   checks: '<path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16"/>',
   send: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+  reply: '<path d="m9 14-5-5 5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v2"/>',
+  heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
   smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
   edit: '<path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
@@ -171,6 +173,7 @@ const state = {
   logDate: isoDate(new Date()), logProject: '', logHours: '4h 00m', logAttach: null,
   logStatus: 'progress', logDependency: '', logLead: '', logFilter: 'all',
   chatId: '', chatQuery: '',
+  replyingTo: null,
   starredProjects: new Set(),
 };
 
@@ -963,17 +966,101 @@ function renderMessenger() {
           </div>
         </div>
         <div class="msgs" id="msgs">
-          ${(c.msgs || []).map(m => m.from === ME ? `
-            <div class="msg me"><div class="bubble"><div class="meta">${m.time} ${icon('checks', 'xs')}</div>${esc(m.text).replace(/\n/g, '<br>')}</div></div>` : `
-            <div class="msg">${av(m.from, 's36')}<div><div class="who" style="display:flex;align-items:center;gap:4px"><span>${(PEOPLE[m.from]?.name) || m.from}</span>${userModeIcon(m.from, 'xs')}<span style="margin-left:auto">${m.time}</span></div>
-              <div class="bubble">${esc(m.text).replace(/\n/g, '<br>')}
-                ${m.file ? `<div class="attach"><span style="color:var(--text-2)">${icon('file')}</span><div><div class="n">${esc(m.file.name)}</div><div class="z">${m.file.size}</div></div><button data-action="download" title="Download">${icon('download', 'sm')}</button></div>` : ''}
-              </div></div></div>`).join('')}
+          ${(c.msgs || []).map((m, idx) => {
+            const isMe = m.from === ME;
+            const fromName = isMe ? 'You' : ((PEOPLE[m.from]?.name) || m.from || 'Member');
+            const reactions = m.reactions || {};
+            const rxEntries = Object.entries(reactions);
+
+            return `
+            <div class="msg ${isMe ? 'me' : ''}" id="msg-item-${idx}" data-msg-idx="${idx}">
+              ${!isMe ? av(m.from, 's36') : ''}
+              <div class="msg-content-wrap">
+                ${!isMe ? `
+                  <div class="who" style="display:flex;align-items:center;gap:4px">
+                    <span>${esc(fromName)}</span>
+                    ${userModeIcon(m.from, 'xs')}
+                    <span style="margin-left:auto">${m.time}</span>
+                  </div>` : ''}
+
+                <div class="bubble-container">
+                  <div class="bubble">
+                    ${isMe ? `<div class="meta">${m.time} ${icon('checks', 'xs')}</div>` : ''}
+
+                    <!-- Quoted Message (WhatsApp Style Reply Preview) -->
+                    ${m.reply_to ? `
+                      <div class="msg-quote-card" data-action="jump-quoted-msg" data-quoted-text="${esc(m.reply_to.text || '')}" title="Click to view quoted message">
+                        <div class="msg-quote-name">${esc(m.reply_to.from_name || (PEOPLE[m.reply_to.from]?.name) || m.reply_to.from || 'Member')}</div>
+                        <div class="msg-quote-snippet">${esc(m.reply_to.text || '')}</div>
+                      </div>
+                    ` : ''}
+
+                    <div class="msg-text">${esc(m.text || '').replace(/\n/g, '<br>')}</div>
+
+                    ${m.file ? `
+                      <div class="attach">
+                        <span style="color:var(--text-2)">${icon('file')}</span>
+                        <div><div class="n">${esc(m.file.name)}</div><div class="z">${m.file.size}</div></div>
+                        <button type="button" data-action="download" title="Download">${icon('download', 'sm')}</button>
+                      </div>` : ''}
+                  </div>
+
+                  <!-- WhatsApp Style Message Actions (Hover / Tap) -->
+                  <div class="msg-actions-pill">
+                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="👍" data-msg-idx="${idx}" title="Thumbs Up">👍</button>
+                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="❤️" data-msg-idx="${idx}" title="Heart">❤️</button>
+                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="😂" data-msg-idx="${idx}" title="Laugh">😂</button>
+                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="😮" data-msg-idx="${idx}" title="Surprised">😮</button>
+                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="🙏" data-msg-idx="${idx}" title="Thanks">🙏</button>
+                    <button type="button" class="msg-act-btn" data-action="open-more-emojis" data-msg-idx="${idx}" title="More emojis">➕</button>
+                    <button type="button" class="msg-act-btn reply-act" data-action="reply-to-msg" data-msg-idx="${idx}" title="Reply to this message">
+                      ${icon('reply', 'xs')} <span>Reply</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Emoji Reactions Display Under Bubble -->
+                ${rxEntries.length ? `
+                  <div class="msg-rx-row">
+                    ${rxEntries.map(([emoji, users]) => {
+                      const userList = Array.isArray(users) ? users : [];
+                      const hasReacted = userList.includes(ME || 'raja');
+                      const names = userList.map(u => (PEOPLE[u]?.name) || u).join(', ');
+                      return `
+                        <button type="button" class="msg-rx-pill ${hasReacted ? 'active' : ''}" data-action="quick-react" data-emoji="${emoji}" data-msg-idx="${idx}" title="${esc(names)}">
+                          <span>${emoji}</span>
+                          <span class="rx-cnt">${userList.length}</span>
+                        </button>
+                      `;
+                    }).join('')}
+                    <button type="button" class="msg-rx-add" data-action="open-more-emojis" data-msg-idx="${idx}" title="Add reaction">+</button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>`;
+          }).join('')}
         </div>
+
+        <!-- WhatsApp Reply Preview Banner -->
+        ${state.replyingTo ? `
+          <div class="reply-banner">
+            <div class="reply-banner-bar"></div>
+            <div class="reply-banner-body">
+              <div class="reply-banner-title">
+                ${icon('reply', 'xs')} Replying to <strong style="color:var(--gold);margin-left:4px">${esc(state.replyingTo.from_name || state.replyingTo.from)}</strong>
+              </div>
+              <div class="reply-banner-text">${esc(state.replyingTo.text)}</div>
+            </div>
+            <button type="button" class="reply-banner-close" data-action="cancel-reply" title="Cancel Reply (Esc)">
+              ${icon('x', 'xs')}
+            </button>
+          </div>
+        ` : ''}
+
         <form class="composer-row" id="msgForm">
           <button type="button" class="plus-btn" data-action="msg-attach" title="Attach">${icon('plus', 'sm')}</button>
           <input type="file" id="msgFile" hidden />
-          <label class="msg-input"><input id="msgInput" placeholder="Type a message..." autocomplete="off"/><button type="button" data-action="emoji" title="Emoji">${icon('smile')}</button></label>
+          <label class="msg-input"><input id="msgInput" placeholder="${state.replyingTo ? `Reply to ${state.replyingTo.from_name}...` : 'Type a message...'}" autocomplete="off"/><button type="button" data-action="emoji" title="Emoji">${icon('smile')}</button></label>
           <button class="send" type="submit" title="Send">${icon('send', 'sm')}</button>
         </form>
       </div>` : `
@@ -993,9 +1080,13 @@ function renderMessenger() {
   </section>`;
 }
 function afterMessenger() {
-  const box = $('#msgs'); if (box) box.scrollTop = box.scrollHeight;
+  const box = $('#msgs');
+  if (box) box.scrollTop = box.scrollHeight;
   const main = $('#main');
   main.style.overflow = 'hidden';
+  if (state.replyingTo) {
+    $('#msgInput')?.focus();
+  }
 }
 function updateMsgDot() {
   $('#msgDot').classList.toggle('hide', !chats.some(c => c.unread));
@@ -1003,21 +1094,102 @@ function updateMsgDot() {
 }
 function sendMessage(text, file) {
   const c = chats.find(x => x.id === state.chatId);
+  if (!c) return;
   const msgContent = text || (file ? 'Shared a file' : '');
-  c.msgs.push({ from: ME, time: nowTime(), text: msgContent, file });
+  const replyTo = state.replyingTo ? { ...state.replyingTo } : null;
+  state.replyingTo = null;
+
+  const newMsg = {
+    id: Date.now(),
+    from: ME || 'raja',
+    time: nowTime(),
+    text: msgContent,
+    file,
+    reply_to: replyTo,
+    reactions: {}
+  };
+  c.msgs.push(newMsg);
   rerender();
-  apiSendMessage(c.id, { from_member: ME, text: msgContent, file_info: file, time_label: nowTime() });
+
+  apiSendMessage(c.id, {
+    from_member: ME || 'raja',
+    text: msgContent,
+    file_info: file,
+    time_label: nowTime(),
+    reply_to: replyTo,
+    reactions: {}
+  }).then(saved => {
+    if (saved && saved.id) newMsg.id = saved.id;
+  });
+
   // Simulated reply so the conversation feels alive
   const replier = c.kind === 'dm' ? c.person : (c.id === 'hotel' ? 'divya' : c.id === 'unity' ? 'karthik' : 'arun');
   const box = $('#msgs');
   setTimeout(() => {
-    if (!location.hash.startsWith('#/messenger') || state.chatId !== c.id) { c.msgs.push({ from: replier, time: nowTime(), text: 'Got it, thanks! 👍' }); c.unread++; updateMsgDot(); return; }
-    box?.insertAdjacentHTML('beforeend', `<div class="typing">${PEOPLE[replier].name} is typing…</div>`); box && (box.scrollTop = box.scrollHeight);
+    if (!location.hash.startsWith('#/messenger') || state.chatId !== c.id) {
+      c.msgs.push({ from: replier, time: nowTime(), text: 'Got it, thanks! 👍', reactions: {} });
+      c.unread++;
+      updateMsgDot();
+      return;
+    }
+    box?.insertAdjacentHTML('beforeend', `<div class="typing">${(PEOPLE[replier]?.name) || replier} is typing…</div>`);
+    if (box) box.scrollTop = box.scrollHeight;
     setTimeout(() => {
-      c.msgs.push({ from: replier, time: nowTime(), text: ['Got it, thanks! 👍', 'Sounds good.', 'Sure, will check and update.', 'Noted 🙌'][Math.floor(Math.random() * 4)] });
-      if (location.hash.startsWith('#/messenger') && state.chatId === c.id) rerender(); else { c.unread++; updateMsgDot(); }
+      c.msgs.push({
+        from: replier,
+        time: nowTime(),
+        text: ['Got it, thanks! 👍', 'Sounds good.', 'Sure, will check and update.', 'Noted 🙌'][Math.floor(Math.random() * 4)],
+        reactions: {}
+      });
+      if (location.hash.startsWith('#/messenger') && state.chatId === c.id) rerender();
+      else { c.unread++; updateMsgDot(); }
     }, 1200);
   }, 700);
+}
+
+async function toggleMessageReaction(c, msgIdx, emoji) {
+  const m = c.msgs[msgIdx];
+  if (!m) return;
+  if (!m.reactions || typeof m.reactions !== 'object') m.reactions = {};
+  const current = ME || 'raja';
+  const users = Array.isArray(m.reactions[emoji]) ? [...m.reactions[emoji]] : [];
+  const uIdx = users.indexOf(current);
+  if (uIdx >= 0) {
+    users.splice(uIdx, 1);
+    if (!users.length) {
+      delete m.reactions[emoji];
+    } else {
+      m.reactions[emoji] = users;
+    }
+  } else {
+    users.push(current);
+    m.reactions[emoji] = users;
+  }
+  rerender();
+  if (m.id) {
+    await fetchFromAPI(`/messages/${m.id}/react/`, {
+      method: 'POST',
+      body: JSON.stringify({ emoji, user: current })
+    });
+  }
+}
+
+function openMoreEmojis(anchor, msgIdx) {
+  closeFloating();
+  const c = chats.find(x => x.id === state.chatId);
+  if (!c || !c.msgs[msgIdx]) return;
+  const emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏', '🎉', '🚀', '💯', '✨', '😍', '👀', '🤝', '💪', '👌', '⚡'];
+  const el = document.createElement('div');
+  el.className = 'rx-popover';
+  el.innerHTML = emojis.map(em => `<button type="button" class="rx-pop-btn" data-emoji="${em}">${em}</button>`).join('');
+  el.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-emoji]');
+    if (!btn) return;
+    const emoji = btn.dataset.emoji;
+    el.remove();
+    await toggleMessageReaction(c, msgIdx, emoji);
+  });
+  place(el, anchor);
 }
 
 /* ---------------- Floating UI: profile card, menus, modal ---------------- */
@@ -2523,7 +2695,73 @@ function handleAction(a, el) {
       break;
     }
     case 'msg-attach': $('#msgFile').click(); break;
-    case 'emoji': { const i = $('#msgInput'); i.value += '🙂'; i.focus(); break; }
+    case 'emoji': {
+      const emojis = ['🙂', '👍', '❤️', '😂', '🔥', '🎉', '🙌', '✨', '💯', '👌'];
+      const elPop = document.createElement('div');
+      elPop.className = 'rx-popover';
+      elPop.innerHTML = emojis.map(em => `<button type="button" class="rx-pop-btn" data-input-emoji="${em}">${em}</button>`).join('');
+      elPop.addEventListener('click', e => {
+        const btn = e.target.closest('[data-input-emoji]');
+        if (!btn) return;
+        const inp = $('#msgInput');
+        if (inp) {
+          inp.value += btn.dataset.inputEmoji;
+          inp.focus();
+        }
+        elPop.remove();
+      });
+      place(elPop, el);
+      break;
+    }
+    case 'reply-to-msg': {
+      const idx = +el.dataset.msgIdx;
+      const c = chats.find(x => x.id === state.chatId);
+      if (!c || !c.msgs[idx]) return;
+      const m = c.msgs[idx];
+      const fromName = (m.from === ME ? 'You' : ((PEOPLE[m.from]?.name) || m.from || 'Member'));
+      state.replyingTo = {
+        id: m.id,
+        from: m.from,
+        from_name: fromName,
+        text: (m.text || (m.file ? m.file.name : 'Attachment')).slice(0, 140)
+      };
+      rerender();
+      setTimeout(() => $('#msgInput')?.focus(), 40);
+      break;
+    }
+    case 'cancel-reply': {
+      state.replyingTo = null;
+      rerender();
+      break;
+    }
+    case 'quick-react': {
+      const idx = +el.dataset.msgIdx;
+      const emoji = el.dataset.emoji;
+      const c = chats.find(x => x.id === state.chatId);
+      if (!c || !c.msgs[idx] || !emoji) return;
+      await toggleMessageReaction(c, idx, emoji);
+      break;
+    }
+    case 'open-more-emojis': {
+      const idx = +el.dataset.msgIdx;
+      openMoreEmojis(el, idx);
+      break;
+    }
+    case 'jump-quoted-msg': {
+      const text = el.dataset.quotedText;
+      const c = chats.find(x => x.id === state.chatId);
+      if (!c || !text) return;
+      const targetIdx = c.msgs.findIndex(x => (x.text || '').includes(text) || text.includes(x.text || ''));
+      if (targetIdx >= 0) {
+        const targetEl = $(`#msg-item-${targetIdx}`);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetEl.classList.add('msg-highlight-pulse');
+          setTimeout(() => targetEl.classList.remove('msg-highlight-pulse'), 1800);
+        }
+      }
+      break;
+    }
     case 'download': toast('Downloading pricing-module-v2.zip'); break;
     case 'chat-info': {
       const c = chats.find(x => x.id === state.chatId);
@@ -2581,7 +2819,14 @@ document.addEventListener('submit', e => {
   }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeFloating(); $('.overlay')?.remove(); }
+  if (e.key === 'Escape') {
+    closeFloating();
+    $('.overlay')?.remove();
+    if (state.replyingTo) {
+      state.replyingTo = null;
+      rerender();
+    }
+  }
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'logText') handleAction('log-save');
 });
 window.addEventListener('resize', closeFloating);

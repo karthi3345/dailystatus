@@ -108,6 +108,8 @@ class ChatMessage(models.Model):
     text = models.TextField()
     time_label = models.CharField(max_length=50, blank=True)
     file_info = models.JSONField(null=True, blank=True)
+    reply_to = models.JSONField(null=True, blank=True)
+    reactions = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

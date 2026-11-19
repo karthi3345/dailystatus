@@ -319,6 +319,28 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
             qs = qs.filter(chat_id=chat_id)
         return qs
 
+    @action(detail=True, methods=['post'], url_path='react')
+    def react(self, request, pk=None):
+        msg = self.get_object()
+        emoji = request.data.get('emoji')
+        user = (request.user.username.lower() if request.user and request.user.is_authenticated else request.data.get('user', 'raja')).lower()
+        if not emoji:
+            return Response({'error': 'Emoji is required'}, status=status.HTTP_400_BAD_REQUEST)
+        reactions = dict(msg.reactions or {})
+        users = list(reactions.get(emoji, []))
+        if user in users:
+            users.remove(user)
+            if not users:
+                reactions.pop(emoji, None)
+            else:
+                reactions[emoji] = users
+        else:
+            users.append(user)
+            reactions[emoji] = users
+        msg.reactions = reactions
+        msg.save()
+        return Response({'id': msg.id, 'reactions': msg.reactions})
+
     def perform_create(self, serializer):
         msg = serializer.save()
         chat_id = msg.chat_id
@@ -382,7 +404,9 @@ class ChatThreadsView(APIView):
                         'from': m.from_member,
                         'time': m.time_label or m.created_at.strftime('%I:%M %p').lstrip('0'),
                         'text': m.text,
-                        'file': m.file_info
+                        'file': m.file_info,
+                        'reply_to': m.reply_to,
+                        'reactions': m.reactions or {}
                     }
                     for m in msgs
                 ]
