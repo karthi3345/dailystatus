@@ -1034,21 +1034,22 @@ function renderMessenger() {
         </div>
         <div class="msgs" id="msgs">
           ${(c.msgs || []).map((m, idx) => {
-            const isMe = m.from === ME;
-            const fromName = isMe ? 'You' : ((PEOPLE[m.from]?.name) || m.from || 'Member');
+            const isMe = m.from === ME || (!m.from && ME === 'raja') || m.from === 'raja';
+            const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'Raja');
+            const senderId = m.from || (isMe ? (ME || 'raja') : 'member');
+            const senderName = isMe ? `${myName} (You)` : ((PEOPLE[m.from]?.name) || m.from || 'Member');
             const reactions = m.reactions || {};
             const rxEntries = Object.entries(reactions);
 
             return `
             <div class="msg ${isMe ? 'me' : ''}" id="msg-item-${idx}" data-msg-idx="${idx}">
-              ${!isMe ? av(m.from, 's36') : ''}
+              ${av(senderId, 's36')}
               <div class="msg-content-wrap">
-                ${!isMe ? `
-                  <div class="who" style="display:flex;align-items:center;gap:4px">
-                    <span>${esc(fromName)}</span>
-                    ${userModeIcon(m.from, 'xs')}
-                    <span style="margin-left:auto">${m.time}</span>
-                  </div>` : ''}
+                <div class="who">
+                  <span style="font-weight:600;color:${isMe ? 'var(--gold)' : '#60a5fa'}">${esc(senderName)}</span>
+                  ${userModeIcon(senderId, 'xs')}
+                  <span class="time-tag" style="${isMe ? 'margin-right:4px' : 'margin-left:auto'}">${m.time || ''}</span>
+                </div>
 
                 <div class="bubble-container">
                   <div class="bubble">
@@ -1125,6 +1126,9 @@ function renderMessenger() {
         ` : ''}
 
         <form class="composer-row" id="msgForm">
+          <div class="composer-user-av" title="You are chatting as ${(PEOPLE[ME]?.name) || ME || 'Raja'}">
+            ${av(ME || 'raja', 's36')}
+          </div>
           <button type="button" class="plus-btn" data-action="msg-attach" title="Attach">${icon('plus', 'sm')}</button>
           <input type="file" id="msgFile" hidden />
           <label class="msg-input"><input id="msgInput" placeholder="${state.replyingTo ? `Reply to ${state.replyingTo.from_name}...` : 'Type a message...'}" autocomplete="off"/><button type="button" data-action="emoji" title="Emoji">${icon('smile')}</button></label>
@@ -1199,9 +1203,11 @@ function sendMessage(text, file) {
       updateMsgDot();
       return;
     }
-    box?.insertAdjacentHTML('beforeend', `<div class="typing">${(PEOPLE[replier]?.name) || replier} is typing…</div>`);
+    $('#simTyping')?.remove();
+    box?.insertAdjacentHTML('beforeend', `<div class="typing-row" id="simTyping">${av(replier, 's22')} <span style="font-size:12px;color:var(--text-2);font-style:italic"><b>${esc((PEOPLE[replier]?.name) || replier)}</b> is typing…</span></div>`);
     if (box) box.scrollTop = box.scrollHeight;
     setTimeout(() => {
+      $('#simTyping')?.remove();
       c.msgs.push({
         from: replier,
         time: nowTime(),
