@@ -319,9 +319,48 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
             qs = qs.filter(chat_id=chat_id)
         return qs
 
+    def perform_create(self, serializer):
+        msg = serializer.save()
+        chat_id = msg.chat_id
+        if not ChatThread.objects.filter(id=chat_id).exists():
+            creator = msg.from_member or (self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin')
+            if chat_id.startswith('proj-grp-'):
+                proj_id = chat_id.replace('proj-grp-', '')
+                proj = Project.objects.filter(id=proj_id).first()
+                proj_name = proj.name if proj else proj_id.capitalize()
+                members = list(proj.team or []) if proj else [creator]
+                if creator not in members:
+                    members.append(creator)
+                ChatThread.objects.create(
+                    id=chat_id,
+                    name=proj_name,
+                    kind='group',
+                    project=proj_id,
+                    members=members,
+                    created_by=creator
+                )
+            elif Member.objects.filter(id=chat_id).exists():
+                mem = Member.objects.filter(id=chat_id).first()
+                ChatThread.objects.create(
+                    id=chat_id,
+                    name=mem.name or chat_id.capitalize(),
+                    kind='dm',
+                    person=chat_id,
+                    members=[creator, chat_id],
+                    created_by=creator
+                )
+            else:
+                ChatThread.objects.create(
+                    id=chat_id,
+                    name=msg.chat_name or chat_id,
+                    kind=msg.kind or 'group',
+                    members=[creator],
+                    created_by=creator
+                )
+
 
 class ChatThreadsView(APIView):
-    """Returns all chat threads grouped with their messages, and allows creating new groups."""
+    """Returns all chat threads grouped with their messages, and allows creating new groups or DMs."""
     def get(self, request):
         threads = ChatThread.objects.all().order_by('created_at')
         result = []
@@ -353,51 +392,98 @@ class ChatThreadsView(APIView):
     def post(self, request):
         import re, time
         data = request.data
-        name = (data.get('name') or '').strip()
-        if not name:
-            return Response({'error': 'Group name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        kind = data.get('kind') or 'group'
+        creator = request.user.username.lower() if (request.user and request.user.is_authenticated) else (data.get('created_by') or 'kathir').lower()
 
-        slug_base = re.sub(r'[^a-zA-Z0-9]+', '-', name).strip('-').lower() or 'group'
-        thread_id = f"grp-{slug_base}-{int(time.time())}"
+        if kind == 'dm':
+            person = (data.get('person') or data.get('to') or '').strip().lower()
+            if not person:
+                return Response({'error': 'Recipient employee is required for direct messages.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        members = data.get('members') or []
-        creator = request.user.username.lower() if (request.user and request.user.is_authenticated) else (data.get('created_by') or 'kathir')
-        if creator not in members:
-            members.append(creator)
+            target_mem = Member.objects.filter(id=person).first()
+            target_name = target_mem.name if target_mem else person.capitalize()
+            thread_id = data.get('id') or f"dm-{min(creator, person)}-{max(creator, person)}"
+            members = list(set([creator, person]))
 
-        thread = ChatThread.objects.create(
-            id=thread_id,
-            name=name,
-            kind='group',
-            members=members,
-            created_by=creator
-        )
-
-        initial_msg = (data.get('initial_message') or '').strip()
-        if initial_msg:
-            ChatMessage.objects.create(
-                chat_id=thread_id,
-                chat_name=name,
-                kind='group',
-                from_member=creator,
-                text=initial_msg
+            thread, created = ChatThread.objects.get_or_create(
+                id=thread_id,
+                defaults={
+                    'name': target_name,
+                    'kind': 'dm',
+                    'person': person,
+                    'members': members,
+                    'created_by': creator,
+                    'starred': False
+                }
             )
+            if not created:
+                thread.kind = 'dm'
+                thread.person = person
+                if not thread.members:
+                    thread.members = members
+                    thread.save()
+
+            initial_msg = (data.get('initial_message') or data.get('text') or '').strip()
+            if initial_msg:
+                ChatMessage.objects.create(
+                    chat_id=thread.id,
+                    chat_name=thread.name,
+                    kind='dm',
+                    from_member=creator,
+                    text=initial_msg
+                )
         else:
-            ChatMessage.objects.create(
-                chat_id=thread_id,
-                chat_name=name,
-                kind='group',
-                from_member=creator,
-                text=f"Group '{name}' created."
+            name = (data.get('name') or '').strip()
+            if not name:
+                return Response({'error': 'Group name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            slug_base = re.sub(r'[^a-zA-Z0-9]+', '-', name).strip('-').lower() or 'group'
+            thread_id = data.get('id') or f"grp-{slug_base}-{int(time.time())}"
+            project_id = data.get('project') or None
+
+            members = data.get('members') or []
+            if creator not in members:
+                members.append(creator)
+
+            thread, created = ChatThread.objects.get_or_create(
+                id=thread_id,
+                defaults={
+                    'name': name,
+                    'kind': 'group',
+                    'project': project_id,
+                    'members': members,
+                    'created_by': creator,
+                    'starred': False
+                }
             )
+
+            initial_msg = (data.get('initial_message') or data.get('text') or '').strip()
+            if initial_msg:
+                ChatMessage.objects.create(
+                    chat_id=thread.id,
+                    chat_name=thread.name,
+                    kind='group',
+                    from_member=creator,
+                    text=initial_msg
+                )
+            elif created:
+                ChatMessage.objects.create(
+                    chat_id=thread.id,
+                    chat_name=thread.name,
+                    kind='group',
+                    from_member=creator,
+                    text=f"Welcome to {name}! Channel created."
+                )
 
         msgs = ChatMessage.objects.filter(chat_id=thread.id).order_by('created_at')
         return Response({
             'id': thread.id,
             'kind': thread.kind,
             'name': thread.name,
-            'members': len(thread.members),
-            'memberList': thread.members,
+            'project': thread.project,
+            'person': thread.person,
+            'members': len(thread.members) if thread.members else 0,
+            'memberList': thread.members or [],
             'starred': thread.starred,
             'unread': 0,
             'msgs': [

@@ -15,6 +15,8 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
+    start = serializers.CharField(required=False, allow_blank=True, default='')
+    end = serializers.CharField(required=False, allow_blank=True, default='')
 
     class Meta:
         model = Project

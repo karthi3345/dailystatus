@@ -300,9 +300,11 @@ function renderProject(id, tab) {
         <div class="detail-title"><h1>${esc(p.name)}</h1>${statusBadge(p.status)}</div>
         <div class="dates">${icon('calendar', 'sm')} ${fmtLong(p.start).replace(/^(\w+ \d+), (\d+)$/, '$1, $2')}${p.end ? ' – ' + fmtLong(p.end) : ' – Ongoing (No end date)'}</div>
       </div>
-      <div class="head-actions">
+      <div class="head-actions" style="display:flex;align-items:center;gap:8px">
+        <button class="btn gold" data-action="open-project-chat" data-id="${p.id}" style="height:34px;padding:0 12px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px" title="Open Project Chat in Messenger">
+          ${icon('message', 'sm')} <span>Project Chat</span>
+        </button>
         <button class="icon-btn ${state.starredProjects.has(p.id) ? 'starred' : ''}" data-action="star-project" data-id="${p.id}" title="Star">${icon('star', 'sm')}</button>
-        <button class="icon-btn" data-action="open-project-chat" data-id="${p.id}" title="Open Project Chat">${icon('message', 'sm')}</button>
         <button class="icon-btn" data-pmenu="${p.id}" title="More">${icon('more', 'sm')}</button>
       </div>
     </div>
@@ -351,6 +353,18 @@ function tabOverview(p) {
         ${steps.map(([t, d], i) => `<div class="tl-step ${i < phase ? 'done' : i === phase && phase < 4 ? 'now' : ''}"><div class="tl-dot"></div><div class="t">${t}</div><div class="d">${d}</div></div>`).join('')}
       </div>
     </div>
+  </div>
+  <div class="card" style="margin-top:16px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg, rgba(245,184,46,.12), rgba(245,184,46,.03));border:1px solid rgba(245,184,46,.25);border-radius:12px;flex-wrap:wrap;gap:12px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="width:38px;height:38px;border-radius:10px;background:rgba(245,184,46,.2);color:var(--gold);display:grid;place-items:center;font-size:18px">💬</span>
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--text)">${esc(p.name)} Group Chat</div>
+        <div style="font-size:12px;color:var(--text-2)">Official messenger channel for project team collaboration, task updates and blockers.</div>
+      </div>
+    </div>
+    <button class="btn gold" data-action="open-project-chat" data-id="${p.id}" style="padding:0 16px;height:34px;font-size:12.5px;display:flex;align-items:center;gap:6px">
+      ${icon('message', 'sm')} Open Project Chat
+    </button>
   </div>
   <div class="card tbl-card">
     <div class="tbl-head"><span class="card-title">Team &amp; Availability</span><span class="muted">${MEMBER_ROWS.length} Members</span></div>
@@ -675,7 +689,13 @@ function renderMessenger() {
         <div class="chats">${list.map(ch => `
           <div class="chat-item ${c && ch.id === c.id ? 'active' : ''}" data-chat="${ch.id}">
             ${chatAv(ch)}
-            <div style="min-width:0"><div class="t">${esc(ch.name)}</div><div class="p">${preview(ch)}</div></div>
+            <div style="min-width:0">
+              <div class="t" style="display:flex;align-items:center;gap:6px">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ch.name)}</span>
+                ${ch.project ? `<span style="font-size:9.5px;padding:1px 6px;background:rgba(245,184,46,.15);color:var(--gold);border-radius:4px;flex-shrink:0;font-weight:600">Project</span>` : ch.kind === 'group' ? `<span style="font-size:9.5px;padding:1px 6px;background:rgba(255,255,255,.07);color:var(--text-2);border-radius:4px;flex-shrink:0">Group</span>` : ''}
+              </div>
+              <div class="p">${preview(ch)}</div>
+            </div>
             <div class="right"><span>${ch.timeLabel && lastMsg(ch).time === ch.timeLabel ? ch.timeLabel : lastMsg(ch).time}</span>
               ${ch.unread ? `<span class="unread">${ch.unread}</span>` : `<button class="star ${ch.starred ? 'on' : ''}" data-star-chat="${ch.id}" title="Star">${icon('star', 'xs')}</button>`}</div>
           </div>`).join('') || '<div class="empty">No chats found.</div>'}</div>
@@ -683,9 +703,17 @@ function renderMessenger() {
       ${c ? `
       <div class="chat-win">
         <div class="chat-head">
-          ${c.kind === 'dm' ? av(c.person, 's36') : `<span class="group-av">${icon('users', 'sm')}</span>`}
-          <div><div class="t" style="display:flex;align-items:center;gap:6px"><span>${esc(c.name)}</span>${c.kind === 'dm' && c.person ? userModeIcon(c.person, 'sm') : ''}</div><div class="s">${c.kind === 'dm' ? (AVAIL[PEOPLE[c.person]?.availability]?.label || 'Available') : `${(c.memberList ? c.memberList.length : c.members) || 1} Members`}</div></div>
+          ${c.kind === 'dm' ? `<span class="clickable" data-profile="${c.person}">${av(c.person, 's36')}</span>` : `<span class="group-av">${icon(c.project ? 'portfolio' : 'users', 'sm')}</span>`}
+          <div>
+            <div class="t" style="display:flex;align-items:center;gap:6px">
+              <span>${esc(c.name)}</span>
+              ${c.kind === 'dm' && c.person ? userModeIcon(c.person, 'sm') : ''}
+              ${c.project ? `<span style="font-size:10px;padding:2px 7px;background:rgba(245,184,46,.15);color:var(--gold);border-radius:4px;font-weight:600">Project Channel</span>` : ''}
+            </div>
+            <div class="s">${c.kind === 'dm' ? (AVAIL[PEOPLE[c.person]?.availability]?.label || 'Available') : `${(c.memberList ? c.memberList.length : c.members) || 1} Members`}</div>
+          </div>
           <div class="acts">
+            ${c.project ? `<button class="btn flat" data-go="#/project/${c.project}/overview" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="View Project in Projects View">${icon('chevLeft', 'xs')}Project View</button>` : ''}
             ${c.kind === 'group' ? `<button class="btn flat" data-action="add-group-member" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="Add Employee to this Group">${icon('userPlus', 'xs')}Add Member</button>` : ''}
             <button title="Call" data-action="call">${icon('phone', 'sm')}</button>
             <button title="Video" data-action="call">${icon('video', 'sm')}</button>
@@ -858,7 +886,33 @@ document.addEventListener('click', e => {
     const a = t.closest('[data-set-avail]'), m = t.closest('[data-set-mode]'), dm = t.closest('[data-dm]');
     if (a && P) { P.availability = a.dataset.setAvail; toast(`${P.name} is now ${AVAIL[P.availability].short || AVAIL[P.availability].label}`); apiPatchMember(id, { availability: P.availability }); }
     if (m && P) { P.mode = m.dataset.setMode; toast(`${P.name}: ${MODES[P.mode].long}`); apiPatchMember(id, { mode: P.mode }); }
-    if (dm) { closeFloating(); state.chatId = id; go('#/messenger/' + id); return; }
+    if (dm) {
+      closeFloating();
+      const targetId = dm.dataset.dm || id;
+      let c = chats.find(x => x.id === targetId || (x.kind === 'dm' && (x.person === targetId || (x.memberList && x.memberList.includes(targetId)))));
+      if (!c) {
+        const targetP = PEOPLE[targetId] || { name: targetId.charAt(0).toUpperCase() + targetId.slice(1) };
+        c = {
+          id: targetId,
+          name: targetP.name,
+          kind: 'dm',
+          person: targetId,
+          members: 2,
+          memberList: [ME, targetId].filter(Boolean),
+          starred: false,
+          unread: 0,
+          msgs: []
+        };
+        chats.unshift(c);
+        fetchFromAPI('/chats/', {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'dm', person: targetId, created_by: ME })
+        }).catch(() => {});
+      }
+      state.chatId = c.id;
+      go('#/messenger/' + c.id);
+      return;
+    }
     if (a || m) { const anchorRect = pop.getBoundingClientRect(); rerender(); refreshSide(); reopenProfileAt(id, anchorRect); }
     return;
   }
@@ -1089,13 +1143,31 @@ function handleAction(a, el) {
       break;
     case 'open-project-chat': {
       const pid = el?.dataset?.id || p?.id;
-      const c = chats.find(x => x.project === pid || x.id === 'proj-grp-' + pid);
-      if (c) {
-        state.chatId = c.id;
-        go('#/messenger/' + c.id);
-      } else {
-        toast('No chat found for this project');
+      let c = chats.find(x => x.project === pid || x.id === 'proj-grp-' + pid);
+      if (!c) {
+        const prj = projects.find(x => x.id === pid) || p;
+        const name = prj ? prj.name : pid;
+        const lead = (prj && prj.team && prj.team[0]) || ME || 'admin';
+        const team = (prj && prj.team && prj.team.length) ? prj.team : [ME || 'admin'];
+        c = {
+          id: 'proj-grp-' + pid,
+          name: name,
+          kind: 'group',
+          project: pid,
+          members: team.length,
+          memberList: team,
+          starred: false,
+          unread: 0,
+          msgs: [{ from: lead, time: nowTime(), text: `Welcome to the ${name} group discussion channel! 🚀` }]
+        };
+        chats.unshift(c);
+        fetchFromAPI('/chats/', {
+          method: 'POST',
+          body: JSON.stringify({ id: c.id, name, kind: 'group', project: pid, members: team, initial_message: c.msgs[0].text })
+        }).catch(() => {});
       }
+      state.chatId = c.id;
+      go('#/messenger/' + c.id);
       break;
     }
     case 'project-filter':
@@ -1258,17 +1330,7 @@ function handleAction(a, el) {
     case 'open-login': openLoginModal(); break;
     case 'open-register': openRegisterModal(); break;
     case 'auth-logout': handleLogout(); break;
-    case 'new-chat':
-      openModal('New Message', [
-        { name: 'to', label: 'To', type: 'select', value: 'karthik', options: MEMBER_ROWS.map(id => [id, PEOPLE[id].name]) },
-        { name: 'text', label: 'Message', required: true },
-      ], d => {
-        let c = chats.find(x => x.id === d.to);
-        if (!c) { c = { id: d.to, kind: 'dm', person: d.to, name: PEOPLE[d.to].name, unread: 0, msgs: [] }; chats.push(c); }
-        state.chatId = c.id; go('#/messenger/' + c.id);
-        setTimeout(() => sendMessage(d.text), 0);
-      }, 'Send');
-      break;
+    case 'new-chat': openNewDirectMessageModal(); break;
   }
 }
 
@@ -1350,14 +1412,20 @@ function openNewGroupModal() {
   const allEmployees = Object.keys(PEOPLE);
   const employeeCheckboxes = allEmployees.map(id => {
     const p = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member' };
+    const a = (p && AVAIL[p.availability]) || AVAIL['available'];
     const isMe = id === ME;
     return `
       <label class="emp-check-item" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;background:var(--panel-2);border:1px solid var(--line-2);margin-bottom:6px">
         <input type="checkbox" name="groupMembers" value="${id}" ${isMe ? 'checked disabled' : ''} style="width:16px;height:16px;accent-color:var(--gold)">
         ${av(id, 's26')}
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13px">${esc(p.name)} ${isMe ? '<span style="color:var(--text-3);font-size:11px">(You)</span>' : ''}</div>
-          <div style="font-size:11px;color:var(--text-2)">${esc(p.role || TITLES[id] || 'Team Member')}</div>
+          <div style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px">
+            <span>${esc(p.name)}</span>
+            ${userModeIcon(id, 'xs')}
+            ${isMe ? '<span style="color:var(--text-3);font-size:11px">(You)</span>' : ''}
+            <span class="badge avail ${a.cls}" style="font-size:9.5px;padding:1px 5px;margin-left:auto">${a.label}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-2);margin-top:2px">${esc(p.role || TITLES[id] || 'Team Member')}</div>
         </div>
       </label>
     `;
@@ -1376,7 +1444,8 @@ function openNewGroupModal() {
           </div>
           <div class="field">
             <label>Add Employees to Group</label>
-            <div style="max-height:190px;overflow-y:auto;padding-right:4px">
+            <input type="text" id="grpEmpSearch" placeholder="Search employees by name..." style="margin-bottom:8px;height:34px;font-size:12px" />
+            <div id="grpEmpList" style="max-height:180px;overflow-y:auto;padding-right:4px">
               ${employeeCheckboxes}
             </div>
           </div>
@@ -1393,6 +1462,17 @@ function openNewGroupModal() {
     </div>
   `;
   document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  const searchInp = $('#grpEmpSearch');
+  if (searchInp) {
+    searchInp.addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      $$('.emp-check-item', $('#grpEmpList')).forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+      });
+    });
+  }
 
   $('#newGroupForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -1412,7 +1492,7 @@ function openNewGroupModal() {
           'Content-Type': 'application/json',
           ...(AUTH_TOKEN ? { 'Authorization': `Token ${AUTH_TOKEN}` } : {})
         },
-        body: JSON.stringify({ name, members: checked, initial_message, created_by: ME })
+        body: JSON.stringify({ kind: 'group', name, members: checked, initial_message, created_by: ME })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1428,6 +1508,113 @@ function openNewGroupModal() {
       toast(`Group "${name}" created!`);
     } catch (err) {
       errBox.textContent = 'Network error creating group.';
+      errBox.style.display = 'block';
+    }
+  };
+}
+
+function openNewDirectMessageModal() {
+  closeFloating();
+  const allEmployees = Object.keys(PEOPLE).filter(id => id !== ME);
+  if (!allEmployees.length) {
+    toast('No other employees registered yet to message.');
+    return;
+  }
+
+  const employeeOptions = allEmployees.map((id, idx) => {
+    const p = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member' };
+    const a = (p && AVAIL[p.availability]) || AVAIL['available'];
+    return `
+      <label class="emp-radio-item" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;background:var(--panel-2);border:1px solid var(--line-2);margin-bottom:6px;transition:border-color .15s">
+        <input type="radio" name="dmRecipient" value="${id}" ${idx === 0 ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--gold)" required>
+        ${av(id, 's32')}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-weight:600;font-size:13px">${esc(p.name)}</span>
+            ${userModeIcon(id, 'xs')}
+            <span class="badge avail ${a.cls}" style="font-size:10px;padding:1px 6px;margin-left:auto">${a.label}</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-2);margin-top:2px">${esc(p.role || TITLES[id] || 'Team Member')}</div>
+        </div>
+      </label>
+    `;
+  }).join('');
+
+  const modalHtml = `
+    <div class="overlay" id="dmModal">
+      <div class="modal" style="width:480px">
+        <h3>New Direct Message</h3>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Select an employee and start a direct conversation.</p>
+        <div id="dmErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+        <form id="newDmForm">
+          <div class="field">
+            <label>Select Team Member</label>
+            <input type="text" id="dmFilter" placeholder="Search employee by name..." style="margin-bottom:8px;height:34px;font-size:12px" />
+            <div id="dmEmpList" style="max-height:180px;overflow-y:auto;padding-right:4px">
+              ${employeeOptions}
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label>Message</label>
+            <textarea id="dmInitMsg" required placeholder="Type your message..." style="height:64px;resize:none" autofocus></textarea>
+          </div>
+          <div class="modal-actions" style="margin-top:16px">
+            <button type="button" class="btn flat" onclick="document.getElementById('dmModal').remove()">Cancel</button>
+            <button type="submit" class="btn primary">Send Message</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  const filterInp = $('#dmFilter');
+  if (filterInp) {
+    filterInp.addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      $$('.emp-radio-item', $('#dmEmpList')).forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+      });
+    });
+  }
+
+  $('#newDmForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const sel = document.querySelector('input[name="dmRecipient"]:checked');
+    if (!sel) return;
+    const recipient = sel.value;
+    const text = $('#dmInitMsg').value.trim();
+    if (!text) return;
+
+    const errBox = $('#dmErr');
+    errBox.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API_BASE}/chats/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(AUTH_TOKEN ? { 'Authorization': `Token ${AUTH_TOKEN}` } : {})
+        },
+        body: JSON.stringify({ kind: 'dm', person: recipient, text, created_by: ME })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errBox.textContent = data.error || 'Failed to start direct message.';
+        errBox.style.display = 'block';
+        return;
+      }
+      $('#dmModal').remove();
+      const existingIdx = chats.findIndex(x => x.id === data.id);
+      if (existingIdx >= 0) chats.splice(existingIdx, 1);
+      chats.unshift(data);
+      state.chatId = data.id;
+      go('#/messenger/' + data.id);
+      rerender();
+      toast(`Conversation started with ${PEOPLE[recipient]?.name || recipient}!`);
+    } catch (err) {
+      errBox.textContent = 'Network error starting direct message.';
       errBox.style.display = 'block';
     }
   };
@@ -1649,6 +1836,7 @@ function openLoginModal() {
         PEOPLE[ME].role = data.user.role;
       }
       TITLES[ME] = data.user.role;
+      MEMBER_ROWS = Object.keys(PEOPLE);
       $('#authModal')?.remove();
       toast(`Welcome back, ${data.user.name}!`);
       refreshSide();
@@ -1823,6 +2011,7 @@ function openRegisterModal() {
       localStorage.setItem('kathir_auth_user', ME);
       PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: 'available', mode: 'office' };
       TITLES[ME] = data.user.role;
+      MEMBER_ROWS = Object.keys(PEOPLE);
       $('#authModal')?.remove();
       toast(`Account created! Welcome, ${data.user.name}!`);
       refreshSide();
@@ -1932,6 +2121,7 @@ async function loadInitialData() {
         TITLES[m.id] = m.role;
       }
     });
+    MEMBER_ROWS = Object.keys(PEOPLE);
     updated = true;
   }
 
