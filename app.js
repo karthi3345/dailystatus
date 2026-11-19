@@ -1625,7 +1625,7 @@ function afterMessenger() {
     }
   }
   const main = $('#main');
-  main.style.overflow = 'hidden';
+  main.style.overflow = 'auto';
   if (state.replyingTo) {
     $('#msgInput')?.focus();
   }

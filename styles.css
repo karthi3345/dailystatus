@@ -442,10 +442,24 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 .log-hours { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 
 /* ---------- Messenger ---------- */
-.msgr { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 36px - 56px - 80px); min-height: 480px; overflow: hidden; }
-.chat-list { border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.msgr {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: calc(100vh - 32px - 52px - 56px);
+  min-height: 400px;
+  max-height: 100%;
+  overflow: hidden;
+}
+.chat-list {
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
 .chat-list .search { flex: none; margin: 14px; }
-.chats { overflow: auto; flex: 1; }
+.chats { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
 .chat-item { display: grid; grid-template-columns: 38px 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; position: relative; }
 .chat-item:hover { background: rgba(255,255,255,.025); }
 .chat-item.active { background: linear-gradient(90deg, rgba(245,184,46,.13), rgba(245,184,46,.04)); box-shadow: inset 3px 0 0 var(--gold); }
@@ -457,11 +471,20 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 .chat-item .star.on .ic { fill: var(--gold); }
 .unread { min-width: 18px; height: 18px; border-radius: 9px; background: var(--gold); color: #1a1405; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
 .group-av { width: 38px; height: 38px; border-radius: 50%; background: #34343b; display: grid; place-items: center; color: #d7d7dc; }
-.chat-win { display: flex; flex-direction: column; min-width: 0; position: relative; }
+.chat-win {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  position: relative;
+  overflow: hidden;
+}
 .chat-scroll-bottom-btn {
   position: absolute;
   right: 24px;
-  bottom: 84px;
+  bottom: 74px;
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -482,13 +505,23 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
   border-color: var(--gold);
   transform: translateY(-2px);
 }
-.chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.chat-head { flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .chat-head .t { font-weight: 600; font-size: 14px; }
 .chat-head .s { color: var(--text-2); font-size: 11.5px; }
 .chat-head .acts { margin-left: auto; display: flex; gap: 6px; }
 .chat-head .acts button { padding: 6px; color: var(--text-2); border-radius: 7px; }
 .chat-head .acts button:hover { color: #fff; background: rgba(255,255,255,.06); }
-.msgs { flex: 1; overflow: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.msgs {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
 .msg { display: flex; gap: 10px; max-width: 82%; align-items: flex-end; position: relative; transition: background .3s ease; border-radius: 12px; }
 .msg .who { font-size: 12px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
 .msg:not(.me) .who { justify-content: flex-start; }
@@ -517,7 +550,16 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 .attach .n { font-size: 12px; }
 .attach .z { font-size: 11px; color: var(--muted); }
 .attach button { margin-left: auto; color: var(--text-2); }
-.composer-row { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); align-items: center; }
+.composer-row {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  align-items: center;
+  background: var(--panel-1, #18181d);
+  z-index: 5;
+}
 .composer-user-av { display: flex; align-items: center; justify-content: center; flex: none; cursor: pointer; }
 .composer-user-av .av { box-shadow: 0 0 12px rgba(245, 184, 46, 0.35); border: 2px solid rgba(245, 184, 46, 0.6); transition: transform .18s ease; }
 .composer-user-av .av:hover { transform: scale(1.08); }
