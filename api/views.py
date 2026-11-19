@@ -6,12 +6,40 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 from .models import Member, Project, Task, DailyWorkLog, ChatMessage, ChatThread
 from .serializers import (
     MemberSerializer, ProjectSerializer, TaskSerializer,
     DailyWorkLogSerializer, ChatMessageSerializer
 )
+
+def broadcast_global_event(event_name, data):
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                'app_global_events',
+                {
+                    'type': 'broadcast_app_event',
+                    'event': event_name,
+                    'data': data
+                }
+            )
+    except Exception:
+        pass
+
+def broadcast_chat_event(chat_id, event_dict):
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f"chat_{chat_id}",
+                event_dict
+            )
+    except Exception:
+        pass
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -209,6 +237,16 @@ class MemberViewSet(viewsets.ModelViewSet):
     queryset = Member.objects.all()
     serializer_class = MemberSerializer
 
+    def perform_update(self, serializer):
+        member = serializer.save()
+        broadcast_global_event('member_updated', {
+            'id': member.id,
+            'name': member.name,
+            'availability': member.availability,
+            'mode': member.mode,
+            'today': member.today
+        })
+
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
@@ -245,12 +283,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 from_member=creator,
                 text=f"Welcome to the {project.name} group discussion channel! 🚀"
             )
+        broadcast_global_event('project_created', {
+            'id': project.id,
+            'name': project.name,
+            'status': project.status
+        })
 
     def perform_destroy(self, instance):
         group_id = f"proj-grp-{instance.id}"
+        proj_id = instance.id
         ChatThread.objects.filter(id=group_id).delete()
         ChatMessage.objects.filter(chat_id=group_id).delete()
         instance.delete()
+        broadcast_global_event('project_deleted', {
+            'id': proj_id
+        })
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -263,6 +310,36 @@ class TaskViewSet(viewsets.ModelViewSet):
         if project_id:
             qs = qs.filter(project_id=project_id)
         return qs
+
+    def perform_create(self, serializer):
+        task = serializer.save()
+        broadcast_global_event('task_created', {
+            'id': task.id,
+            'project_id': task.project.id,
+            'title': task.title,
+            'status': task.status
+        })
+
+    def perform_update(self, serializer):
+        task = serializer.save()
+        broadcast_global_event('task_updated', {
+            'id': task.id,
+            'project_id': task.project.id,
+            'title': task.title,
+            'status': task.status,
+            'priority': task.priority,
+            'assignee': task.assignee,
+            'due': task.due
+        })
+
+    def perform_destroy(self, instance):
+        task_id = instance.id
+        proj_id = instance.project.id
+        instance.delete()
+        broadcast_global_event('task_deleted', {
+            'id': task_id,
+            'project_id': proj_id
+        })
 
 
 class DailyWorkLogViewSet(viewsets.ModelViewSet):
@@ -295,6 +372,33 @@ class DailyWorkLogViewSet(viewsets.ModelViewSet):
                     from_member=log.member,
                     text=f"⚠️ [BLOCKER / DEPENDENCY REPORTED]\n{lead_mention}: I have a dependency/blocker on this project:\n\"{log.dependency}\"\nPlease check and assist! 🚀"
                 )
+        broadcast_global_event('worklog_created', {
+            'id': log.id,
+            'member': log.member,
+            'project': log.project,
+            'date': log.date,
+            'hours': log.hours,
+            'status': log.status
+        })
+
+    def perform_update(self, serializer):
+        log = serializer.save()
+        broadcast_global_event('worklog_updated', {
+            'id': log.id,
+            'member': log.member,
+            'project': log.project,
+            'date': log.date,
+            'hours': log.hours,
+            'status': log.status,
+            'approval_status': log.approval_status
+        })
+
+    def perform_destroy(self, instance):
+        log_id = instance.id
+        instance.delete()
+        broadcast_global_event('worklog_deleted', {
+            'id': log_id
+        })
 
     @action(detail=True, methods=['post'], url_path='resolve-dependency')
     def resolve_dependency(self, request, pk=None):
@@ -319,6 +423,12 @@ class DailyWorkLogViewSet(viewsets.ModelViewSet):
                 text=f"✅ [DEPENDENCY RESOLVED by @{lead}]\nFor @{log.member}: {log.help_note}\nWork log is now unblocked and In Progress! 🚀"
             )
 
+        broadcast_global_event('worklog_updated', {
+            'id': log.id,
+            'member': log.member,
+            'status': log.status,
+            'resolved': True
+        })
         return Response(DailyWorkLogSerializer(log).data)
 
     @action(detail=True, methods=['post'], url_path='approve')
@@ -332,6 +442,13 @@ class DailyWorkLogViewSet(viewsets.ModelViewSet):
         log.approved_by = approver
         log.approved_at = now_ist.strftime('%d %b %Y, %I:%M %p').lstrip('0') + ' IST'
         log.save()
+        broadcast_global_event('worklog_updated', {
+            'id': log.id,
+            'member': log.member,
+            'approval_status': 'approved',
+            'approved_by': approver,
+            'approved_at': log.approved_at
+        })
         return Response(DailyWorkLogSerializer(log).data)
 
 
@@ -366,6 +483,12 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
             reactions[emoji] = users
         msg.reactions = reactions
         msg.save()
+        broadcast_chat_event(msg.chat_id, {
+            'type': 'chat_reaction_broadcast',
+            'msg_id': msg.id,
+            'emoji': emoji,
+            'reactions': msg.reactions
+        })
         return Response({'id': msg.id, 'reactions': msg.reactions})
 
     def perform_create(self, serializer):
@@ -379,6 +502,26 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 msg.save(update_fields=['time_label'])
             except Exception:
                 pass
+        broadcast_chat_event(msg.chat_id, {
+            'type': 'chat_message_broadcast',
+            'message': {
+                'id': msg.id,
+                'chat_id': msg.chat_id,
+                'from': msg.from_member,
+                'text': msg.text,
+                'time': msg.time_label,
+                'date': msg.created_at.strftime('%d %b %Y') if msg.created_at else '',
+                'file': msg.file,
+                'voice': msg.voice,
+                'reply_to': msg.reply_to or {},
+                'reactions': msg.reactions or {}
+            }
+        })
+        broadcast_global_event('new_message', {
+            'chat_id': msg.chat_id,
+            'from': msg.from_member,
+            'text': msg.text
+        })
         chat_id = msg.chat_id
         if not ChatThread.objects.filter(id=chat_id).exists():
             creator = msg.from_member or (self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin')

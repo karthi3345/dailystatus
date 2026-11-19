@@ -92,8 +92,8 @@ const THUMBS = {
 };
 
 /* ---------------- Dynamic Data store ---------------- */
-let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
-let ME = (AUTH_TOKEN && localStorage.getItem('kathir_auth_user')) ? localStorage.getItem('kathir_auth_user') : '';
+let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || 'direct-access-token';
+let ME = localStorage.getItem('kathir_auth_user') || 'kumar';
 
 const PEOPLE = {};
 const TITLES = {};
@@ -321,14 +321,22 @@ function deduplicateChats() {
   for (const c of chats) {
     if (!c) continue;
     if (c.kind === 'dm') {
-      const p = (c.person || c.id.replace(/^dm-/, '').split('-')[0] || '').toLowerCase().trim();
+      const p = (
+        c.person ||
+        (c.id && c.id.startsWith('dm-') ? c.id.replace(/^dm-/, '').split('-')[0] : '') ||
+        (c.name && Object.keys(PEOPLE).includes(c.name.toLowerCase()) ? c.name : '') ||
+        (c.name && MEMBER_ROWS.includes(c.name.toLowerCase()) ? c.name : '') ||
+        c.name ||
+        c.id
+      ).toLowerCase().trim();
       if (!p) continue;
+      c.person = p;
       if (seenDMs.has(p)) {
         const existing = seenDMs.get(p);
         if (Array.isArray(c.msgs) && c.msgs.length) {
           existing.msgs = existing.msgs || [];
           for (const m of c.msgs) {
-            if (!existing.msgs.some(em => em.id === m.id || (em.text === m.text && em.time === m.time))) {
+            if (!existing.msgs.some(em => (em.id && m.id && em.id === m.id) || (em.text === m.text && em.time === m.time))) {
               existing.msgs.push(m);
             }
           }
@@ -340,8 +348,8 @@ function deduplicateChats() {
         newChats.push(c);
       }
     } else {
-      const gid = c.id || c.name;
-      if (!seenGroups.has(gid)) {
+      const gid = (c.id || c.name || '').toLowerCase().trim();
+      if (gid && !seenGroups.has(gid)) {
         seenGroups.add(gid);
         newChats.push(c);
       }
@@ -827,12 +835,14 @@ function tabTasks(p) {
       <option value="epic" ${state.taskType === 'epic' ? 'selected' : ''}>⚡ Epic</option>
     </select>
 
+    ${state.taskView === 'list' ? `
     <select class="select" data-taskfilter="taskStatus">
       ${opt('all', 'All Statuses', state.taskStatus)}
       ${opt('pending', 'To Do', state.taskStatus)}
       ${opt('progress', 'In Progress', state.taskStatus)}
       ${opt('done', 'Completed', state.taskStatus)}
     </select>
+    ` : ''}
 
     <select class="select" data-taskfilter="taskAssignee">
       ${opt('all', 'All Assignees', state.taskAssignee)}
@@ -1751,6 +1761,7 @@ function renderMessenger() {
             <button type="button" class="send" data-action="finish-voice-rec" title="Send Voice Message" style="border:none;cursor:pointer">${icon('send', 'sm')}</button>
           </div>
         ` : `
+          <div id="typingIndicator" class="typing-indicator" style="display:none;align-items:center;gap:6px;padding:3px 18px;font-size:11.5px;color:var(--text-3);min-height:18px"></div>
           <form class="composer-row" id="msgForm">
             <div class="composer-user-av" title="You are chatting as ${(PEOPLE[ME]?.name) || ME || 'Raja'}">
               ${av(ME || 'raja', 's36')}
@@ -1782,6 +1793,11 @@ function renderMessenger() {
   </section>`;
 }
 function afterMessenger() {
+  const c = chats.find(x => x.id === state.chatId) || chats[0];
+  if (c && c.id) {
+    connectChatSocket(c.id);
+  }
+
   const box = $('#msgs');
   const scrollBtn = $('#chatScrollBottom');
   if (box) {
@@ -1803,8 +1819,15 @@ function afterMessenger() {
   }
   const main = $('#main');
   main.style.overflow = 'auto';
-  if (state.replyingTo) {
-    $('#msgInput')?.focus();
+
+  const msgInput = $('#msgInput');
+  if (msgInput) {
+    if (state.replyingTo) msgInput.focus();
+    msgInput.addEventListener('input', () => {
+      sendTypingSignal(true);
+      if (typingTimeout) clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => sendTypingSignal(false), 2000);
+    });
   }
 }
 function updateMsgDot() {
@@ -1820,7 +1843,7 @@ function sendMessage(text, file, voice) {
 
   const newMsg = {
     id: Date.now(),
-    from: ME || 'raja',
+    from: ME || 'kumar',
     time: nowTime(),
     date: nowISTDate(),
     text: msgContent,
@@ -1834,19 +1857,33 @@ function sendMessage(text, file, voice) {
   saveChatsToCache();
   rerender();
 
-  apiSendMessage(c.id, {
-    from_member: ME || 'raja',
-    text: msgContent,
-    file_info: voice || file || null,
-    time_label: nowTime(),
-    reply_to: replyTo,
-    reactions: {}
-  }).then(saved => {
-    if (saved && saved.id) {
-      newMsg.id = saved.id;
-      saveChatsToCache();
-    }
-  });
+  // Send via active WebSocket if open, otherwise REST API fallback
+  if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN) {
+    try {
+      activeChatSocket.send(JSON.stringify({
+        type: 'chat_message',
+        text: msgContent,
+        sender: ME || 'kumar',
+        file: file || null,
+        voice: voice || null,
+        reply_to: replyTo
+      }));
+    } catch (_) {}
+  } else {
+    apiSendMessage(c.id, {
+      from_member: ME || 'kumar',
+      text: msgContent,
+      file_info: voice || file || null,
+      time_label: nowTime(),
+      reply_to: replyTo,
+      reactions: {}
+    }).then(saved => {
+      if (saved && saved.id) {
+        newMsg.id = saved.id;
+        saveChatsToCache();
+      }
+    });
+  }
 
   const box = $('#msgs');
   if (box) {
@@ -1859,7 +1896,7 @@ async function toggleMessageReaction(c, msgIdx, emoji) {
   const m = c.msgs[msgIdx];
   if (!m) return;
   if (!m.reactions || typeof m.reactions !== 'object') m.reactions = {};
-  const current = ME || 'raja';
+  const current = ME || 'kumar';
   const users = Array.isArray(m.reactions[emoji]) ? [...m.reactions[emoji]] : [];
   const uIdx = users.indexOf(current);
   if (uIdx >= 0) {
@@ -1875,7 +1912,17 @@ async function toggleMessageReaction(c, msgIdx, emoji) {
   }
   saveChatsToCache();
   rerender();
-  if (m.id) {
+
+  if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN && m.id) {
+    try {
+      activeChatSocket.send(JSON.stringify({
+        type: 'react',
+        msg_id: m.id,
+        emoji: emoji,
+        user: current
+      }));
+    } catch (_) {}
+  } else if (m.id) {
     await fetchFromAPI(`/messages/${m.id}/react/`, {
       method: 'POST',
       body: JSON.stringify({ emoji, user: current })
@@ -1920,17 +1967,13 @@ function place(el, anchor) {
 }
 function openProfile(id, anchor) {
   closeFloating();
-  if (!ME || !AUTH_TOKEN) {
-    openLoginModal();
-    return;
-  }
   if (anchor && anchor.nodeType) {
     currentProfileAnchor = anchor;
   } else if (!currentProfileAnchor || !document.body.contains(currentProfileAnchor)) {
     currentProfileAnchor = (id === ME) ? $('#sideUser') : null;
   }
-  const personId = id || ME;
-  const isMe = personId && ME && personId.toLowerCase() === ME.toLowerCase();
+  const personId = (id || ME || 'kumar').toLowerCase();
+  const isMe = personId === (ME || 'kumar').toLowerCase();
   const P = (personId && PEOPLE[personId]) || {
     name: (personId && typeof personId === 'string' && personId.length) ? personId.charAt(0).toUpperCase() + personId.slice(1) : 'Member',
     role: 'Developer',
@@ -1943,13 +1986,15 @@ function openProfile(id, anchor) {
   const el = document.createElement('div');
   el.className = 'pop';
 
+  const memberKeys = Object.keys(PEOPLE).length ? Object.keys(PEOPLE) : ['kumar', 'raja', 'karthik', 'rahul', 'mr_vandu'];
+
   if (isMe) {
     el.innerHTML = `
       <div class="pop-head">
         ${av(personId, 's64')}
         <div style="min-width:0;flex:1">
           <div class="n" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
-            <span>${esc(P.name)} (You)</span>
+            <span>${esc(P.name)} (Active)</span>
             <span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>
           </div>
           <div class="r">${TITLES[personId] || P.role || 'Member'}</div>
@@ -1962,8 +2007,20 @@ function openProfile(id, anchor) {
       <h5>My Work Location</h5>
       ${Object.entries(MODES).map(([k, m]) => `<button class="opt ${P.mode === k ? 'on' : ''}" data-set-mode="${k}">${icon(m.icon)}${m.long}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
       <div class="sep"></div>
-      <h5>Account</h5>
-      <button class="opt" data-action="auth-logout" style="color:var(--red);font-weight:600">${icon('x')}Log Out</button>`;
+      <h5>Switch Active User</h5>
+      <div style="display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto;margin-top:6px">
+        ${memberKeys.map(uid => {
+          const mem = PEOPLE[uid] || { name: uid };
+          const active = uid.toLowerCase() === (ME || 'kumar').toLowerCase();
+          return `
+            <button type="button" class="opt ${active ? 'on' : ''}" data-action="switch-user" data-uid="${uid}" style="display:flex;align-items:center;gap:8px;padding:6px 10px;text-align:left;border-radius:8px">
+              ${av(uid, 's22')}
+              <span style="font-weight:600;font-size:12px;flex:1">${esc(mem.name)} ${active ? '(Active)' : ''}</span>
+              ${active ? `<span style="color:var(--gold);font-size:11px;font-weight:bold">✓</span>` : ''}
+            </button>
+          `;
+        }).join('')}
+      </div>`;
   } else {
     el.innerHTML = `
       <div class="pop-head">
@@ -1992,7 +2049,10 @@ function openProfile(id, anchor) {
           <span style="color:var(--text)">${esc(P.today)}</span>
         </div>` : ''}
       </div>
-      <button class="btn gold" data-dm="${personId}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600">
+      <button class="btn gold" data-action="switch-user" data-uid="${personId}" style="width:100%;height:34px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px">
+        Switch Active User to ${esc(P.name)}
+      </button>
+      <button class="btn flat" data-dm="${personId}" style="width:100%;height:34px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px">
         ${icon('message', 'sm')} Send Direct Message
       </button>`;
   }
@@ -3673,6 +3733,21 @@ async function handleAction(a, el) {
     }
     case 'new-group': openNewGroupModal(); break;
     case 'add-group-member': openAddMemberModal(state.chatId); break;
+    case 'switch-user': {
+      const uid = (el.dataset.uid || '').toLowerCase();
+      if (uid) {
+        ME = uid;
+        localStorage.setItem('kathir_auth_user', ME);
+        ensureAllTeamDMs();
+        deduplicateChats();
+        refreshSide();
+        rerender();
+        closeFloating();
+        toast(`Active user switched to ${(PEOPLE[ME] && PEOPLE[ME].name) || ME}! 🚀`);
+        broadcastGlobalEventSocket('member_updated', { id: ME, name: (PEOPLE[ME] && PEOPLE[ME].name) || ME });
+      }
+      break;
+    }
     case 'open-login': openLoginModal(); break;
     case 'open-register': openRegisterModal(); break;
     case 'auth-logout': handleLogout(); break;
@@ -3749,16 +3824,287 @@ async function fetchFromAPI(endpoint, options = {}) {
       ...options
     });
     if (res.status === 401 && !endpoint.startsWith('/auth/login')) {
-      AUTH_TOKEN = null;
-      ME = null;
-      localStorage.removeItem('kathir_auth_token');
-      localStorage.removeItem('kathir_auth_user');
-      refreshSide();
+      // Direct access mode - do not wipe user or block access
     }
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {
     return null;
+  }
+}
+
+/* ---------------- Django Channels & Redis WebSocket Integration ---------------- */
+let globalEventSocket = null;
+let globalEventRetryTimer = null;
+
+function initGlobalEventSocket() {
+  if (globalEventSocket && (globalEventSocket.readyState === WebSocket.OPEN || globalEventSocket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${location.host}/ws/events/`;
+
+  try {
+    globalEventSocket = new WebSocket(wsUrl);
+
+    globalEventSocket.onopen = () => {
+      console.log('⚡ Django Channels Global Event WebSocket connected');
+      if (globalEventRetryTimer) {
+        clearTimeout(globalEventRetryTimer);
+        globalEventRetryTimer = null;
+      }
+    };
+
+    globalEventSocket.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        handleGlobalRealtimeEvent(payload.event, payload.data);
+      } catch (err) {}
+    };
+
+    globalEventSocket.onclose = () => {
+      if (!globalEventRetryTimer) {
+        globalEventRetryTimer = setTimeout(() => {
+          globalEventRetryTimer = null;
+          initGlobalEventSocket();
+        }, 3000);
+      }
+    };
+
+    globalEventSocket.onerror = () => {
+      try { globalEventSocket.close(); } catch (_) {}
+    };
+  } catch (err) {
+    if (!globalEventRetryTimer) {
+      globalEventRetryTimer = setTimeout(() => {
+        globalEventRetryTimer = null;
+        initGlobalEventSocket();
+      }, 5000);
+    }
+  }
+}
+
+function broadcastGlobalEventSocket(event, data) {
+  if (globalEventSocket && globalEventSocket.readyState === WebSocket.OPEN) {
+    try {
+      globalEventSocket.send(JSON.stringify({ event, data }));
+    } catch (e) {}
+  }
+}
+
+function handleGlobalRealtimeEvent(event, data) {
+  if (!event || !data) return;
+  switch (event) {
+    case 'member_updated': {
+      if (data.id) {
+        const uid = data.id.toLowerCase();
+        if (PEOPLE[uid]) {
+          if (data.name) PEOPLE[uid].name = data.name;
+          if (data.availability) PEOPLE[uid].availability = data.availability;
+          if (data.mode) PEOPLE[uid].mode = data.mode;
+          if (data.today) PEOPLE[uid].today = data.today;
+        } else {
+          PEOPLE[uid] = {
+            name: data.name || uid.charAt(0).toUpperCase() + uid.slice(1),
+            role: data.role || 'Member',
+            availability: data.availability || 'available',
+            mode: data.mode || 'office',
+            today: data.today || ''
+          };
+          if (!MEMBER_ROWS.includes(uid)) MEMBER_ROWS.push(uid);
+        }
+        ensureAllTeamDMs();
+        refreshSide();
+        rerender();
+      }
+      break;
+    }
+    case 'task_created':
+    case 'task_updated':
+    case 'task_deleted': {
+      if (data.project_id) {
+        fetchFromAPI(`/tasks/?project=${data.project_id}`).then(apiTasks => {
+          if (Array.isArray(apiTasks)) {
+            const p = projects.find(x => x.id === data.project_id);
+            if (p) {
+              p.tasks = apiTasks;
+              rerender();
+            }
+          }
+        });
+      }
+      break;
+    }
+    case 'project_created':
+    case 'project_deleted': {
+      fetchFromAPI('/projects/').then(apiProjects => {
+        if (Array.isArray(apiProjects)) {
+          projects.length = 0;
+          apiProjects.forEach(ap => {
+            projects.push({
+              id: ap.id,
+              name: ap.name,
+              type: ap.type || 'Web',
+              category: ap.category || 'Active',
+              status: ap.status || 'progress',
+              pct: ap.pct || 0,
+              team: ap.team || [],
+              desc: ap.desc || '',
+              kanbanColumns: ap.kanban_columns || [
+                { id: 'pending', name: 'To Do', color: 'pending' },
+                { id: 'progress', name: 'In Progress', color: 'progress' },
+                { id: 'done', name: 'Completed', color: 'done' }
+              ],
+              tasks: ap.tasks || []
+            });
+          });
+          rerender();
+        }
+      });
+      break;
+    }
+    case 'worklog_created':
+    case 'worklog_updated':
+    case 'worklog_deleted': {
+      fetchFromAPI('/worklogs/').then(apiLogs => {
+        if (Array.isArray(apiLogs)) {
+          workLogs.length = 0;
+          workLogs.push(...apiLogs);
+          saveWorkLogsToCache();
+          if (location.hash.startsWith('#/worklog')) rerender();
+        }
+      });
+      break;
+    }
+  }
+}
+
+let activeChatSocket = null;
+let currentChatSocketId = null;
+let chatSocketRetryTimer = null;
+const typingUsers = new Set();
+let typingTimeout = null;
+
+function connectChatSocket(chatId) {
+  if (!chatId) return;
+  if (currentChatSocketId === chatId && activeChatSocket && (activeChatSocket.readyState === WebSocket.OPEN || activeChatSocket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  if (activeChatSocket) {
+    try { activeChatSocket.close(); } catch (_) {}
+    activeChatSocket = null;
+  }
+
+  currentChatSocketId = chatId;
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${location.host}/ws/chat/${chatId}/`;
+
+  try {
+    activeChatSocket = new WebSocket(wsUrl);
+
+    activeChatSocket.onopen = () => {
+      console.log(`💬 Chat WebSocket connected for ${chatId}`);
+      if (chatSocketRetryTimer) {
+        clearTimeout(chatSocketRetryTimer);
+        chatSocketRetryTimer = null;
+      }
+    };
+
+    activeChatSocket.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'new_message' && data.message) {
+          handleNewSocketMessage(data.message);
+        } else if (data.type === 'typing') {
+          handleTypingEvent(data.user, data.is_typing);
+        } else if (data.type === 'reaction_update') {
+          handleReactionUpdate(data.msg_id, data.emoji, data.reactions);
+        }
+      } catch (err) {}
+    };
+
+    activeChatSocket.onclose = () => {
+      if (currentChatSocketId === chatId) {
+        chatSocketRetryTimer = setTimeout(() => {
+          if (currentChatSocketId === chatId && state.chatId === chatId) {
+            connectChatSocket(chatId);
+          }
+        }, 3000);
+      }
+    };
+
+    activeChatSocket.onerror = () => {
+      try { activeChatSocket.close(); } catch (_) {}
+    };
+  } catch (err) {
+    console.error('WebSocket connection error:', err);
+  }
+}
+
+function handleNewSocketMessage(msg) {
+  const c = chats.find(x => x.id === msg.chat_id) || chats.find(x => x.id === state.chatId);
+  if (!c) return;
+  c.msgs = c.msgs || [];
+  const existingIdx = c.msgs.findIndex(m => m.id === msg.id || (m.from === msg.from && m.text === msg.text && typeof m.id === 'number' && Date.now() - m.id < 15000));
+  if (existingIdx >= 0) {
+    c.msgs[existingIdx] = { ...c.msgs[existingIdx], ...msg };
+  } else {
+    c.msgs.push(msg);
+  }
+  saveChatsToCache();
+  if (state.chatId === c.id) {
+    rerender();
+  } else {
+    c.unread = (c.unread || 0) + 1;
+    updateMsgDot();
+  }
+}
+
+function handleTypingEvent(user, isTyping) {
+  const myName = (PEOPLE[ME]?.name) || ME || 'User';
+  if (user === myName) return;
+  if (isTyping) {
+    typingUsers.add(user);
+  } else {
+    typingUsers.delete(user);
+  }
+  updateTypingIndicatorUI();
+}
+
+function updateTypingIndicatorUI() {
+  const el = $('#typingIndicator');
+  if (!el) return;
+  if (typingUsers.size === 0) {
+    el.innerHTML = '';
+    el.style.display = 'none';
+  } else {
+    const names = [...typingUsers].join(', ');
+    el.innerHTML = `<span style="font-style:italic">✍️ ${esc(names)} is typing...</span>`;
+    el.style.display = 'flex';
+  }
+}
+
+function sendTypingSignal(isTyping) {
+  if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN) {
+    try {
+      activeChatSocket.send(JSON.stringify({
+        type: 'typing',
+        user: (PEOPLE[ME] && PEOPLE[ME].name) || ME || 'User',
+        is_typing: isTyping
+      }));
+    } catch (_) {}
+  }
+}
+
+function handleReactionUpdate(msgId, emoji, reactions) {
+  const c = chats.find(x => x.id === state.chatId);
+  if (!c || !c.msgs) return;
+  const m = c.msgs.find(x => x.id === msgId);
+  if (m) {
+    m.reactions = reactions || {};
+    saveChatsToCache();
+    rerender();
   }
 }
 
@@ -4472,7 +4818,11 @@ async function apiSendMessage(chatId, messageData) {
 }
 
 async function loadInitialData() {
-  if (AUTH_TOKEN) {
+  ME = localStorage.getItem('kathir_auth_user') || 'kumar';
+  AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || 'direct-access-token';
+  checkInitialAuthView();
+
+  try {
     const meRes = await fetchFromAPI('/auth/me/');
     if (meRes && meRes.authenticated && meRes.user) {
       ME = meRes.user.username.toLowerCase();
@@ -4480,20 +4830,8 @@ async function loadInitialData() {
       if (!PEOPLE[ME]) {
         PEOPLE[ME] = { name: meRes.user.name, role: meRes.user.role, availability: meRes.user.availability, mode: meRes.user.mode };
       }
-    } else {
-      AUTH_TOKEN = null;
-      localStorage.removeItem('kathir_auth_token');
-      localStorage.removeItem('kathir_auth_user');
-      ME = null;
-      checkInitialAuthView();
-      return;
     }
-  } else {
-    ME = null;
-    localStorage.removeItem('kathir_auth_user');
-    checkInitialAuthView();
-    return;
-  }
+  } catch (_) {}
   checkInitialAuthView();
 
   const [apiMembers, apiProjects, apiLogs, apiChats] = await Promise.all([
@@ -4567,8 +4905,11 @@ async function loadInitialData() {
     }
   }
 
+  ensureAllTeamDMs();
+  deduplicateChats();
   refreshSide();
   rerender();
+  initGlobalEventSocket();
 }
 
 /* ---------------- Drag and Drop for Kanban Board ---------------- */
@@ -4622,36 +4963,24 @@ document.addEventListener('drop', e => {
 
 /* ---------------- Boot ---------------- */
 function refreshSide() {
-  if (!ME || !AUTH_TOKEN) {
-    $('#sideAvatar').innerHTML = `<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#2d2d33"/><circle cx="20" cy="16" r="7" fill="#888"/><path d="M8 38c2-8 7-10 12-10s10 2 12 10z" fill="#888"/></svg>`;
-    const info = $('#sideUser > div');
-    if (info) {
-      info.innerHTML = `<div class="name" style="color:var(--gold)">Sign In / Register</div><div class="role">Guest (Click to Login)</div>`;
-    }
-    return;
+  if (!ME) {
+    ME = localStorage.getItem('kathir_auth_user') || 'kumar';
   }
-  const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'User', role: 'Team Member' };
+  const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'Kumar', role: TITLES[ME] || 'Team Lead' };
   const modeKey = (currentPerson && currentPerson.mode) || 'office';
   const m = MODES[modeKey] || MODES['office'];
   $('#sideAvatar').innerHTML = avatarSVG(ME);
   const info = $('#sideUser > div');
   if (info) {
-    info.innerHTML = `<div class="name" style="display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(currentPerson.name)}</span><span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, 'xs')}</span></div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Member')}</div>`;
+    info.innerHTML = `<div class="name" style="display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(currentPerson.name)}</span><span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, 'xs')}</span></div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Lead')}</div>`;
   }
 }
 
 function checkInitialAuthView() {
   const loginSection = $('#login');
   const appSection = $('#app');
-  if (!loginSection || !appSection) return;
-
-  if (AUTH_TOKEN) {
-    loginSection.hidden = true;
-    appSection.hidden = false;
-  } else {
-    appSection.hidden = true;
-    loginSection.hidden = false;
-  }
+  if (loginSection) loginSection.hidden = true;
+  if (appSection) appSection.hidden = false;
 }
 
 function initAuthScreen() {
@@ -5004,9 +5333,7 @@ initAuthScreen();
 checkInitialAuthView();
 refreshSide();
 window.addEventListener('hashchange', () => {
-  if (AUTH_TOKEN) route();
-});
-if (AUTH_TOKEN) {
   route();
-}
+});
+route();
 loadInitialData();
