@@ -38,15 +38,23 @@ class Project(models.Model):
 class Task(models.Model):
     project = models.ForeignKey(Project, related_name='tasks', on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
+    key = models.CharField(max_length=50, blank=True, default='')
     task_type = models.CharField(max_length=30, default='task')  # bug, epic, story, task
     category = models.CharField(max_length=50, blank=True, default='')
     checklist = models.JSONField(default=list, blank=True)
     assignee = models.CharField(max_length=50, blank=True, null=True)
+    reporter = models.CharField(max_length=50, blank=True, default='')
     priority = models.CharField(max_length=30, default='Medium')
+    labels = models.JSONField(default=list, blank=True)
+    attachments = models.JSONField(default=list, blank=True)
+    comments = models.JSONField(default=list, blank=True)
+    worklogs = models.JSONField(default=list, blank=True)
     due = models.CharField(max_length=30, blank=True, default='')
     status = models.CharField(max_length=30, default='pending')
     desc = models.TextField(blank=True, default='')
     order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     def __str__(self):
         return f"[{self.project.id}] {self.title}"

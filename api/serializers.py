@@ -12,7 +12,13 @@ class TaskSerializer(serializers.ModelSerializer):
     desc = serializers.CharField(required=False, allow_blank=True, default='')
     category = serializers.CharField(required=False, allow_blank=True, default='')
     task_type = serializers.CharField(required=False, default='task')
+    key = serializers.CharField(required=False, allow_blank=True, default='')
+    reporter = serializers.CharField(required=False, allow_blank=True, default='')
     checklist = serializers.ListField(required=False, default=list)
+    labels = serializers.ListField(required=False, default=list)
+    attachments = serializers.ListField(required=False, default=list)
+    comments = serializers.ListField(required=False, default=list)
+    worklogs = serializers.ListField(required=False, default=list)
 
     class Meta:
         model = Task

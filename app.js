@@ -1026,363 +1026,760 @@ function openMenu(anchor, items) {
   el.addEventListener('click', e => { const b = e.target.closest('[data-mi]'); if (!b) return; el.remove(); items[b.dataset.mi].run(); });
   place(el, anchor);
 }
-function openNewTaskModal(p, defaultStatus = 'pending') {
+function openJiraTaskModal(p, task, isNew = false) {
   const ov = document.createElement('div');
-  ov.className = 'overlay';
-  const members = (p && p.team && p.team.length ? p.team : Object.keys(PEOPLE));
-  const memberOpts = members.map(id => `<option value="${id}">${esc((PEOPLE[id] && PEOPLE[id].name) || id)}</option>`).join('');
-  let draftChecklist = [];
+  ov.className = 'jira-overlay';
 
-  const renderDraftList = () => {
-    const listEl = ov.querySelector('#subtaskDraftList');
-    if (!listEl) return;
-    if (!draftChecklist.length) {
-      listEl.innerHTML = '<span style="font-size:11.5px;color:var(--text-2);font-style:italic">No subtasks added yet.</span>';
-      return;
-    }
-    listEl.innerHTML = draftChecklist.map((item, idx) => `
-      <div class="chk-item" style="cursor:default">
-        <span>${esc(item.text)}</span>
-        <button type="button" class="del-btn" data-del-subtask="${idx}" title="Remove subtask">${icon('trash', 'xs')}</button>
-      </div>
-    `).join('');
-  };
-
-  ov.innerHTML = `
-    <div class="modal task-modal" style="width:540px;max-width:calc(100vw - 32px);max-height:90vh;overflow-y:auto">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <h3 style="margin:0;font-size:18px">Create &amp; Assign Task</h3>
-        <button type="button" class="icon-btn" data-close style="width:30px;height:30px">${icon('x', 'sm')}</button>
-      </div>
-
-      <form id="newTaskForm">
-        <div class="field">
-          <label style="font-weight:600">Task Type</label>
-          <div class="task-type-pills">
-            <label class="type-pill-opt">
-              <input type="radio" name="task_type" value="task" checked hidden />
-              <span class="type-pill task">${icon('checkSquare', 'xs')} Task</span>
-            </label>
-            <label class="type-pill-opt">
-              <input type="radio" name="task_type" value="bug" hidden />
-              <span class="type-pill bug">${icon('alertCircle', 'xs')} Bug</span>
-            </label>
-            <label class="type-pill-opt">
-              <input type="radio" name="task_type" value="story" hidden />
-              <span class="type-pill story">${icon('bookmark', 'xs')} Story</span>
-            </label>
-            <label class="type-pill-opt">
-              <input type="radio" name="task_type" value="epic" hidden />
-              <span class="type-pill epic">${icon('zap', 'xs')} Epic</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="field">
-          <label style="font-weight:600">Task Title <span style="color:var(--red)">*</span></label>
-          <input name="title" required placeholder="What needs to be done?" autocomplete="off" />
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label style="font-weight:600">Category</label>
-            <select class="select" name="category">
-              <option value="Frontend">Frontend</option>
-              <option value="Backend">Backend</option>
-              <option value="UI/UX">UI/UX Design</option>
-              <option value="QA">QA &amp; Testing</option>
-              <option value="DevOps">DevOps</option>
-              <option value="Database">Database</option>
-              <option value="General">General</option>
-            </select>
-          </div>
-          <div class="field">
-            <label style="font-weight:600">Assignee</label>
-            <select class="select" name="assignee">
-              ${memberOpts}
-            </select>
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label style="font-weight:600">Priority</label>
-            <select class="select" name="priority">
-              <option value="High">High</option>
-              <option value="Medium" selected>Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          </div>
-          <div class="field">
-            <label style="font-weight:600">Initial Board Column</label>
-            <select class="select" name="status">
-              <option value="pending" ${defaultStatus === 'pending' ? 'selected' : ''}>To Do</option>
-              <option value="progress" ${defaultStatus === 'progress' ? 'selected' : ''}>In Progress</option>
-              <option value="done" ${defaultStatus === 'done' ? 'selected' : ''}>Completed</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field">
-          <label style="font-weight:600">Due Date <span style="font-weight:400;color:var(--text-2)">(Manual &amp; Optional)</span></label>
-          <input type="date" name="due" value="" />
-          <span style="font-size:11px;color:var(--text-2);margin-top:2px">Optional — leave blank for no due date / ongoing</span>
-        </div>
-
-        <div class="field">
-          <label style="font-weight:600">Description</label>
-          <textarea name="desc" placeholder="Provide background, steps to reproduce, or acceptance criteria..."></textarea>
-        </div>
-
-        <div class="field">
-          <label style="font-weight:600">Subtasks &amp; Checklist <span style="font-weight:400;color:var(--text-2)">(Optional)</span></label>
-          <div id="subtaskDraftList" class="subtask-list" style="margin-bottom:6px"></div>
-          <div style="display:flex;gap:6px">
-            <input id="newSubtaskInput" placeholder="Add a subtask / checklist item..." style="flex:1;height:34px;font-size:12.5px" />
-            <button type="button" id="btnAddSubtask" class="btn" style="height:34px;padding:0 12px;font-size:12px">${icon('plus', 'sm')} Add</button>
-          </div>
-        </div>
-
-        <div class="modal-actions" style="margin-top:16px">
-          <button type="button" class="btn" data-close>Cancel</button>
-          <button type="submit" class="btn gold">${icon('check', 'sm')} Create Task</button>
-        </div>
-      </form>
-    </div>
-  `;
-
-  document.body.appendChild(ov);
-  renderDraftList();
-
-  const close = () => ov.remove();
-  ov.addEventListener('click', e => {
-    if (e.target === ov || e.target.closest('[data-close]')) close();
-    const delBtn = e.target.closest('[data-del-subtask]');
-    if (delBtn) {
-      const idx = parseInt(delBtn.dataset.delSubtask, 10);
-      draftChecklist.splice(idx, 1);
-      renderDraftList();
-    }
-  });
-
-  const addSubtask = () => {
-    const input = ov.querySelector('#newSubtaskInput');
-    const val = (input?.value || '').trim();
-    if (!val) return;
-    draftChecklist.push({ text: val, done: false });
-    input.value = '';
-    renderDraftList();
-    input.focus();
-  };
-
-  ov.querySelector('#btnAddSubtask')?.addEventListener('click', addSubtask);
-  ov.querySelector('#newSubtaskInput')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addSubtask();
-    }
-  });
-
-  ov.querySelector('#newTaskForm')?.addEventListener('submit', async e => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const title = (fd.get('title') || '').trim();
-    if (!title) return;
-    const taskData = {
-      project: p.id,
-      title,
-      task_type: fd.get('task_type') || 'task',
-      category: fd.get('category') || '',
-      assignee: fd.get('assignee') || '',
-      priority: fd.get('priority') || 'Medium',
-      status: fd.get('status') || 'pending',
-      due: (fd.get('due') || '').trim(),
-      desc: (fd.get('desc') || '').trim(),
-      checklist: draftChecklist
-    };
-
-    close();
-    toast('Creating task...');
-
-    try {
-      const created = await apiCreateTask(taskData);
-      if (created && created.id) {
-        p.tasks.push(created);
-      } else {
-        p.tasks.push({ id: Date.now(), ...taskData });
-      }
-      rerender();
-      const colName = taskData.status === 'done' ? 'Completed' : taskData.status === 'progress' ? 'In Progress' : 'To Do';
-      toast(`Task "${title}" created in ${colName}`);
-    } catch (err) {
-      p.tasks.push({ id: Date.now(), ...taskData });
-      rerender();
-      toast(`Task "${title}" created`);
-    }
-  });
-}
-
-function openTaskDetailsModal(p, task) {
-  const ov = document.createElement('div');
-  ov.className = 'overlay';
+  // Ensure arrays exist
   if (!Array.isArray(task.checklist)) task.checklist = [];
+  if (!Array.isArray(task.attachments)) task.attachments = [];
+  if (!Array.isArray(task.comments)) task.comments = [];
+  if (!Array.isArray(task.worklogs)) task.worklogs = [];
+  if (!Array.isArray(task.labels)) task.labels = task.category ? [task.category] : ['All_Projects'];
+  if (!task.key) {
+    const projCode = ((p && p.name) || 'IPP').replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || 'IPP';
+    task.key = `${projCode}-${task.id ? String(task.id).slice(-3) : 1}`;
+  }
+  if (!task.reporter) task.reporter = ME || 'raja';
+  if (!task.watchers) task.watchers = 2;
+  if (task.isWatching === undefined) task.isWatching = true;
 
-  const renderModalContent = () => {
+  let activeTab = 'comments'; // 'all', 'comments', 'history', 'worklog'
+  let isFullscreen = false;
+
+  const saveTask = async () => {
+    if (!isNew && task.id) {
+      await apiPatchTask(task.id, {
+        title: task.title,
+        desc: task.desc,
+        task_type: task.task_type,
+        category: task.category,
+        assignee: task.assignee,
+        reporter: task.reporter,
+        priority: task.priority,
+        status: task.status,
+        due: task.due,
+        key: task.key,
+        checklist: task.checklist,
+        attachments: task.attachments,
+        comments: task.comments,
+        worklogs: task.worklogs,
+        labels: task.labels
+      });
+      rerender();
+    }
+  };
+
+  const renderModal = () => {
     const type = TASK_TYPES[task.task_type] || TASK_TYPES['task'];
+    const members = (p && p.team && p.team.length ? p.team : Object.keys(PEOPLE));
+    const assigneeName = (PEOPLE[task.assignee] && PEOPLE[task.assignee].name) || task.assignee || 'Unassigned';
+    const reporterName = (PEOPLE[task.reporter] && PEOPLE[task.reporter].name) || task.reporter || 'Reporter';
+
     const chkDone = task.checklist.filter(c => c.done).length;
     const chkTotal = task.checklist.length;
+    const pct = chkTotal ? Math.round((chkDone / chkTotal) * 100) : 0;
+
     ov.innerHTML = `
-      <div class="modal task-modal" style="width:560px;max-width:calc(100vw - 32px);max-height:90vh;overflow-y:auto">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span class="k-type-badge ${task.task_type || 'task'}">${icon(type.icon, 'xs')} ${type.label}</span>
-            ${task.category ? `<span class="k-cat-pill">${esc(task.category)}</span>` : ''}
-            <span class="badge ${task.priority ? task.priority.toLowerCase() : 'medium'}">${task.priority || 'Medium'}</span>
-            <span class="badge ${STATUS[task.status]?.cls || 'progress'}">${task.status === 'pending' ? 'To Do' : (STATUS[task.status]?.label || 'In Progress')}</span>
+      <div class="jira-modal ${isFullscreen ? 'fullscreen' : ''}">
+        <!-- Top Bar -->
+        <div class="jira-topbar">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="jira-key-badge" title="Click to change task type" id="jiraKeyBadge" style="cursor:pointer">
+              ${icon(type.icon, 'xs')} <span>${esc(task.key)}</span> ${icon('chevDown', 'xs')}
+            </span>
           </div>
-          <button type="button" class="icon-btn" data-close style="width:30px;height:30px">${icon('x', 'sm')}</button>
+
+          <div class="jira-top-actions">
+            <button class="jira-top-btn" id="jiraWatchBtn" title="Toggle Watchers">
+              <svg class="ic xs" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <span>${task.watchers}</span>
+            </button>
+            <button class="jira-top-btn" id="jiraShareBtn" title="Share task link">
+              <svg class="ic xs" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            </button>
+            <button class="jira-top-btn" id="jiraMenuBtn" title="More actions">
+              ${icon('more', 'xs')}
+            </button>
+            <button class="jira-top-btn" id="jiraExpandBtn" title="Toggle Fullscreen">
+              <svg class="ic xs" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            </button>
+            <button class="icon-btn" data-close style="width:30px;height:30px;margin-left:4px">${icon('x', 'sm')}</button>
+          </div>
         </div>
 
-        <h3 style="margin:0 0 10px;font-size:18px;line-height:1.35">${esc(task.title)}</h3>
+        <!-- Body: Two Columns -->
+        <div class="jira-body">
+          <!-- Left Column (Main) -->
+          <div class="jira-main">
+            <!-- Title -->
+            <div>
+              <input class="jira-title-input" id="jiraTitleInput" value="${esc(task.title)}" placeholder="Task title..." autocomplete="off" />
+              <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+                <button class="jira-top-btn" id="jiraAddSubtaskQuick" title="Add subtask">${icon('plus', 'xs')} Add Subtask</button>
+                <label class="jira-top-btn" style="cursor:pointer">
+                  <input type="file" id="jiraQuickFileInput" multiple hidden />
+                  ${icon('clip', 'xs')} Attach
+                </label>
+              </div>
+            </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;background:rgba(255,255,255,.02);padding:10px 12px;border-radius:8px;border:1px solid var(--line)">
-          <div>
-            <div style="font-size:11px;color:var(--text-2);margin-bottom:4px">Assignee</div>
-            <div style="display:flex;align-items:center;gap:6px">
-              ${av(task.assignee, 's24')}
-              <span style="font-weight:500;font-size:13px">${esc((PEOPLE[task.assignee] && PEOPLE[task.assignee].name) || task.assignee || 'Unassigned')}</span>
-              ${userModeIcon(task.assignee, 'xs')}
+            <!-- Description -->
+            <div class="jira-sec">
+              <div class="jira-sec-head">${icon('chevDown', 'xs')} Description</div>
+              <div class="jira-desc-box">
+                <textarea class="jira-desc-area" id="jiraDescArea" placeholder="Add a description...">${esc(task.desc || '')}</textarea>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+                  <span class="jira-pill-btn" style="background:rgba(59,130,246,.15);color:#60a5fa;border-color:rgba(59,130,246,.3)">
+                    <svg class="ic xs" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;margin-right:3px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    Connect Slack to update
+                  </span>
+                  <button type="button" class="btn-xs gold" id="jiraSaveDescBtn" style="padding:4px 10px">Save</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Attachments -->
+            <div class="jira-sec">
+              <div class="jira-sec-head">${icon('chevDown', 'xs')} Attachments (${task.attachments.length})</div>
+              <div class="jira-attach-drop">
+                <label class="btn" style="cursor:pointer;padding:0 14px;height:34px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px">
+                  <input type="file" id="jiraAttachInput" multiple hidden />
+                  ${icon('clip', 'sm')} Add attachment
+                </label>
+                <span class="muted" style="font-size:11.5px">Click to upload files, screenshots, or documents</span>
+              </div>
+              ${task.attachments.length ? `
+                <div class="jira-attach-list">
+                  ${task.attachments.map((att, idx) => `
+                    <div class="jira-attach-card">
+                      <span class="file-ic">${icon('file', 'sm')}</span>
+                      <div class="fname" title="${esc(att.name)}">${esc(att.name)}</div>
+                      <span class="muted" style="font-size:10.5px">${att.size || ''}</span>
+                      <button type="button" class="del-btn" data-del-attach="${idx}" title="Delete attachment">${icon('trash', 'xs')}</button>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Subtasks -->
+            <div class="jira-sec">
+              <div class="jira-sec-head" style="justify-content:space-between">
+                <span>Subtasks ${chkTotal ? `(${chkDone}/${chkTotal})` : ''}</span>
+                ${chkTotal ? `<span style="font-size:11.5px;color:var(--text-2)">${pct}% complete</span>` : ''}
+              </div>
+              ${chkTotal ? `
+                <div class="bar" style="height:5px;margin-bottom:6px"><i style="width:${pct}%"></i></div>
+              ` : ''}
+              <div style="display:flex;flex-direction:column;gap:5px">
+                ${task.checklist.map((c, idx) => `
+                  <div class="jira-subtask-item ${c.done ? 'done' : ''}">
+                    <input type="checkbox" data-jira-subtask="${idx}" ${c.done ? 'checked' : ''} style="cursor:pointer" />
+                    <span style="flex:1">${esc(c.text)}</span>
+                    <button type="button" class="del-btn" data-del-jira-subtask="${idx}" title="Delete subtask">${icon('trash', 'xs')}</button>
+                  </div>
+                `).join('')}
+              </div>
+              <div style="display:flex;gap:6px;margin-top:6px">
+                <input id="jiraSubtaskInp" placeholder="Add subtask..." style="flex:1;height:34px;font-size:12.5px" />
+                <button type="button" id="jiraAddSubtaskBtn" class="btn" style="height:34px;padding:0 12px;font-size:12px">${icon('plus', 'sm')} Add</button>
+              </div>
+            </div>
+
+            <!-- Agent sessions / AI Helper -->
+            <div class="jira-sec" style="background:rgba(255,255,255,.015);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">
+                  <span style="color:#22c55e">●</span> Agent sessions
+                </div>
+                <button type="button" class="btn-xs ok" id="jiraStartWorkBtn" style="padding:4px 10px;display:flex;align-items:center;gap:4px">
+                  ${icon('checkCircle', 'xs')} Start work ${icon('chevDown', 'xs')}
+                </button>
+              </div>
+            </div>
+
+            <!-- Activity & Comments -->
+            <div class="jira-sec">
+              <div class="jira-activity-tabs">
+                <button class="jira-tab-btn ${activeTab === 'all' ? 'active' : ''}" data-jiratab="all">All</button>
+                <button class="jira-tab-btn ${activeTab === 'comments' ? 'active' : ''}" data-jiratab="comments">Comments (${task.comments.length})</button>
+                <button class="jira-tab-btn ${activeTab === 'history' ? 'active' : ''}" data-jiratab="history">History</button>
+                <button class="jira-tab-btn ${activeTab === 'worklog' ? 'active' : ''}" data-jiratab="worklog">Work log (${task.worklogs.length})</button>
+              </div>
+
+              ${activeTab === 'comments' ? `
+                <div class="jira-comment-box">
+                  <textarea id="jiraCommentInput" placeholder="Add a comment..."></textarea>
+                  <div class="jira-pills-row">
+                    <button type="button" class="jira-pill-btn" data-insert-pill="[Status update]: Working on this...">Status update...</button>
+                    <button type="button" class="jira-pill-btn" data-insert-pill="Thanks for the update!">Thanks...</button>
+                    <button type="button" class="jira-pill-btn" data-insert-pill="Looks good, approved.">Agree...</button>
+                    <button type="button" class="jira-pill-btn" data-insert-pill="[Blocker]: Need assistance with dependencies.">Blocker...</button>
+                  </div>
+                  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px">
+                    <button type="button" class="btn gold" id="jiraSaveCommentBtn" style="height:30px;padding:0 12px;font-size:12px">Save Comment</button>
+                  </div>
+                </div>
+                <div class="jira-comments-stream">
+                  ${task.comments.length ? task.comments.map((cm, idx) => `
+                    <div class="jira-comment-item">
+                      ${av(cm.author || 'raja', 's32')}
+                      <div style="flex:1">
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                          <strong style="font-size:12.5px">${esc((PEOPLE[cm.author] && PEOPLE[cm.author].name) || cm.author || 'Member')}</strong>
+                          <span class="muted" style="font-size:11px">${cm.time || 'just now'}</span>
+                          <button type="button" class="del-btn" data-del-comment="${idx}" style="margin-left:auto">${icon('trash', 'xs')}</button>
+                        </div>
+                        <div style="font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap">${esc(cm.text)}</div>
+                      </div>
+                    </div>
+                  `).join('') : '<div class="muted" style="text-align:center;padding:16px 0;font-size:12px">No comments yet.</div>'}
+                </div>
+              ` : ''}
+
+              ${activeTab === 'worklog' ? `
+                <div class="jira-comment-box">
+                  <div style="font-size:12.5px;font-weight:600">Log Work</div>
+                  <div class="field-row" style="margin-bottom:0">
+                    <div class="field" style="margin-bottom:0">
+                      <label style="font-size:11px">Time Spent (e.g. 2h 30m)</label>
+                      <input id="jiraWorkHours" placeholder="1h 30m" style="height:32px;font-size:12px" />
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                      <label style="font-size:11px">Work Description</label>
+                      <input id="jiraWorkNote" placeholder="What did you work on?" style="height:32px;font-size:12px" />
+                    </div>
+                  </div>
+                  <div style="display:flex;justify-content:flex-end;margin-top:4px">
+                    <button type="button" class="btn gold" id="jiraSaveWorkBtn" style="height:30px;padding:0 12px;font-size:12px">Log Work</button>
+                  </div>
+                </div>
+                <div class="jira-comments-stream" style="margin-top:10px">
+                  ${task.worklogs.length ? task.worklogs.map(w => `
+                    <div class="jira-comment-item">
+                      ${av(w.author || 'raja', 's28')}
+                      <div style="flex:1">
+                        <div style="display:flex;align-items:center;gap:6px">
+                          <strong style="font-size:12.5px">${esc((PEOPLE[w.author] && PEOPLE[w.author].name) || w.author || 'Member')}</strong>
+                          <span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:11px">${esc(w.hours)}</span>
+                          <span class="muted" style="font-size:11px">${w.date || 'Today'}</span>
+                        </div>
+                        ${w.note ? `<div style="font-size:12.5px;color:var(--text-2);margin-top:2px">${esc(w.note)}</div>` : ''}
+                      </div>
+                    </div>
+                  `).join('') : '<div class="muted" style="text-align:center;padding:16px 0;font-size:12px">No work logged yet.</div>'}
+                </div>
+              ` : ''}
+
+              ${activeTab === 'history' || activeTab === 'all' ? `
+                <div style="display:flex;flex-direction:column;gap:8px;padding:10px 0">
+                  <div style="font-size:12px;color:var(--text-2);display:flex;gap:8px">
+                    <span>${icon('clock', 'xs')}</span>
+                    <span>Issue created by <b>${esc(reporterName)}</b></span>
+                  </div>
+                  <div style="font-size:12px;color:var(--text-2);display:flex;gap:8px">
+                    <span>${icon('checkSquare', 'xs')}</span>
+                    <span>Status set to <b>${task.status === 'pending' ? 'To Do' : task.status === 'progress' ? 'In Progress' : 'Done'}</b></span>
+                  </div>
+                  ${task.checklist.filter(c => c.done).map(c => `
+                    <div style="font-size:12px;color:var(--text-2);display:flex;gap:8px">
+                      <span style="color:#22c55e">${icon('check', 'xs')}</span>
+                      <span>Completed subtask: <i>${esc(c.text)}</i></span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
             </div>
           </div>
-          <div>
-            <div style="font-size:11px;color:var(--text-2);margin-bottom:4px">Due Date</div>
-            <div style="font-size:13px">${task.due ? `${icon('calendar', 'xs')} ${fmtLong(task.due)}` : '<span class="muted">No due date (Ongoing)</span>'}</div>
-          </div>
-        </div>
 
-        ${task.desc ? `
-          <div style="margin-bottom:16px">
-            <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Description</div>
-            <div style="font-size:13px;line-height:1.5;color:var(--text);white-space:pre-wrap;background:rgba(255,255,255,.02);padding:10px 12px;border-radius:8px;border:1px solid var(--line)">${esc(task.desc)}</div>
-          </div>
-        ` : ''}
+          <!-- Right Column (Sidebar / Details) -->
+          <div class="jira-side">
+            <!-- Status Dropdown -->
+            <div>
+              <select class="jira-status-select ${task.status}" id="jiraStatusSelect">
+                <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>To Do ⌄</option>
+                <option value="progress" ${task.status === 'progress' || task.status === 'review' ? 'selected' : ''}>In Progress ⌄</option>
+                <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done ⌄</option>
+              </select>
+            </div>
 
-        <div style="margin-bottom:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="font-size:12px;font-weight:600;color:var(--text-2)">Subtasks &amp; Checklist (${chkDone}/${chkTotal})</div>
-            ${chkTotal > 0 ? `<div style="font-size:11px;color:var(--text-2)">${Math.round((chkDone/chkTotal)*100)}% complete</div>` : ''}
-          </div>
-          ${chkTotal > 0 ? `
-            <div class="bar" style="margin-bottom:10px;height:5px"><i style="width:${Math.round((chkDone/chkTotal)*100)}%"></i></div>
-          ` : ''}
-          <div class="subtask-list" style="margin-bottom:8px">
-            ${task.checklist.map((c, idx) => `
-              <div class="chk-item ${c.done ? 'done' : ''}">
-                <input type="checkbox" data-modal-chk="${idx}" ${c.done ? 'checked' : ''} style="cursor:pointer" />
-                <span style="flex:1">${esc(c.text)}</span>
-                <button type="button" class="del-btn" data-modal-del-chk="${idx}" title="Delete subtask">${icon('trash', 'xs')}</button>
+            <!-- Action buttons -->
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn" id="jiraImproveTaskBtn" style="flex:1;height:34px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px">
+                <span style="color:var(--gold)">✦</span> Improve Task
+              </button>
+            </div>
+
+            <!-- Details Card -->
+            <div class="jira-details-card">
+              <div style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px">
+                ${icon('chevDown', 'xs')} Details
               </div>
-            `).join('')}
-          </div>
-          <div style="display:flex;gap:6px">
-            <input id="modalSubtaskInput" placeholder="Add subtask / checklist item..." style="flex:1;height:34px;font-size:12.5px" />
-            <button type="button" id="modalBtnAddSubtask" class="btn" style="height:34px;padding:0 12px;font-size:12px">${icon('plus', 'sm')} Add</button>
-          </div>
-        </div>
 
-        <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <div style="display:flex;gap:6px">
-            ${task.status !== 'pending' ? `<button type="button" class="btn" data-modal-set-status="pending">← To Do</button>` : ''}
-            ${(task.status !== 'progress' && task.status !== 'review') ? `<button type="button" class="btn" data-modal-set-status="progress">In Progress →</button>` : ''}
-            ${task.status !== 'done' ? `<button type="button" class="btn ok" data-modal-set-status="done">${icon('check', 'sm')} Completed</button>` : ''}
+              <!-- Assignee -->
+              <div class="jira-field-row">
+                <span class="jira-field-label">Assignee</span>
+                <div class="jira-field-val">
+                  ${av(task.assignee, 's22')}
+                  <select class="select" id="jiraAssigneeSelect" style="height:30px;font-size:12px;flex:1">
+                    ${members.map(id => `<option value="${id}" ${id === task.assignee ? 'selected' : ''}>${esc((PEOPLE[id] && PEOPLE[id].name) || id)}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+
+              <!-- Reporter -->
+              <div class="jira-field-row">
+                <span class="jira-field-label">Reporter</span>
+                <div class="jira-field-val">
+                  ${av(task.reporter, 's22')}
+                  <span style="font-size:12.5px;font-weight:500">${esc(reporterName)}</span>
+                </div>
+              </div>
+
+              <!-- Priority -->
+              <div class="jira-field-row">
+                <span class="jira-field-label">Priority</span>
+                <div class="jira-field-val">
+                  <select class="select" id="jiraPrioritySelect" style="height:30px;font-size:12px;flex:1">
+                    <option value="Highest" ${task.priority === 'Highest' ? 'selected' : ''}>⯭ Highest</option>
+                    <option value="High" ${task.priority === 'High' ? 'selected' : ''}>▲ High</option>
+                    <option value="Medium" ${(!task.priority || task.priority === 'Medium') ? 'selected' : ''}>〓 Medium</option>
+                    <option value="Low" ${task.priority === 'Low' ? 'selected' : ''}>▼ Low</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Labels -->
+              <div class="jira-field-row" style="align-items:flex-start">
+                <span class="jira-field-label" style="margin-top:4px">Labels</span>
+                <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+                  <div style="display:flex;gap:4px;flex-wrap:wrap">
+                    ${task.labels.map((lbl, lIdx) => `
+                      <span class="k-cat-pill" style="background:rgba(245,184,46,.12);color:var(--gold);border-color:rgba(245,184,46,.3)">
+                        ${esc(lbl)}
+                        <button type="button" class="del-btn" data-del-label="${lIdx}" style="margin-left:4px">${icon('x', 'xs')}</button>
+                      </span>
+                    `).join('')}
+                  </div>
+                  <input id="jiraAddLabelInp" placeholder="+ Add label..." style="height:26px;font-size:11px;padding:0 6px;border-radius:4px" />
+                </div>
+              </div>
+
+              <!-- Due Date (Manual & Optional) -->
+              <div class="jira-field-row">
+                <span class="jira-field-label">Due Date</span>
+                <div class="jira-field-val">
+                  <input type="date" id="jiraDueInput" value="${task.due || ''}" style="height:30px;font-size:11.5px;flex:1" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Automation & Checklist Accordions -->
+            <div class="jira-details-card" style="padding:10px 14px;gap:8px">
+              <div style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+                <span>› Automation ⚡</span>
+                <span class="muted" style="font-size:11px">Rule executions</span>
+              </div>
+              <div style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+                <span>› Checklist ☑</span>
+                <span class="badge ok" style="font-size:10px">${chkDone}/${chkTotal}</span>
+              </div>
+            </div>
+
+            <!-- Metadata -->
+            <div style="font-size:11px;color:var(--text-2);display:flex;flex-direction:column;gap:4px;padding:4px">
+              <div>Created today by ${esc(reporterName)}</div>
+              <div>Updated just now</div>
+            </div>
+
+            <!-- If New Task: Create Button -->
+            ${isNew ? `
+              <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--line);display:flex;gap:8px">
+                <button type="button" class="btn" data-close style="flex:1">Cancel</button>
+                <button type="button" class="btn gold" id="jiraCreateTaskSubmit" style="flex:1.4">${icon('check', 'sm')} Create Task</button>
+              </div>
+            ` : `
+              <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--line);display:flex;justify-content:space-between">
+                <button type="button" class="btn danger" id="jiraDeleteTaskBtn" style="color:var(--red);font-size:12px">${icon('trash', 'xs')} Delete Issue</button>
+              </div>
+            `}
           </div>
-          <button type="button" class="btn danger" data-modal-del-task style="color:var(--red)">${icon('trash', 'sm')} Delete</button>
         </div>
       </div>
     `;
   };
 
-  renderModalContent();
+  renderModal();
   document.body.appendChild(ov);
 
   const close = () => ov.remove();
-  ov.addEventListener('click', async e => {
-    if (e.target === ov || e.target.closest('[data-close]')) close();
 
-    // Checkbox toggle
-    const chk = e.target.closest('[data-modal-chk]');
+  // Event handlers
+  ov.addEventListener('click', async e => {
+    if (e.target === ov || e.target.closest('[data-close]')) {
+      close();
+      return;
+    }
+
+    // Toggle watchers
+    if (e.target.closest('#jiraWatchBtn')) {
+      task.isWatching = !task.isWatching;
+      task.watchers = Math.max(1, (task.watchers || 2) + (task.isWatching ? 1 : -1));
+      renderModal();
+      toast(task.isWatching ? 'You are watching this issue' : 'You stopped watching this issue');
+      return;
+    }
+
+    // Share button
+    if (e.target.closest('#jiraShareBtn')) {
+      navigator.clipboard?.writeText?.(window.location.href + ` [${task.key}] ${task.title}`);
+      toast('Task link copied to clipboard!');
+      return;
+    }
+
+    // Fullscreen toggle
+    if (e.target.closest('#jiraExpandBtn')) {
+      isFullscreen = !isFullscreen;
+      const modalEl = ov.querySelector('.jira-modal');
+      modalEl?.classList.toggle('fullscreen', isFullscreen);
+      return;
+    }
+
+    // Task Type Change
+    if (e.target.closest('#jiraKeyBadge')) {
+      const types = ['task', 'bug', 'story', 'epic'];
+      const nextIdx = (types.indexOf(task.task_type) + 1) % types.length;
+      task.task_type = types[nextIdx];
+      await saveTask();
+      renderModal();
+      toast(`Type changed to ${TASK_TYPES[task.task_type].label}`);
+      return;
+    }
+
+    // Save Description
+    if (e.target.closest('#jiraSaveDescBtn')) {
+      const descVal = (ov.querySelector('#jiraDescArea')?.value || '').trim();
+      task.desc = descVal;
+      await saveTask();
+      toast('Description saved');
+      return;
+    }
+
+    // Subtask checkbox toggle
+    const chk = e.target.closest('[data-jira-subtask]');
     if (chk) {
-      const idx = parseInt(chk.dataset.modalChk, 10);
+      const idx = parseInt(chk.dataset.jiraSubtask, 10);
       if (task.checklist[idx]) {
         task.checklist[idx].done = chk.checked;
-        apiPatchTask(task.id, { checklist: task.checklist });
-        rerender();
-        renderModalContent();
+        await saveTask();
+        renderModal();
       }
       return;
     }
 
     // Delete subtask
-    const delSub = e.target.closest('[data-modal-del-chk]');
+    const delSub = e.target.closest('[data-del-jira-subtask]');
     if (delSub) {
-      const idx = parseInt(delSub.dataset.modalDelChk, 10);
+      const idx = parseInt(delSub.dataset.delJiraSubtask, 10);
       task.checklist.splice(idx, 1);
-      apiPatchTask(task.id, { checklist: task.checklist });
-      rerender();
-      renderModalContent();
+      await saveTask();
+      renderModal();
       return;
     }
 
-    // Add subtask button
-    if (e.target.closest('#modalBtnAddSubtask')) {
-      const input = ov.querySelector('#modalSubtaskInput');
-      const text = (input?.value || '').trim();
-      if (text) {
-        task.checklist.push({ text, done: false });
-        apiPatchTask(task.id, { checklist: task.checklist });
-        rerender();
-        renderModalContent();
+    // Add subtask
+    if (e.target.closest('#jiraAddSubtaskBtn') || e.target.closest('#jiraAddSubtaskQuick')) {
+      const inp = ov.querySelector('#jiraSubtaskInp');
+      const val = (inp?.value || '').trim();
+      if (val) {
+        task.checklist.push({ text: val, done: false });
+        await saveTask();
+        renderModal();
+      } else {
+        inp?.focus();
       }
       return;
     }
 
-    // Status changes
-    const setStatus = e.target.closest('[data-modal-set-status]');
-    if (setStatus) {
-      task.status = setStatus.dataset.modalSetStatus;
-      apiPatchTask(task.id, { status: task.status });
-      rerender();
-      renderModalContent();
-      const colName = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do';
-      toast(`Task moved to ${colName}`);
+    // Improve Task AI button
+    if (e.target.closest('#jiraImproveTaskBtn')) {
+      toast('AI Assistant improving task...');
+      if (!task.desc) {
+        task.desc = `Objective: ${task.title || 'Implement project requirement'}\n\nAcceptance Criteria:\n1. Verify edge case handling and responsiveness.\n2. Ensure proper authentication & permission checks.\n3. Validate unit & integration test coverage.`;
+      }
+      if (!task.checklist.length) {
+        task.checklist.push(
+          { text: 'Analyze technical requirements & architecture', done: false },
+          { text: 'Implement core functionality & error states', done: false },
+          { text: 'Verify QA testing & lead sign-off', done: false }
+        );
+      }
+      await saveTask();
+      renderModal();
+      toast('✦ Task improved with AI suggestions!');
       return;
     }
 
-    // Delete task
-    if (e.target.closest('[data-modal-del-task]')) {
-      if (confirm(`Are you sure you want to delete task "${task.title}"?`)) {
+    // Start work button
+    if (e.target.closest('#jiraStartWorkBtn')) {
+      task.status = 'progress';
+      await saveTask();
+      renderModal();
+      toast('Started work — moved to In Progress!');
+      return;
+    }
+
+    // Activity Tabs switch
+    const tabBtn = e.target.closest('[data-jiratab]');
+    if (tabBtn) {
+      activeTab = tabBtn.dataset.jiratab;
+      renderModal();
+      return;
+    }
+
+    // Insert quick comment pill
+    const pill = e.target.closest('[data-insert-pill]');
+    if (pill) {
+      const txt = ov.querySelector('#jiraCommentInput');
+      if (txt) {
+        txt.value = (txt.value ? txt.value + ' ' : '') + pill.dataset.insertPill;
+        txt.focus();
+      }
+      return;
+    }
+
+    // Save Comment
+    if (e.target.closest('#jiraSaveCommentBtn')) {
+      const txt = ov.querySelector('#jiraCommentInput');
+      const commentText = (txt?.value || '').trim();
+      if (commentText) {
+        task.comments.unshift({
+          id: Date.now(),
+          author: ME || 'raja',
+          text: commentText,
+          time: nowTime() + ', today'
+        });
+        await saveTask();
+        renderModal();
+        toast('Comment added');
+      }
+      return;
+    }
+
+    // Delete comment
+    const delCom = e.target.closest('[data-del-comment]');
+    if (delCom) {
+      const idx = parseInt(delCom.dataset.delComment, 10);
+      task.comments.splice(idx, 1);
+      await saveTask();
+      renderModal();
+      return;
+    }
+
+    // Log work
+    if (e.target.closest('#jiraSaveWorkBtn')) {
+      const hours = (ov.querySelector('#jiraWorkHours')?.value || '').trim();
+      const note = (ov.querySelector('#jiraWorkNote')?.value || '').trim();
+      if (hours) {
+        task.worklogs.unshift({
+          author: ME || 'raja',
+          hours,
+          note,
+          date: isoDate(new Date())
+        });
+        await saveTask();
+        renderModal();
+        toast(`Logged ${hours} work`);
+      }
+      return;
+    }
+
+    // Delete attachment
+    const delAtt = e.target.closest('[data-del-attach]');
+    if (delAtt) {
+      const idx = parseInt(delAtt.dataset.delAttach, 10);
+      task.attachments.splice(idx, 1);
+      await saveTask();
+      renderModal();
+      return;
+    }
+
+    // Delete label
+    const delLbl = e.target.closest('[data-del-label]');
+    if (delLbl) {
+      const idx = parseInt(delLbl.dataset.delLabel, 10);
+      task.labels.splice(idx, 1);
+      await saveTask();
+      renderModal();
+      return;
+    }
+
+    // Create Task (if isNew)
+    if (e.target.closest('#jiraCreateTaskSubmit')) {
+      const titleInp = (ov.querySelector('#jiraTitleInput')?.value || '').trim();
+      if (!titleInp) {
+        toast('Please enter a task title');
+        ov.querySelector('#jiraTitleInput')?.focus();
+        return;
+      }
+      task.title = titleInp;
+      close();
+      toast('Creating task...');
+      try {
+        const created = await apiCreateTask({
+          project: p.id,
+          title: task.title,
+          key: task.key,
+          task_type: task.task_type || 'task',
+          category: task.labels[0] || 'General',
+          checklist: task.checklist,
+          assignee: task.assignee,
+          reporter: task.reporter,
+          priority: task.priority || 'Medium',
+          labels: task.labels,
+          attachments: task.attachments,
+          comments: task.comments,
+          worklogs: task.worklogs,
+          due: task.due || '',
+          status: task.status || 'pending',
+          desc: task.desc || ''
+        });
+        if (created && created.id) p.tasks.push(created);
+        else p.tasks.push(task);
+        rerender();
+        toast(`Task "${task.title}" created in ${task.status === 'done' ? 'Done' : task.status === 'progress' ? 'In Progress' : 'To Do'}`);
+      } catch (err) {
+        p.tasks.push(task);
+        rerender();
+        toast(`Task created`);
+      }
+      return;
+    }
+
+    // Delete issue
+    if (e.target.closest('#jiraDeleteTaskBtn') || e.target.closest('#jiraMenuBtn')) {
+      if (confirm(`Delete issue ${task.key}: "${task.title}"?`)) {
         p.tasks.splice(p.tasks.indexOf(task), 1);
         apiDeleteTask(task.id);
         rerender();
         close();
-        toast('Task deleted');
+        toast('Issue deleted');
       }
       return;
     }
   });
 
-  ov.addEventListener('keydown', e => {
-    if (e.target.id === 'modalSubtaskInput' && e.key === 'Enter') {
-      e.preventDefault();
-      const text = (e.target.value || '').trim();
-      if (text) {
-        task.checklist.push({ text, done: false });
-        apiPatchTask(task.id, { checklist: task.checklist });
-        rerender();
-        renderModalContent();
+  // Input change listeners
+  ov.addEventListener('change', async e => {
+    // Status change
+    if (e.target.id === 'jiraStatusSelect') {
+      task.status = e.target.value;
+      await saveTask();
+      renderModal();
+      toast(`Status moved to ${task.status === 'done' ? 'Done' : task.status === 'progress' ? 'In Progress' : 'To Do'}`);
+      return;
+    }
+
+    // Assignee change
+    if (e.target.id === 'jiraAssigneeSelect') {
+      task.assignee = e.target.value;
+      await saveTask();
+      renderModal();
+      toast(`Reassigned to ${(PEOPLE[task.assignee] && PEOPLE[task.assignee].name) || task.assignee}`);
+      return;
+    }
+
+    // Priority change
+    if (e.target.id === 'jiraPrioritySelect') {
+      task.priority = e.target.value;
+      await saveTask();
+      renderModal();
+      toast(`Priority set to ${task.priority}`);
+      return;
+    }
+
+    // Due Date change
+    if (e.target.id === 'jiraDueInput') {
+      task.due = e.target.value.trim();
+      await saveTask();
+      toast(task.due ? `Due date: ${task.due}` : 'Due date cleared');
+      return;
+    }
+
+    // File attachments upload
+    if (e.target.id === 'jiraAttachInput' || e.target.id === 'jiraQuickFileInput') {
+      const files = Array.from(e.target.files || []);
+      if (files.length) {
+        files.forEach(f => {
+          task.attachments.push({
+            name: f.name,
+            size: (f.size > 1024 * 1024) ? (f.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB',
+            date: nowTime()
+          });
+        });
+        await saveTask();
+        renderModal();
+        toast(`${files.length} attachment(s) added`);
       }
     }
   });
+
+  // Enter key in input fields
+  ov.addEventListener('keydown', async e => {
+    if (e.key === 'Enter') {
+      if (e.target.id === 'jiraSubtaskInp') {
+        e.preventDefault();
+        const val = e.target.value.trim();
+        if (val) {
+          task.checklist.push({ text: val, done: false });
+          await saveTask();
+          renderModal();
+        }
+      } else if (e.target.id === 'jiraAddLabelInp') {
+        e.preventDefault();
+        const val = e.target.value.trim();
+        if (val && !task.labels.includes(val)) {
+          task.labels.push(val);
+          await saveTask();
+          renderModal();
+        }
+      } else if (e.target.id === 'jiraTitleInput') {
+        task.title = e.target.value.trim();
+        await saveTask();
+      }
+    }
+  });
+}
+
+function openNewTaskModal(p, defaultStatus = 'pending') {
+  const nextNum = (p.tasks && p.tasks.length ? p.tasks.length + 1 : 1);
+  const projCode = ((p && p.name) || 'IPP').replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || 'IPP';
+  const newTask = {
+    id: Date.now(),
+    key: `${projCode}-${nextNum}`,
+    title: '',
+    task_type: 'task',
+    category: 'All_Projects',
+    checklist: [],
+    assignee: ME || 'raja',
+    reporter: ME || 'raja',
+    priority: 'Medium',
+    status: defaultStatus || 'pending',
+    due: '',
+    desc: '',
+    labels: ['All_Projects'],
+    attachments: [],
+    comments: [],
+    worklogs: [],
+    watchers: 2,
+    isWatching: true
+  };
+  openJiraTaskModal(p, newTask, true);
+}
+
+function openTaskDetailsModal(p, task) {
+  openJiraTaskModal(p, task, false);
 }
 
 function openModal(title, fields, onSubmit, submitLabel = 'Save', onMount = null) {
