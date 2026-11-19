@@ -575,6 +575,16 @@ function renderWorkLog() {
         <span style="font-size:12px;color:var(--text-2)">Member: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[ME]?.name) || ME || 'User')} ${userModeIcon(ME, 'xs')}</b></span>
       </div>
 
+      <div style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">
+          📁 Project Name <span style="font-weight:normal;color:var(--text-3);font-size:11.5px">(Enter the name of the project)</span>
+        </label>
+        <input type="text" id="logProjectName" list="projectSuggestions" placeholder="Enter the name of the project (e.g. E-Commerce Platform, Hotel Booking App)..." value="${esc(state.logProjectName || (projects.find(p => p.id === state.logProject)?.name) || (projects[0]?.name || ''))}" style="width:100%;height:38px;padding:0 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:13px" />
+        <datalist id="projectSuggestions">
+          ${projects.map(p => `<option value="${esc(p.name)}">`).join('')}
+        </datalist>
+      </div>
+
       <textarea id="logText" placeholder="What did you work on today? Use checklist icon to add bullet tasks."></textarea>
 
       ${state.logStatus === 'dependency' ? `
@@ -630,7 +640,7 @@ function renderWorkLog() {
           </span>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0">${esc(p.name)}</h4>
+              <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0;color:var(--gold);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px">📁 Project: ${esc(p.name || l.project || 'General')}</h4>
               <span style="font-size:12px;color:var(--text-2)">Logged by: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[l.member]?.name) || l.member || 'Member')} ${userModeIcon(l.member, 'xs')}</b></span>
             </div>
             <ul style="margin-top:6px">${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
@@ -1053,11 +1063,10 @@ function handleAction(a, el) {
   const p = currentProject();
   switch (a) {
     case 'new-project':
-      const availableLeads = Object.keys(PEOPLE).length ? Object.keys(PEOPLE) : [ME || 'admin'].filter(Boolean);
       openModal('New Project', [
         { name: 'name', label: 'Project name', required: true, placeholder: 'e.g. Restaurant POS' },
         { name: 'type', label: 'Type', type: 'select', half: true, value: 'Web', options: [['Web', 'Web'], ['SaaS', 'SaaS'], ['Mobile', 'Mobile'], ['Game', 'Game']] },
-        { name: 'lead', label: 'Lead', type: 'select', half: true, value: availableLeads[0] || (ME || 'admin'), options: availableLeads.map(id => [id, (PEOPLE[id]?.name) || id]) },
+        { name: 'lead', label: 'Lead name (Team Lead)', type: 'text', half: true, placeholder: 'Enter lead name manually (e.g. Karthik, Ram)...', required: true },
         {
           name: 'start',
           half: true,
@@ -1083,10 +1092,18 @@ function handleAction(a, el) {
       ], async d => {
         const id = d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
         const thumb = { Web: 'portfolio', SaaS: 'crm', Mobile: 'cafe', Game: 'game' }[d.type] || 'portfolio';
-        const lead = d.lead || ME || 'admin';
+        const rawLead = (d.lead || '').trim();
+        const existingLeadId = Object.keys(PEOPLE).find(k => k.toLowerCase() === rawLead.toLowerCase() || (PEOPLE[k]?.name || '').toLowerCase() === rawLead.toLowerCase());
+        const lead = existingLeadId || (rawLead ? rawLead.toLowerCase().replace(/[^a-z0-9_]+/g, '_') : (ME || 'admin'));
+        if (!PEOPLE[lead] && rawLead) {
+          PEOPLE[lead] = { name: rawLead, role: 'Team Lead', availability: 'available', mode: 'office' };
+          TITLES[lead] = 'Team Lead';
+          MEMBER_ROWS = Object.keys(PEOPLE);
+        }
+        const teamMembers = Array.from(new Set([lead, ME].filter(Boolean)));
         const noEnd = d.noEndDate === 'on' || d.noEndDate === true || !d.end;
         const endDate = noEnd ? '' : d.end;
-        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: endDate, team: [lead], extra: 0,
+        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: endDate, team: teamMembers, extra: 0,
           totals: { total: 0, completed: 0, inProgress: 0 }, workload: {}, tasks: [], files: [], notes: [], _other: { completed: 0, inProgress: 0, pending: 0 } };
         projects.unshift(np);
         await fetchFromAPI('/projects/', {
@@ -1229,8 +1246,11 @@ function handleAction(a, el) {
     case 'log-save': {
       const items = $('#logText').value.split('\n').map(s => s.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean);
       if (!items.length) { $('#logText').focus(); toast('Write what you worked on first'); return; }
-      state.logProject = $('#logProject').value;
-      state.logHours = $('#logHours').value;
+      const enteredProject = $('#logProjectName')?.value?.trim() || $('#logProject')?.value || 'General';
+      const matchedProj = projects.find(p => p.name.toLowerCase() === enteredProject.toLowerCase() || p.id.toLowerCase() === enteredProject.toLowerCase());
+      state.logProject = matchedProj ? matchedProj.id : enteredProject;
+      state.logProjectName = matchedProj ? matchedProj.name : enteredProject;
+      state.logHours = $('#logHours')?.value || '4h 00m';
       const status = state.logStatus || 'progress';
       const dependency = status === 'dependency' ? ($('#logDependency')?.value?.trim() || '') : '';
       const lead = status === 'dependency' ? ($('#logLead')?.value || '') : '';
