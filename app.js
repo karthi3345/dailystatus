@@ -1418,8 +1418,9 @@ function openJiraTaskModal(p, task, isNew = false) {
             <div>
               <input class="jira-title-input" id="jiraTitleInput" value="${esc(task.title)}" placeholder="Task title..." autocomplete="off" />
               <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-                <button class="jira-top-btn" id="jiraAddSubtaskQuick" title="Add subtask">${icon('plus', 'xs')} Add Subtask</button>
-                <label class="jira-top-btn" style="cursor:pointer">
+                <button class="jira-icon-sub-btn" id="jiraAddSubtaskQuick" title="Add subtask">${icon('plus', 'xs')}</button>
+                <button class="jira-icon-sub-btn" id="jiraToggleFormatting" title="View options">${icon('list', 'xs')}</button>
+                <label class="jira-top-btn" style="cursor:pointer;margin-left:4px">
                   <input type="file" id="jiraQuickFileInput" multiple hidden />
                   ${icon('clip', 'xs')} Attach
                 </label>
@@ -1431,12 +1432,13 @@ function openJiraTaskModal(p, task, isNew = false) {
               <div class="jira-sec-head">${icon('chevDown', 'xs')} Description</div>
               <div class="jira-desc-box">
                 <textarea class="jira-desc-area" id="jiraDescArea" placeholder="Add a description...">${esc(task.desc || '')}</textarea>
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
-                  <span class="jira-pill-btn" style="background:rgba(59,130,246,.15);color:#60a5fa;border-color:rgba(59,130,246,.3)">
-                    <svg class="ic xs" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;margin-right:3px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                    Connect Slack to update
-                  </span>
-                  <button type="button" class="btn-xs gold" id="jiraSaveDescBtn" style="padding:4px 10px">Save</button>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;flex-wrap:wrap">
+                  <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 10px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);border-radius:6px;font-size:11.5px;color:var(--text-2);max-width:100%;overflow:hidden">
+                    <svg class="ic xs" viewBox="0 0 24 24" style="color:#60a5fa;flex:none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#93c5fd;font-family:monospace">https://theswipewire.slack.com/archives/C07TGQR032M/p1731037071973119</span>
+                    <button type="button" class="btn-xs" style="background:#2563eb;color:#fff;border-radius:5px;padding:3px 8px;font-size:10.5px;font-weight:600;flex:none;cursor:pointer">Connect Slack to update</button>
+                  </div>
+                  <button type="button" class="btn-xs gold" id="jiraSaveDescBtn" style="padding:4px 12px;margin-left:auto">Save</button>
                 </div>
               </div>
             </div>
@@ -1445,11 +1447,14 @@ function openJiraTaskModal(p, task, isNew = false) {
             <div class="jira-sec">
               <div class="jira-sec-head">${icon('chevDown', 'xs')} Attachments (${task.attachments.length})</div>
               <div class="jira-attach-drop">
-                <label class="btn" style="cursor:pointer;padding:0 14px;height:34px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px">
+                <label style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
                   <input type="file" id="jiraAttachInput" multiple hidden />
-                  ${icon('clip', 'sm')} Add attachment
+                  <span class="jira-purple-pill">
+                    <svg class="ic xs" viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5" fill="#131317"/></svg>
+                    Add attachment
+                  </span>
                 </label>
-                <span class="muted" style="font-size:11.5px">Click to upload files, screenshots, or documents</span>
+                <span class="muted" style="font-size:11.5px;margin-top:4px">Click or drag & drop files, documents, or screenshots</span>
               </div>
               ${task.attachments.length ? `
                 <div class="jira-attach-list">
@@ -1490,14 +1495,21 @@ function openJiraTaskModal(p, task, isNew = false) {
             </div>
 
             <!-- Agent sessions / AI Helper -->
-            <div class="jira-sec" style="background:rgba(255,255,255,.015);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
-              <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="jira-sec" style="background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
                 <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">
-                  <span style="color:#22c55e">●</span> Agent sessions
+                  <span>Agent sessions</span>
                 </div>
-                <button type="button" class="btn-xs ok" id="jiraStartWorkBtn" style="padding:4px 10px;display:flex;align-items:center;gap:4px">
-                  ${icon('checkCircle', 'xs')} Start work ${icon('chevDown', 'xs')}
-                </button>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span class="muted" style="font-size:11.5px;display:inline-flex;align-items:center;gap:4px">
+                    <svg class="ic xs" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    Uses AI. Verify results.
+                  </span>
+                  <button type="button" class="btn-xs ok" id="jiraStartWorkBtn" style="padding:5px 12px;border-radius:7px;display:flex;align-items:center;gap:6px;font-weight:600">
+                    <span style="width:8px;height:8px;border-radius:50%;background:#22c55e"></span>
+                    Start work <span style="font-size:10px">⌄</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1508,11 +1520,18 @@ function openJiraTaskModal(p, task, isNew = false) {
                 <button class="jira-tab-btn ${activeTab === 'comments' ? 'active' : ''}" data-jiratab="comments">Comments (${task.comments.length})</button>
                 <button class="jira-tab-btn ${activeTab === 'history' ? 'active' : ''}" data-jiratab="history">History</button>
                 <button class="jira-tab-btn ${activeTab === 'worklog' ? 'active' : ''}" data-jiratab="worklog">Work log (${task.worklogs.length})</button>
+                <button class="jira-tab-btn ${activeTab === 'checklist' ? 'active' : ''}" data-jiratab="checklist">Checklist history</button>
+                <button class="jira-tab-btn ${activeTab === 'viewers' ? 'active' : ''}" data-jiratab="viewers">🔍 Viewer History</button>
+                <button class="jira-tab-btn ${activeTab === 'issues' ? 'active' : ''}" data-jiratab="issues">🕒 Issue History</button>
+                <button class="jira-top-btn" id="jiraSortActivity" style="margin-left:auto;height:26px;padding:0 7px;font-size:11px" title="Sort activity">⇅</button>
               </div>
 
               ${activeTab === 'comments' ? `
                 <div class="jira-comment-box">
-                  <textarea id="jiraCommentInput" placeholder="Add a comment..."></textarea>
+                  <div style="display:flex;gap:10px;align-items:flex-start">
+                    ${av(ME || 'raja', 's32')}
+                    <textarea id="jiraCommentInput" placeholder="Add a comment..."></textarea>
+                  </div>
                   <div class="jira-pills-row">
                     <button type="button" class="jira-pill-btn" data-insert-pill="[Status update]: Working on this...">Status update...</button>
                     <button type="button" class="jira-pill-btn" data-insert-pill="Thanks for the update!">Thanks...</button>
@@ -1574,7 +1593,7 @@ function openJiraTaskModal(p, task, isNew = false) {
                 </div>
               ` : ''}
 
-              ${activeTab === 'history' || activeTab === 'all' ? `
+              ${activeTab === 'history' || activeTab === 'all' || activeTab === 'checklist' || activeTab === 'viewers' || activeTab === 'issues' ? `
                 <div style="display:flex;flex-direction:column;gap:8px;padding:10px 0">
                   <div style="font-size:12px;color:var(--text-2);display:flex;gap:8px">
                     <span>${icon('clock', 'xs')}</span>
@@ -1590,6 +1609,12 @@ function openJiraTaskModal(p, task, isNew = false) {
                       <span>Completed subtask: <i>${esc(c.text)}</i></span>
                     </div>
                   `).join('')}
+                  ${task.approval_status === 'approved' ? `
+                    <div style="font-size:12px;color:#5bdc8e;display:flex;gap:8px">
+                      <span>✓</span>
+                      <span>Approved by Team Lead <b>${(PEOPLE[task.approved_by] && PEOPLE[task.approved_by].name) || task.approved_by || 'Lead'}</b> at ${task.approved_at || 'Verified'}</span>
+                    </div>
+                  ` : ''}
                 </div>
               ` : ''}
             </div>
@@ -1597,21 +1622,26 @@ function openJiraTaskModal(p, task, isNew = false) {
 
           <!-- Right Column (Sidebar / Details) -->
           <div class="jira-side">
-            <!-- Status Dropdown -->
-            <div>
-              <select class="jira-status-select ${task.status}" id="jiraStatusSelect">
+            <!-- Top action row: Status + Agents + Automations -->
+            <div style="display:flex;gap:6px;align-items:center">
+              <select class="jira-status-select ${task.status}" id="jiraStatusSelect" style="flex:1">
                 <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>To Do ⌄</option>
                 <option value="progress" ${task.status === 'progress' || task.status === 'review' ? 'selected' : ''}>In Progress ⌄</option>
                 <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done ⌄</option>
               </select>
-            </div>
-
-            <!-- Action buttons -->
-            <div style="display:flex;gap:8px">
-              <button type="button" class="btn" id="jiraImproveTaskBtn" style="flex:1;height:34px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px">
-                <span style="color:var(--gold)">✦</span> Improve Task
+              <button type="button" class="jira-top-btn" id="jiraAgentsTopBtn" title="Agent Workflows" style="height:34px;padding:0 8px;font-size:11.5px;display:flex;align-items:center;gap:4px">
+                <svg class="ic xs" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="2 17 12 22 22 17" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="2 12 12 17 22 12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                <span>Agents</span>
+              </button>
+              <button type="button" class="jira-top-btn" id="jiraAutomationsTopBtn" title="Automations" style="height:34px;padding:0 9px;font-size:13px;color:var(--gold)">
+                ⚡
               </button>
             </div>
+
+            <!-- Improve Task AI Button -->
+            <button type="button" class="btn" id="jiraImproveTaskBtn" style="width:100%;height:34px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px">
+              <span style="color:var(--gold)">✦</span> Improve Task
+            </button>
 
             <!-- Details Card -->
             <div class="jira-details-card">
@@ -1701,7 +1731,7 @@ function openJiraTaskModal(p, task, isNew = false) {
                 <div style="flex:1;display:flex;flex-direction:column;gap:4px">
                   <div style="display:flex;gap:4px;flex-wrap:wrap">
                     ${task.labels.map((lbl, lIdx) => `
-                      <span class="k-cat-pill" style="background:rgba(245,184,46,.12);color:var(--gold);border-color:rgba(245,184,46,.3)">
+                      <span class="k-cat-pill" style="background:rgba(245,184,46,.12);color:var(--gold);border-color:rgba(245,184,46,.35);font-weight:600">
                         ${esc(lbl)}
                         <button type="button" class="del-btn" data-del-label="${lIdx}" style="margin-left:4px">${icon('x', 'xs')}</button>
                       </span>
@@ -1727,11 +1757,11 @@ function openJiraTaskModal(p, task, isNew = false) {
 
             <!-- Automation & Checklist Accordions -->
             <div class="jira-details-card" style="padding:10px 14px;gap:8px">
-              <div style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+              <div id="jiraAutomationRow" style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
                 <span>› Automation ⚡</span>
                 <span class="muted" style="font-size:11px">Rule executions</span>
               </div>
-              <div style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+              <div id="jiraChecklistRow" style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
                 <span>› Checklist ☑</span>
                 <span class="badge ok" style="font-size:10px">${chkDone}/${chkTotal}</span>
               </div>
@@ -1871,12 +1901,44 @@ function openJiraTaskModal(p, task, isNew = false) {
       return;
     }
 
-    // Start work button
+    // Start work / Agent sessions
     if (e.target.closest('#jiraStartWorkBtn')) {
       task.status = 'progress';
       await saveTask();
       renderModal();
-      toast('Started work — moved to In Progress!');
+      toast('Started work with AI Agent — moved to In Progress! ⚛');
+      return;
+    }
+
+    // Top Agents button
+    if (e.target.closest('#jiraAgentsTopBtn')) {
+      toast(`⬡ AI Agent session connected to [${task.key}]`);
+      return;
+    }
+
+    // Automations trigger / row
+    if (e.target.closest('#jiraAutomationsTopBtn') || e.target.closest('#jiraAutomationRow')) {
+      toast('⚡ Automation Rules: Lead Approval + Date Sync + Auto-Progress Active');
+      return;
+    }
+
+    // Checklist row click
+    if (e.target.closest('#jiraChecklistRow')) {
+      ov.querySelector('#jiraSubtaskInp')?.focus();
+      return;
+    }
+
+    // Activity sort toggle
+    if (e.target.closest('#jiraSortActivity')) {
+      task.comments.reverse();
+      renderModal();
+      toast('Activity sort order inverted');
+      return;
+    }
+
+    // Formatting button
+    if (e.target.closest('#jiraToggleFormatting')) {
+      toast('Markdown formatting supported (**bold**, *italic*, checklists)');
       return;
     }
 
@@ -2316,6 +2378,16 @@ document.addEventListener('click', e => {
     const task = p && p.tasks.find(x => x.id == opTask.dataset.openTaskModal);
     if (p && task) openTaskDetailsModal(p, task);
     return;
+  }
+
+  const kCard = t.closest('.k-card');
+  if (kCard && !t.closest('.k-card-actions') && !t.closest('.kebab') && !t.closest('[data-toggle-chk]') && !t.closest('input')) {
+    const p = currentProject();
+    const task = p && p.tasks.find(x => String(x.id) === String(kCard.dataset.kTask));
+    if (p && task) {
+      openTaskDetailsModal(p, task);
+      return;
+    }
   }
 
   const tgChk = t.closest('[data-toggle-chk]');
