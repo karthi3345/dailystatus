@@ -148,209 +148,15 @@ const TASK_TYPES = {
   epic:  { label: 'Epic',  icon: 'zap',         cls: 'epic' },
 };
 
-const SEED_PROJECTS = [
-  {
-    id: 'runway-rum-mwn689x2',
-    name: 'Volgo Updates',
-    type: 'Web',
-    thumb: 'portfolio',
-    status: 'progress',
-    start: '2026-11-19',
-    end: '',
-    team: ['raja', 'karthik', 'samrat'],
-    extra: 0,
-    totals: { total: 3, completed: 2, inProgress: 1 },
-    workload: { raja: 60, samrat: 40 },
-    tasks: [
-      {
-        id: 43,
-        key: 'IPP-3',
-        title: 'Fastsports | tag ID Needed | All Brands',
-        description: 'Tag ID is needed to add the Fastsports addition\nConnect Slack to update',
-        status: 'done',
-        priority: 'Highest',
-        assignee: 'Sakthivel U',
-        reporter: 'Samrat D',
-        subtasks: ['Tag ID setup', 'Slack Webhook linking', 'Quality testing'],
-        checklist: [
-          { text: 'Verified tag endpoints', done: true },
-          { text: 'Checked staging logs', done: true }
-        ],
-        category: 'Web',
-        task_type: 'task',
-        labels: ['All_Projects'],
-        due: '2026-11-20',
-        approval_status: 'approved',
-        approved_by: 'raja',
-        approved_at: '11:30 AM, today',
-        watchers: 2,
-        isWatching: true,
-        comments: [
-          { author: 'Samrat D', time: 'Yesterday 4:15 PM', text: 'Checked staging tags. Ready for production lead approval.' }
-        ],
-        attachments: [],
-        worklogs: []
-      },
-      {
-        id: 42,
-        key: 'IPP-2',
-        title: 'eqfdrwefrwf',
-        description: 'Core billing module sync and offline caching test',
-        status: 'done',
-        priority: 'Medium',
-        assignee: 'raja',
-        reporter: 'Karthik',
-        subtasks: [],
-        checklist: [],
-        category: 'Web',
-        task_type: 'task',
-        labels: ['All_Projects'],
-        due: '',
-        approval_status: 'approved',
-        approved_by: 'raja',
-        approved_at: '9:00 AM, today',
-        watchers: 2,
-        isWatching: true,
-        comments: [],
-        attachments: [],
-        worklogs: []
-      },
-      {
-        id: 44,
-        key: 'IPP-4',
-        title: 'tgtybgy',
-        description: 'Integration test for POS gateway transactions',
-        status: 'pending',
-        priority: 'High',
-        assignee: 'raja',
-        reporter: 'Karthik',
-        subtasks: [],
-        checklist: [],
-        category: 'Web',
-        task_type: 'bug',
-        labels: ['POS'],
-        due: '',
-        approval_status: 'pending',
-        watchers: 1,
-        isWatching: false,
-        comments: [],
-        attachments: [],
-        worklogs: []
-      }
-    ],
-    files: [
-      { name: 'volgo-spec-v1.pdf', kind: 'doc', by: 'karthik', date: '2026-11-19', size: '2.4 MB' }
-    ],
-    notes: [
-      { id: 'n1', title: 'Sprint Objectives', text: 'Deliver core brand tag linking by end of sprint.', by: 'raja', date: '2026-11-19' }
-    ],
-    analytics: {},
-    _other: { completed: 0, inProgress: 0, pending: 0 }
-  },
-  {
-    id: 'pos-mwn6norq',
-    name: 'pos',
-    type: 'Web',
-    thumb: 'cafe',
-    status: 'progress',
-    start: '2026-11-19',
-    end: '',
-    team: ['raja', 'karthik'],
-    extra: 0,
-    totals: { total: 2, completed: 1, inProgress: 1 },
-    workload: { raja: 50, karthik: 50 },
-    tasks: [],
-    files: [],
-    notes: [],
-    analytics: {},
-    _other: { completed: 0, inProgress: 0, pending: 0 }
-  }
-];
+const SEED_PROJECTS = [];
 
-const SEED_CHATS = [
-  {
-    id: 'proj-grp-decewcdvcd-mwn5l8l5',
-    name: 'decewcdvcd',
-    kind: 'group',
-    project: 'decewcdvcd-mwn5l8l5',
-    members: 1,
-    memberList: ['raja'],
-    starred: false,
-    msgs: [
-      { id: 21, from: 'raja', time: '6:23 AM', text: 'Welcome to the decewcdvcd group discussion channel! 🚀', reactions: {} },
-      { id: 27, from: 'raja', time: '1:05 PM', text: 'nothing needs to chnage', reply_to: { id: 21, from: 'raja', text: 'Welcome to the decewcdvcd group discussion channel! 🚀', from_name: 'You' }, reactions: { '👍': ['raja'] } },
-      { id: 32, from: 'raja', time: '1:18 PM', text: 'PROCESS NOT DONE WELL', reply_to: { id: 27, from: 'raja', text: 'nothing needs to chnage', from_name: 'You' }, reactions: {} },
-      { id: 34, from: 'raja', time: '1:59 PM', text: 'Shared a file', file: { name: 'vercel.json', size: '0.0 MB' }, reactions: {} },
-      { id: 35, from: 'raja', time: '2:02 PM', text: '👌', reactions: {} },
-      { id: 40, from: 'kumar', time: '3:16 PM', text: 'hi', reactions: {} }
-    ]
-  },
-  {
-    id: 'proj-grp-runway-rum-mwn689x2',
-    name: 'Volgo Updates',
-    kind: 'group',
-    project: 'runway-rum-mwn689x2',
-    members: 2,
-    memberList: ['rfergteg', 'raja'],
-    starred: true,
-    msgs: [
-      { id: 22, from: 'raja', time: '6:30 AM', text: 'Welcome to the Volgo Updates group discussion channel! 🚀', reactions: {} },
-      { id: 23, from: 'raja', time: '12:00 PM', text: 'hey guys', reactions: {} },
-      { id: 25, from: 'raja', time: '12:42 PM', text: 'hey guys why there is no upadte here?', reactions: {} },
-      { id: 28, from: 'raja', time: '1:15 PM', text: 'hi', reactions: {} },
-      { id: 29, from: 'raja', time: '1:16 PM', text: 'sadcdcsdf', reactions: {} },
-      { id: 33, from: 'raja', time: '1:39 PM', text: 'yes', reply_to: { id: 25, from: 'raja', text: 'hey guys why there is no upadte here?', from_name: 'You' }, reactions: {} }
-    ]
-  },
-  {
-    id: 'proj-grp-pos-mwn6norq',
-    name: 'pos',
-    kind: 'group',
-    project: 'pos-mwn6norq',
-    members: 2,
-    memberList: ['mathi', 'raja'],
-    starred: false,
-    msgs: [
-      { id: 24, from: 'raja', time: '6:42 AM', text: 'Welcome to the pos group discussion channel! 🚀', reactions: {} },
-      { id: 30, from: 'raja', time: '1:17 PM', text: 'hi', reactions: {} },
-      { id: 31, from: 'raja', time: '1:17 PM', text: 'i need api', reactions: { '❤️': ['raja'] } },
-      { id: 37, from: 'raja', time: '2:02 PM', text: 'yh66uh', reactions: {} },
-      { id: 38, from: 'raja', time: '2:02 PM', text: 'yhujuj', reactions: {} },
-      { id: 39, from: 'kumar', time: '3:08 PM', text: 'hi', reactions: {} },
-      { id: 42, from: 'kumar', time: '3:19 PM', text: 'hey', reactions: {} }
-    ]
-  },
-  {
-    id: 'hotel',
-    name: 'hotel',
-    kind: 'group',
-    project: null,
-    members: 1,
-    memberList: ['raja'],
-    starred: false,
-    msgs: [
-      { id: 26, from: 'raja', time: '01:00 PM', text: 'I am replying to your earlier question with WhatsApp style reply!', reactions: { '❤️': ['raja'] } },
-      { id: 36, from: 'raja', time: '2:02 PM', text: 'hi', reactions: {} }
-    ]
-  }
-];
+const SEED_CHATS = [];
 
 function getCachedChats() {
   try {
     const raw = localStorage.getItem('kathir_cached_chats');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        parsed.forEach(c => {
-          if (c.name === 'Runway Rum') c.name = 'Volgo Updates';
-          if (Array.isArray(c.msgs)) {
-            c.msgs.forEach(m => {
-              if (m.text && m.text.includes('Runway Rum')) m.text = m.text.replace(/Runway Rum/g, 'Volgo Updates');
-            });
-          }
-        });
-        return parsed;
-      }
+    if (raw !== null) {
+      return JSON.parse(raw);
     }
   } catch (e) {}
   return null;
@@ -358,8 +164,9 @@ function getCachedChats() {
 
 function saveChatsToCache() {
   try {
-    if (Array.isArray(chats) && chats.length > 0) {
+    if (Array.isArray(chats)) {
       localStorage.setItem('kathir_cached_chats', JSON.stringify(chats));
+      localStorage.setItem('kathir_chats_saved', '1');
     }
   } catch (e) {}
 }
@@ -367,14 +174,8 @@ function saveChatsToCache() {
 function getCachedProjects() {
   try {
     const raw = localStorage.getItem('kathir_cached_projects');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        parsed.forEach(p => {
-          if (p.name === 'Runway Rum') p.name = 'Volgo Updates';
-        });
-        return parsed;
-      }
+    if (raw !== null) {
+      return JSON.parse(raw);
     }
   } catch (e) {}
   return null;
@@ -393,12 +194,13 @@ const cachedInitialProjects = getCachedProjects();
 const isProjectsSaved = localStorage.getItem('kathir_projects_saved') === '1';
 const projects = (cachedInitialProjects !== null && (cachedInitialProjects.length > 0 || isProjectsSaved))
   ? cachedInitialProjects
-  : (isProjectsSaved ? [] : JSON.parse(JSON.stringify(SEED_PROJECTS)));
+  : [];
 
 const cachedInitialChats = getCachedChats();
-const chats = (cachedInitialChats && cachedInitialChats.length)
+const isChatsSaved = localStorage.getItem('kathir_chats_saved') === '1';
+const chats = (cachedInitialChats !== null && (cachedInitialChats.length > 0 || isChatsSaved))
   ? cachedInitialChats
-  : JSON.parse(JSON.stringify(SEED_CHATS));
+  : [];
 
 function getCachedWorkLogs() {
   try {
@@ -1753,7 +1555,7 @@ function playSynthesizedVoiceTone(durationSecs) {
 /* ---------------- Messenger ---------------- */
 function lastMsg(c) { return (c && c.msgs && c.msgs.length) ? c.msgs[c.msgs.length - 1] : { time: '', text: '' }; }
 function renderMessenger() {
-  ensureAllTeamDMs();
+  deduplicateChats();
   const q = state.chatQuery.toLowerCase();
   const list = chats.filter(c => !q || c.name.toLowerCase().includes(q) || (c.msgs && c.msgs.some(m => (m.text || '').toLowerCase().includes(q))));
   const c = chats.find(x => x.id === state.chatId) || chats[0];
@@ -4773,26 +4575,18 @@ async function loadInitialData() {
     saveWorkLogsToCache();
   }
 
-  if (Array.isArray(apiChats) && apiChats.length > 0) {
+  if (Array.isArray(apiChats)) {
     chats.length = 0;
     apiChats.forEach(c => {
       const chatCopy = { ...c };
-      if (chatCopy.name === 'Runway Rum') chatCopy.name = 'Volgo Updates';
-      if (Array.isArray(chatCopy.msgs)) {
-        chatCopy.msgs = chatCopy.msgs.map(m => ({
-          ...m,
-          text: (m.text || '').replace(/Runway Rum/g, 'Volgo Updates')
-        }));
-      }
       chats.push(chatCopy);
     });
     saveChatsToCache();
     if (chats.length && (!state.chatId || !chats.some(c => c.id === state.chatId))) {
       state.chatId = chats[0].id;
+    } else if (!chats.length) {
+      state.chatId = null;
     }
-  } else if (!chats.length) {
-    chats.push(...JSON.parse(JSON.stringify(SEED_CHATS)));
-    saveChatsToCache();
   }
 
   refreshSide();

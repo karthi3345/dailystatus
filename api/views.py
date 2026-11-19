@@ -217,51 +217,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Project.objects.all().order_by('id')
 
-    def _seed_default_projects(self):
-        try:
-            p1 = Project.objects.create(
-                id='runway-rum-mwn689x2',
-                name='Volgo Updates',
-                type='Web',
-                thumb='portfolio',
-                status='progress',
-                start='2026-11-19',
-                end='',
-                team=['raja', 'karthik', 'samrat'],
-                extra=0,
-                totals={'total': 3, 'completed': 2, 'inProgress': 1},
-                workload={'raja': 60, 'samrat': 40}
-            )
-            Task.objects.create(
-                project=p1,
-                title='Fastsports | tag ID Needed | All Brands',
-                key='IPP-3',
-                description='Tag ID is needed to add the Fastsports addition\nConnect Slack to update',
-                status='done',
-                priority='Highest',
-                assignee='Sakthivel U',
-                reporter='Samrat D',
-                subtasks=['Tag ID setup', 'Slack Webhook linking', 'Quality testing'],
-                checklist=['Verified tag endpoints', 'Checked staging logs'],
-                category='Web',
-                task_type='task',
-                labels=['All_Projects'],
-                due='2026-11-20'
-            )
-            Task.objects.create(
-                project=p1,
-                title='Restaurant POS Migration',
-                key='IPP-4',
-                description='Migrate offline billing logs to realtime websocket sync',
-                status='progress',
-                priority='High',
-                assignee='raja',
-                reporter='Karthik',
-                due='2026-11-20'
-            )
-        except Exception:
-            pass
-
     def perform_create(self, serializer):
         project = serializer.save()
         group_id = f"proj-grp-{project.id}"
