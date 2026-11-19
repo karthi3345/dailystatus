@@ -99,8 +99,8 @@ const THUMBS = {
 };
 
 /* ---------------- Dynamic Data store ---------------- */
-let ME = localStorage.getItem('kathir_auth_user') || '';
 let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
+let ME = (AUTH_TOKEN && localStorage.getItem('kathir_auth_user')) ? localStorage.getItem('kathir_auth_user') : '';
 
 const PEOPLE = {};
 const TITLES = {};
@@ -761,7 +761,13 @@ function openProfile(id, anchor) {
     openLoginModal();
     return;
   }
-  const P = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Developer', availability: 'available', mode: 'office' };
+  const personId = id || ME;
+  const P = (personId && PEOPLE[personId]) || {
+    name: (personId && typeof personId === 'string' && personId.length) ? personId.charAt(0).toUpperCase() + personId.slice(1) : 'Member',
+    role: 'Developer',
+    availability: 'available',
+    mode: 'office'
+  };
   const el = document.createElement('div');
   el.className = 'pop';
   el.innerHTML = `
@@ -823,10 +829,16 @@ document.addEventListener('click', e => {
   // Floating layers: clicks inside handle themselves
   const pop = t.closest('.pop');
   if (pop) {
-    const id = pop.dataset.person, P = PEOPLE[id];
+    const act = t.closest('[data-action]');
+    if (act) {
+      closeFloating();
+      handleAction(act.dataset.action, act);
+      return;
+    }
+    const id = pop.dataset.person, P = (id && PEOPLE[id]) || { name: (id && typeof id === 'string' && id.length) ? id.charAt(0).toUpperCase() + id.slice(1) : 'Member', role: 'Developer', availability: 'available', mode: 'office' };
     const a = t.closest('[data-set-avail]'), m = t.closest('[data-set-mode]'), dm = t.closest('[data-dm]');
-    if (a) { P.availability = a.dataset.setAvail; toast(`${P.name} is now ${AVAIL[P.availability].short || AVAIL[P.availability].label}`); apiPatchMember(id, { availability: P.availability }); }
-    if (m) { P.mode = m.dataset.setMode; toast(`${P.name}: ${MODES[P.mode].long}`); apiPatchMember(id, { mode: P.mode }); }
+    if (a && P) { P.availability = a.dataset.setAvail; toast(`${P.name} is now ${AVAIL[P.availability].short || AVAIL[P.availability].label}`); apiPatchMember(id, { availability: P.availability }); }
+    if (m && P) { P.mode = m.dataset.setMode; toast(`${P.name}: ${MODES[P.mode].long}`); apiPatchMember(id, { mode: P.mode }); }
     if (dm) { closeFloating(); state.chatId = id; go('#/messenger/' + id); return; }
     if (a || m) { const anchorRect = pop.getBoundingClientRect(); rerender(); refreshSide(); reopenProfileAt(id, anchorRect); }
     return;
@@ -1296,6 +1308,13 @@ async function fetchFromAPI(endpoint, options = {}) {
       headers,
       ...options
     });
+    if (res.status === 401 && !endpoint.startsWith('/auth/login')) {
+      AUTH_TOKEN = null;
+      ME = null;
+      localStorage.removeItem('kathir_auth_token');
+      localStorage.removeItem('kathir_auth_user');
+      refreshSide();
+    }
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {
@@ -1618,7 +1637,15 @@ function openLoginModal() {
       submitBtn.textContent = 'Sign In';
     }
   };
+
+  const modal = $('#authModal');
+  if (modal) {
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.remove();
+    });
+  }
 }
+window.openLoginModal = openLoginModal;
 
 function openRegisterModal() {
   closeFloating();
@@ -1784,7 +1811,15 @@ function openRegisterModal() {
       submitBtn.textContent = 'Register';
     }
   };
+
+  const modal = $('#authModal');
+  if (modal) {
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.remove();
+    });
+  }
 }
+window.openRegisterModal = openRegisterModal;
 
 function handleLogout() {
   closeFloating();
@@ -1801,6 +1836,7 @@ function handleLogout() {
   rerender();
   setTimeout(() => openLoginModal(), 300);
 }
+window.handleLogout = handleLogout;
 
 async function apiPatchMember(id, patchData) {
   return await fetchFromAPI(`/members/${id}/`, {
@@ -1840,10 +1876,15 @@ async function loadInitialData() {
       if (!PEOPLE[ME]) {
         PEOPLE[ME] = { name: meRes.user.name, role: meRes.user.role, availability: meRes.user.availability, mode: meRes.user.mode };
       }
-    } else if (meRes && !meRes.authenticated) {
+    } else {
       AUTH_TOKEN = null;
       localStorage.removeItem('kathir_auth_token');
+      localStorage.removeItem('kathir_auth_user');
+      ME = null;
     }
+  } else {
+    ME = null;
+    localStorage.removeItem('kathir_auth_user');
   }
 
   const [apiMembers, apiProjects, apiLogs, apiChats] = await Promise.all([

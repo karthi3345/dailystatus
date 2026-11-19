@@ -164,6 +164,15 @@ class MeView(APIView):
             return Response({'authenticated': False}, status=status.HTTP_200_OK)
 
         member = Member.objects.filter(id=request.user.username.lower()).first()
+        if not member:
+            member = Member.objects.create(
+                id=request.user.username.lower(),
+                name=request.user.first_name or request.user.username.capitalize(),
+                role='Developer',
+                title='Developer',
+                availability='available',
+                mode='office'
+            )
         return Response({
             'authenticated': True,
             'user': {
