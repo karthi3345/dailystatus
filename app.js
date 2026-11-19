@@ -527,7 +527,47 @@ function getMsgDateLabel(m) {
   }
   return dateStr;
 }
+function deduplicateChats() {
+  const seenDMs = new Map();
+  const seenGroups = new Set();
+  const newChats = [];
+
+  for (const c of chats) {
+    if (!c) continue;
+    if (c.kind === 'dm') {
+      const p = (c.person || c.id.replace(/^dm-/, '').split('-')[0] || '').toLowerCase().trim();
+      if (!p) continue;
+      if (seenDMs.has(p)) {
+        const existing = seenDMs.get(p);
+        if (Array.isArray(c.msgs) && c.msgs.length) {
+          existing.msgs = existing.msgs || [];
+          for (const m of c.msgs) {
+            if (!existing.msgs.some(em => em.id === m.id || (em.text === m.text && em.time === m.time))) {
+              existing.msgs.push(m);
+            }
+          }
+        }
+        if (!existing.timeLabel && c.timeLabel) existing.timeLabel = c.timeLabel;
+        if (state.chatId === c.id) state.chatId = existing.id;
+      } else {
+        seenDMs.set(p, c);
+        newChats.push(c);
+      }
+    } else {
+      const gid = c.id || c.name;
+      if (!seenGroups.has(gid)) {
+        seenGroups.add(gid);
+        newChats.push(c);
+      }
+    }
+  }
+
+  chats.length = 0;
+  chats.push(...newChats);
+}
+
 function ensureAllTeamDMs() {
+  deduplicateChats();
   const allIds = new Set([...Object.keys(PEOPLE), ...MEMBER_ROWS]);
   allIds.forEach(id => {
     if (!id) return;
@@ -535,7 +575,7 @@ function ensureAllTeamDMs() {
     if (ME && cleanId === ME.toLowerCase().trim()) return;
     const dmId = `dm-${cleanId}`;
     const pName = (PEOPLE[cleanId]?.name) || (PEOPLE[id]?.name) || (cleanId.charAt(0).toUpperCase() + cleanId.slice(1));
-    let existing = chats.find(c => c.kind === 'dm' && (c.id === dmId || (c.person && c.person.toLowerCase() === cleanId)));
+    let existing = chats.find(c => c.kind === 'dm' && (c.id === dmId || c.id === cleanId || (c.person && c.person.toLowerCase() === cleanId)));
     if (!existing) {
       chats.push({
         id: dmId,
@@ -550,10 +590,12 @@ function ensureAllTeamDMs() {
         msgs: []
       });
     } else {
-      if (!existing.person) existing.person = cleanId;
+      existing.kind = 'dm';
+      existing.person = cleanId;
       if (!existing.name) existing.name = pName;
     }
   });
+  deduplicateChats();
 }
 const barColor = v => (v >= 75 ? 'red' : v >= 50 && v <= 65 ? '' : 'green');
 const statusBadge = s => (STATUS[s] ? `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>` : `<span class="badge progress">In Progress</span>`);
@@ -2959,12 +3001,13 @@ document.addEventListener('click', e => {
     }
     if (dm) {
       closeFloating();
-      const targetId = dm.dataset.dm || id;
-      let c = chats.find(x => x.id === targetId || (x.kind === 'dm' && (x.person === targetId || (x.memberList && x.memberList.includes(targetId)))));
+      const targetId = (dm.dataset.dm || id || '').toLowerCase().trim();
+      ensureAllTeamDMs();
+      let c = chats.find(x => x.kind === 'dm' && ((x.person && x.person.toLowerCase() === targetId) || x.id === targetId || x.id === `dm-${targetId}`));
       if (!c) {
         const targetP = PEOPLE[targetId] || { name: targetId.charAt(0).toUpperCase() + targetId.slice(1) };
         c = {
-          id: targetId,
+          id: `dm-${targetId}`,
           name: targetP.name,
           kind: 'dm',
           person: targetId,
@@ -2975,6 +3018,7 @@ document.addEventListener('click', e => {
           msgs: []
         };
         chats.unshift(c);
+        deduplicateChats();
         saveChatsToCache();
         fetchFromAPI('/chats/', {
           method: 'POST',
@@ -4003,9 +4047,11 @@ function openNewDirectMessageModal() {
         return;
       }
       $('#dmModal').remove();
-      const existingIdx = chats.findIndex(x => x.id === data.id);
+      const existingIdx = chats.findIndex(x => x.id === data.id || (x.kind === 'dm' && x.person && x.person.toLowerCase() === recipient.toLowerCase()));
       if (existingIdx >= 0) chats.splice(existingIdx, 1);
       chats.unshift(data);
+      deduplicateChats();
+      saveChatsToCache();
       state.chatId = data.id;
       go('#/messenger/' + data.id);
       rerender();

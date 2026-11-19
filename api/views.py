@@ -447,16 +447,23 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                     members=members,
                     created_by=creator
                 )
-            elif Member.objects.filter(id=chat_id).exists():
-                mem = Member.objects.filter(id=chat_id).first()
-                ChatThread.objects.create(
-                    id=chat_id,
-                    name=mem.name or chat_id.capitalize(),
-                    kind='dm',
-                    person=chat_id,
-                    members=[creator, chat_id],
-                    created_by=creator
-                )
+            elif Member.objects.filter(id=chat_id).exists() or chat_id.startswith('dm-'):
+                clean_person = chat_id.replace('dm-', '').split('-')[-1].lower()
+                existing_thread = ChatThread.objects.filter(kind='dm', person=clean_person).first()
+                if existing_thread:
+                    if msg.chat_id != existing_thread.id:
+                        msg.chat_id = existing_thread.id
+                        msg.save(update_fields=['chat_id'])
+                else:
+                    mem = Member.objects.filter(id=clean_person).first()
+                    ChatThread.objects.create(
+                        id=chat_id,
+                        name=mem.name if mem else clean_person.capitalize(),
+                        kind='dm',
+                        person=clean_person,
+                        members=[creator, clean_person],
+                        created_by=creator
+                    )
             else:
                 ChatThread.objects.create(
                     id=chat_id,
@@ -472,6 +479,8 @@ class ChatThreadsView(APIView):
     def get(self, request):
         threads = ChatThread.objects.all().order_by('created_at')
         result = []
+        seen_dm_persons = {}
+
         for t in threads:
             msgs = ChatMessage.objects.filter(chat_id=t.id).order_by('created_at')
             m_list = []
@@ -497,7 +506,8 @@ class ChatThreadsView(APIView):
                     'reply_to': m.reply_to,
                     'reactions': m.reactions or {}
                 })
-            result.append({
+
+            thread_data = {
                 'id': t.id,
                 'kind': t.kind,
                 'name': t.name,
@@ -508,7 +518,18 @@ class ChatThreadsView(APIView):
                 'starred': t.starred,
                 'unread': 0,
                 'msgs': m_list
-            })
+            }
+
+            if t.kind == 'dm' and t.person:
+                p_key = t.person.lower().strip()
+                if p_key in seen_dm_persons:
+                    # Merge messages into the existing canonical thread
+                    existing = seen_dm_persons[p_key]
+                    existing['msgs'].extend(m_list)
+                    continue
+                seen_dm_persons[p_key] = thread_data
+
+            result.append(thread_data)
         return Response(result)
 
     def post(self, request):
@@ -524,21 +545,24 @@ class ChatThreadsView(APIView):
 
             target_mem = Member.objects.filter(id=person).first()
             target_name = target_mem.name if target_mem else person.capitalize()
-            thread_id = data.get('id') or f"dm-{min(creator, person)}-{max(creator, person)}"
+            thread_id = data.get('id') or f"dm-{person}"
             members = list(set([creator, person]))
 
-            thread, created = ChatThread.objects.get_or_create(
-                id=thread_id,
-                defaults={
-                    'name': target_name,
-                    'kind': 'dm',
-                    'person': person,
-                    'members': members,
-                    'created_by': creator,
-                    'starred': False
-                }
-            )
-            if not created:
+            # Check if a DM thread already exists for this person
+            thread = ChatThread.objects.filter(kind='dm', person=person).first()
+            if not thread:
+                thread = ChatThread.objects.filter(id=thread_id).first()
+            if not thread:
+                thread = ChatThread.objects.create(
+                    id=thread_id,
+                    name=target_name,
+                    kind='dm',
+                    person=person,
+                    members=members,
+                    created_by=creator,
+                    starred=False
+                )
+            else:
                 thread.kind = 'dm'
                 thread.person = person
                 if not thread.members:
