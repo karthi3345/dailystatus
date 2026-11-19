@@ -38,11 +38,14 @@ class Project(models.Model):
 class Task(models.Model):
     project = models.ForeignKey(Project, related_name='tasks', on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
+    task_type = models.CharField(max_length=30, default='task')  # bug, epic, story, task
+    category = models.CharField(max_length=50, blank=True, default='')
+    checklist = models.JSONField(default=list, blank=True)
     assignee = models.CharField(max_length=50, blank=True, null=True)
     priority = models.CharField(max_length=30, default='Medium')
-    due = models.CharField(max_length=30, blank=True)
-    status = models.CharField(max_length=30, default='progress')
-    desc = models.TextField(blank=True)
+    due = models.CharField(max_length=30, blank=True, default='')
+    status = models.CharField(max_length=30, default='pending')
+    desc = models.TextField(blank=True, default='')
     order = models.IntegerField(default=0)
 
     def __str__(self):

@@ -51,6 +51,9 @@ const ICONS = {
   checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
   pendingSq: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7v5l3 2"/>',
   slashCircle: '<circle cx="12" cy="12" r="10"/><line x1="5" y1="5" x2="19" y2="19"/>',
+  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  bookmark: '<path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  alertCircle: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
 };
 const PLAY = '<svg class="ic" viewBox="0 0 24 24"><path class="fill" d="M7 4.5v15l13-7.5z"/></svg>';
 const PAUSE = '<svg class="ic" viewBox="0 0 24 24"><rect class="fill" x="6" y="4.5" width="4" height="15" rx="1"/><rect class="fill" x="14" y="4.5" width="4" height="15" rx="1"/></svg>';
@@ -127,6 +130,13 @@ const STATUS = {
   hold:     { label: 'On Hold', cls: 'hold' },
 };
 
+const TASK_TYPES = {
+  task:  { label: 'Task',  icon: 'checkSquare', cls: 'task' },
+  bug:   { label: 'Bug',   icon: 'alertCircle', cls: 'bug' },
+  story: { label: 'Story', icon: 'bookmark',    cls: 'story' },
+  epic:  { label: 'Epic',  icon: 'zap',         cls: 'epic' },
+};
+
 const projects = [];
 const workLogs = [];
 const chats = [];
@@ -156,7 +166,7 @@ function projectStats(p) {
 /* App state */
 const state = {
   projectQuery: '', projectFilter: 'all',
-  taskQuery: '', taskStatus: 'all', taskAssignee: 'all', taskPriority: 'all', openTasks: new Set(),
+  taskQuery: '', taskStatus: 'all', taskAssignee: 'all', taskPriority: 'all', taskType: 'all', taskView: 'board', openTasks: new Set(),
   fileQuery: '', fileType: 'all', fileView: 'list',
   logDate: isoDate(new Date()), logProject: '', logHours: '4h 00m', logAttach: null,
   logStatus: 'progress', logDependency: '', logLead: '', logFilter: 'all',
@@ -376,46 +386,204 @@ function tabOverview(p) {
   </div>`;
 }
 
+function renderKanbanCard(t) {
+  const type = TASK_TYPES[t.task_type] || TASK_TYPES['task'];
+  const checklist = Array.isArray(t.checklist) ? t.checklist : [];
+  const chkDone = checklist.filter(c => c.done).length;
+  const chkTotal = checklist.length;
+  const pName = (PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || 'Unassigned';
+  return `
+  <div class="k-card ${t.status === 'done' ? 'done' : ''}" draggable="true" data-k-task="${t.id}">
+    <div class="k-card-head">
+      <span class="k-type-badge ${t.task_type || 'task'}" title="Type: ${type.label}">${icon(type.icon, 'xs')}<span>${type.label}</span></span>
+      ${t.category ? `<span class="k-cat-pill">${esc(t.category)}</span>` : ''}
+      <button class="kebab" data-tmenu="${t.id}" style="margin-left:auto">${icon('more', 'sm')}</button>
+    </div>
+    <div class="k-card-title clickable" data-open-task-modal="${t.id}">${esc(t.title)}</div>
+    ${t.desc ? `<div class="k-card-desc">${esc(t.desc.length > 90 ? t.desc.slice(0, 87) + '...' : t.desc)}</div>` : ''}
+    ${chkTotal > 0 ? `
+      <div class="k-card-chk clickable" data-open-task-modal="${t.id}">
+        ${icon('checkSquare', 'xs')} <span>${chkDone}/${chkTotal} subtasks</span>
+        <div class="bar mini" style="flex:1;max-width:70px;height:4px"><i style="width:${Math.round((chkDone/chkTotal)*100)}%"></i></div>
+      </div>
+    ` : ''}
+    <div class="k-card-foot">
+      <div class="k-assignee" title="Assignee: ${esc(pName)}">${av(t.assignee, 's22')}<span>${esc(pName)}</span> ${userModeIcon(t.assignee, 'xs')}</div>
+      <span class="badge ${t.priority ? t.priority.toLowerCase() : 'medium'}">${t.priority || 'Medium'}</span>
+      ${t.due ? `<span class="k-due" title="Due Date">${icon('calendar', 'xs')}${fmtShort(t.due)}</span>` : '<span class="k-due muted">No due date</span>'}
+    </div>
+    <div class="k-card-actions">
+      ${t.status === 'pending' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">In Progress →</button>` : ''}
+      ${t.status === 'progress' || t.status === 'review' ? `
+        <button class="k-btn-move" data-move-task="${t.id}" data-target-status="pending">← To Do</button>
+        <button class="k-btn-move ok" data-move-task="${t.id}" data-target-status="done">Completed ✓</button>
+      ` : ''}
+      ${t.status === 'done' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">↩ Reopen</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderKanbanBoard(p, list) {
+  const todoList = list.filter(t => t.status === 'pending');
+  const inProgressList = list.filter(t => t.status === 'progress' || t.status === 'review');
+  const doneList = list.filter(t => t.status === 'done');
+
+  return `
+  <div class="kanban-board">
+    <div class="kanban-col" data-col-status="pending">
+      <div class="kanban-col-head">
+        <span class="kanban-col-title"><span class="col-dot pending"></span>To Do <span class="kanban-col-count">${todoList.length}</span></span>
+        <button class="btn-col-add" data-action="add-task" data-default-status="pending" title="Create task in To Do">${icon('plus', 'xs')} Add Task</button>
+      </div>
+      <div class="kanban-cards">
+        ${todoList.length ? todoList.map(t => renderKanbanCard(t)).join('') : '<div class="kanban-empty">No tasks in To Do</div>'}
+      </div>
+    </div>
+
+    <div class="kanban-col" data-col-status="progress">
+      <div class="kanban-col-head">
+        <span class="kanban-col-title"><span class="col-dot progress"></span>In Progress <span class="kanban-col-count">${inProgressList.length}</span></span>
+        <button class="btn-col-add" data-action="add-task" data-default-status="progress" title="Create task in In Progress">${icon('plus', 'xs')} Add</button>
+      </div>
+      <div class="kanban-cards">
+        ${inProgressList.length ? inProgressList.map(t => renderKanbanCard(t)).join('') : '<div class="kanban-empty">No tasks in progress</div>'}
+      </div>
+    </div>
+
+    <div class="kanban-col" data-col-status="done">
+      <div class="kanban-col-head">
+        <span class="kanban-col-title"><span class="col-dot done"></span>Completed <span class="kanban-col-count">${doneList.length}</span></span>
+      </div>
+      <div class="kanban-cards">
+        ${doneList.length ? doneList.map(t => renderKanbanCard(t)).join('') : '<div class="kanban-empty">No completed tasks</div>'}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderTaskListView(p, list) {
+  return `
+  <div class="card tbl-card" style="padding-top:4px">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px"><span class="chk" data-action="check-all"></span></th>
+          <th style="width:84px">Type</th>
+          <th>Task</th>
+          <th>Category</th>
+          <th>Assignee</th>
+          <th>Subtasks</th>
+          <th>Priority</th>
+          <th>Due Date</th>
+          <th>Status</th>
+          <th style="width:40px"></th>
+        </tr>
+      </thead>
+      <tbody>${list.length ? list.map(t => {
+        const open = state.openTasks.has(p.id + t.id);
+        const type = TASK_TYPES[t.task_type] || TASK_TYPES['task'];
+        const chk = Array.isArray(t.checklist) ? t.checklist : [];
+        const chkDone = chk.filter(c => c.done).length;
+        return `<tr>
+          <td><span class="chk ${t.status === 'done' ? 'on' : ''}" data-toggle-task="${t.id}">${t.status === 'done' ? icon('check') : ''}</span></td>
+          <td><span class="k-type-badge ${t.task_type || 'task'}">${icon(type.icon, 'xs')} ${type.label}</span></td>
+          <td>
+            <div class="task-title ${t.status === 'done' ? 'done' : ''}">
+              <span class="clickable" data-open-task-modal="${t.id}">${esc(t.title)}</span>
+              ${(t.desc || chk.length) ? `<button class="exp ${open ? 'open' : ''}" data-expand="${t.id}">${icon('chevDown', 'xs')}</button>` : ''}
+            </div>
+          </td>
+          <td>${t.category ? `<span class="k-cat-pill">${esc(t.category)}</span>` : '<span class="muted">-</span>'}</td>
+          <td><span class="cell-user">${av(t.assignee)}<span style="display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || 'Member')} ${userModeIcon(t.assignee, 'xs')}</span></span></td>
+          <td>${chk.length ? `<span class="badge" style="background:rgba(255,255,255,.05);font-size:11px">${chkDone}/${chk.length}</span>` : '<span class="muted">-</span>'}</td>
+          <td><span class="badge ${t.priority ? t.priority.toLowerCase() : 'medium'}">${t.priority || 'Medium'}</span></td>
+          <td>${t.due ? fmtShort(t.due) : '<span class="muted">Ongoing</span>'}</td>
+          <td><span class="clickable" data-cycle-task="${t.id}" title="Click to change status">${taskBadge(t.status)}</span></td>
+          <td><button class="kebab" data-tmenu="${t.id}">${icon('more', 'sm')}</button></td>
+        </tr>${open ? `
+          <tr class="task-desc">
+            <td colspan="10">
+              <div style="padding:6px 0">
+                ${t.desc ? `<div style="margin-bottom:8px;color:var(--text)">${esc(t.desc)}</div>` : ''}
+                ${chk.length ? `
+                  <div class="subtask-list" style="margin-top:6px">
+                    <strong style="font-size:12px;color:var(--text-2);display:block;margin-bottom:4px">Checklist (${chkDone}/${chk.length}):</strong>
+                    ${chk.map((c, idx) => `
+                      <label class="chk-item ${c.done ? 'done' : ''}" data-toggle-chk="${idx}" data-task-id="${t.id}">
+                        <input type="checkbox" ${c.done ? 'checked' : ''} />
+                        <span>${esc(c.text)}</span>
+                      </label>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            </td>
+          </tr>` : ''}`;
+      }).join('') : '<tr><td colspan="10" class="empty">No tasks match these filters.</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
 function tabTasks(p) {
   const s = projectStats(p);
   const q = state.taskQuery.toLowerCase();
-  const list = p.tasks.filter(t =>
-    (!q || t.title.toLowerCase().includes(q) || PEOPLE[t.assignee].name.toLowerCase().includes(q)) &&
-    (state.taskStatus === 'all' || t.status === state.taskStatus) &&
-    (state.taskAssignee === 'all' || t.assignee === state.taskAssignee) &&
-    (state.taskPriority === 'all' || t.priority === state.taskPriority));
+  const list = p.tasks.filter(t => {
+    const assigneeName = (PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || '';
+    const matchesQ = !q || t.title.toLowerCase().includes(q) || assigneeName.toLowerCase().includes(q) || (t.category && t.category.toLowerCase().includes(q));
+    const matchesStatus = state.taskStatus === 'all' || (state.taskStatus === 'progress' ? (t.status === 'progress' || t.status === 'review') : t.status === state.taskStatus);
+    const matchesAssignee = state.taskAssignee === 'all' || t.assignee === state.taskAssignee;
+    const matchesPriority = state.taskPriority === 'all' || t.priority === state.taskPriority;
+    const matchesType = state.taskType === 'all' || (t.task_type || 'task') === state.taskType;
+    return matchesQ && matchesStatus && matchesAssignee && matchesPriority && matchesType;
+  });
+
   const opt = (v, l, cur) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`;
+
   return `
   <div class="stats" style="grid-template-columns:repeat(4,1fr) 1.3fr">
     <div class="card stat"><span class="stat-ic slate">${icon('calendar')}</span><div><div class="stat-num">${s.total}</div><div class="stat-label">Total Tasks</div></div></div>
     <div class="card stat"><span class="stat-ic ok">${icon('check')}</span><div><div class="stat-num">${s.completed}</div><div class="stat-label">Completed</div></div></div>
     <div class="card stat"><span class="stat-ic amber">${icon('checkCircle')}</span><div><div class="stat-num">${s.inProgress}</div><div class="stat-label">In Progress</div></div></div>
-    <div class="card stat"><span class="stat-ic redsoft">${icon('pendingSq')}</span><div><div class="stat-num">${s.pending}</div><div class="stat-label">Pending</div></div></div>
+    <div class="card stat"><span class="stat-ic redsoft">${icon('pendingSq')}</span><div><div class="stat-num">${s.pending}</div><div class="stat-label">To Do</div></div></div>
     <div class="card stat" style="flex-direction:column;align-items:stretch;gap:6px"><div><div class="stat-num">${s.pct}%</div><div class="stat-label">Overall Progress</div></div><div class="bar"><i style="width:${s.pct}%"></i></div></div>
   </div>
-  <div class="toolbar">
-    <label class="search" style="max-width:300px">${icon('search', 'sm')}<input id="taskSearch" placeholder="Search tasks..." value="${esc(state.taskQuery)}"/></label>
+  <div class="toolbar" style="flex-wrap:wrap;gap:10px">
+    <label class="search" style="max-width:260px">${icon('search', 'sm')}<input id="taskSearch" placeholder="Search tasks..." value="${esc(state.taskQuery)}"/></label>
+    
+    <select class="select" data-taskfilter="taskType">
+      <option value="all" ${state.taskType === 'all' ? 'selected' : ''}>All Types</option>
+      <option value="task" ${state.taskType === 'task' ? 'selected' : ''}>📋 Task</option>
+      <option value="bug" ${state.taskType === 'bug' ? 'selected' : ''}>🪲 Bug</option>
+      <option value="story" ${state.taskType === 'story' ? 'selected' : ''}>📖 Story</option>
+      <option value="epic" ${state.taskType === 'epic' ? 'selected' : ''}>⚡ Epic</option>
+    </select>
+
+    <select class="select" data-taskfilter="taskStatus">
+      ${opt('all', 'All Statuses', state.taskStatus)}
+      ${opt('pending', 'To Do', state.taskStatus)}
+      ${opt('progress', 'In Progress', state.taskStatus)}
+      ${opt('done', 'Completed', state.taskStatus)}
+    </select>
+
+    <select class="select" data-taskfilter="taskAssignee">
+      ${opt('all', 'All Assignees', state.taskAssignee)}
+      ${MEMBER_ROWS.map(id => opt(id, (PEOPLE[id] && PEOPLE[id].name) || id, state.taskAssignee)).join('')}
+    </select>
+
+    <select class="select" data-taskfilter="taskPriority">
+      ${opt('all', 'All Priorities', state.taskPriority)}
+      ${['High', 'Medium', 'Low'].map(v => opt(v, v, state.taskPriority)).join('')}
+    </select>
+
+    <div class="view-toggle" style="display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px">
+      <button class="icon-btn ${state.taskView === 'board' ? 'active' : ''}" data-taskview="board" title="Kanban Board" style="width:32px;height:30px;border-radius:6px">${icon('grid', 'sm')}</button>
+      <button class="icon-btn ${state.taskView === 'list' ? 'active' : ''}" data-taskview="list" title="List View" style="width:32px;height:30px;border-radius:6px">${icon('list', 'sm')}</button>
+    </div>
+
     <span style="flex:1"></span>
-    <select class="select" data-taskfilter="taskStatus">${opt('all', 'All Tasks', state.taskStatus)}${opt('progress', 'In Progress', state.taskStatus)}${opt('pending', 'Pending', state.taskStatus)}${opt('done', 'Completed', state.taskStatus)}</select>
-    <select class="select" data-taskfilter="taskAssignee">${opt('all', 'Assignee', state.taskAssignee)}${MEMBER_ROWS.map(id => opt(id, PEOPLE[id].name, state.taskAssignee)).join('')}</select>
-    <select class="select" data-taskfilter="taskPriority">${opt('all', 'Priority', state.taskPriority)}${['High', 'Medium', 'Low'].map(v => opt(v, v, state.taskPriority)).join('')}</select>
     <button class="btn gold" data-action="add-task">${icon('plus', 'sm')} Add Task</button>
   </div>
-  <div class="card tbl-card" style="padding-top:4px">
-    <table><thead><tr><th style="width:36px"><span class="chk" data-action="check-all"></span></th><th>Task</th><th>Assignee</th><th>Priority</th><th>Due Date</th><th>Status</th><th style="width:40px"></th></tr></thead>
-    <tbody>${list.length ? list.map(t => {
-      const open = state.openTasks.has(p.id + t.id);
-      return `<tr>
-        <td><span class="chk ${t.status === 'done' ? 'on' : ''}" data-toggle-task="${t.id}">${t.status === 'done' ? icon('check') : ''}</span></td>
-        <td><div class="task-title ${t.status === 'done' ? 'done' : ''}"><span>${esc(t.title)}</span><button class="exp ${open ? 'open' : ''}" data-expand="${t.id}">${icon('chevDown', 'xs')}</button></div></td>
-        <td><span class="cell-user">${av(t.assignee)}<span style="display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || 'Member')} ${userModeIcon(t.assignee, 'xs')}</span></span></td>
-        <td><span class="badge ${t.priority.toLowerCase()}">${t.priority}</span></td>
-        <td>${fmtShort(t.due)}</td>
-        <td><span class="clickable" data-cycle-task="${t.id}" title="Click to change status">${taskBadge(t.status)}</span></td>
-        <td><button class="kebab" data-tmenu="${t.id}">${icon('more', 'sm')}</button></td>
-      </tr>${open ? `<tr class="task-desc"><td colspan="7">${esc(t.desc || 'No description.')}</td></tr>` : ''}`;
-    }).join('') : '<tr><td colspan="7" class="empty">No tasks match these filters.</td></tr>'}</tbody></table>
-  </div>`;
+  ${state.taskView === 'list' ? renderTaskListView(p, list) : renderKanbanBoard(p, list)}`;
 }
 
 function tabTeam(p) {
@@ -858,6 +1026,365 @@ function openMenu(anchor, items) {
   el.addEventListener('click', e => { const b = e.target.closest('[data-mi]'); if (!b) return; el.remove(); items[b.dataset.mi].run(); });
   place(el, anchor);
 }
+function openNewTaskModal(p, defaultStatus = 'pending') {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  const members = (p && p.team && p.team.length ? p.team : Object.keys(PEOPLE));
+  const memberOpts = members.map(id => `<option value="${id}">${esc((PEOPLE[id] && PEOPLE[id].name) || id)}</option>`).join('');
+  let draftChecklist = [];
+
+  const renderDraftList = () => {
+    const listEl = ov.querySelector('#subtaskDraftList');
+    if (!listEl) return;
+    if (!draftChecklist.length) {
+      listEl.innerHTML = '<span style="font-size:11.5px;color:var(--text-2);font-style:italic">No subtasks added yet.</span>';
+      return;
+    }
+    listEl.innerHTML = draftChecklist.map((item, idx) => `
+      <div class="chk-item" style="cursor:default">
+        <span>${esc(item.text)}</span>
+        <button type="button" class="del-btn" data-del-subtask="${idx}" title="Remove subtask">${icon('trash', 'xs')}</button>
+      </div>
+    `).join('');
+  };
+
+  ov.innerHTML = `
+    <div class="modal task-modal" style="width:540px;max-width:calc(100vw - 32px);max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="margin:0;font-size:18px">Create &amp; Assign Task</h3>
+        <button type="button" class="icon-btn" data-close style="width:30px;height:30px">${icon('x', 'sm')}</button>
+      </div>
+
+      <form id="newTaskForm">
+        <div class="field">
+          <label style="font-weight:600">Task Type</label>
+          <div class="task-type-pills">
+            <label class="type-pill-opt">
+              <input type="radio" name="task_type" value="task" checked hidden />
+              <span class="type-pill task">${icon('checkSquare', 'xs')} Task</span>
+            </label>
+            <label class="type-pill-opt">
+              <input type="radio" name="task_type" value="bug" hidden />
+              <span class="type-pill bug">${icon('alertCircle', 'xs')} Bug</span>
+            </label>
+            <label class="type-pill-opt">
+              <input type="radio" name="task_type" value="story" hidden />
+              <span class="type-pill story">${icon('bookmark', 'xs')} Story</span>
+            </label>
+            <label class="type-pill-opt">
+              <input type="radio" name="task_type" value="epic" hidden />
+              <span class="type-pill epic">${icon('zap', 'xs')} Epic</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label style="font-weight:600">Task Title <span style="color:var(--red)">*</span></label>
+          <input name="title" required placeholder="What needs to be done?" autocomplete="off" />
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label style="font-weight:600">Category</label>
+            <select class="select" name="category">
+              <option value="Frontend">Frontend</option>
+              <option value="Backend">Backend</option>
+              <option value="UI/UX">UI/UX Design</option>
+              <option value="QA">QA &amp; Testing</option>
+              <option value="DevOps">DevOps</option>
+              <option value="Database">Database</option>
+              <option value="General">General</option>
+            </select>
+          </div>
+          <div class="field">
+            <label style="font-weight:600">Assignee</label>
+            <select class="select" name="assignee">
+              ${memberOpts}
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label style="font-weight:600">Priority</label>
+            <select class="select" name="priority">
+              <option value="High">High</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div class="field">
+            <label style="font-weight:600">Initial Board Column</label>
+            <select class="select" name="status">
+              <option value="pending" ${defaultStatus === 'pending' ? 'selected' : ''}>To Do</option>
+              <option value="progress" ${defaultStatus === 'progress' ? 'selected' : ''}>In Progress</option>
+              <option value="done" ${defaultStatus === 'done' ? 'selected' : ''}>Completed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label style="font-weight:600">Due Date <span style="font-weight:400;color:var(--text-2)">(Manual &amp; Optional)</span></label>
+          <input type="date" name="due" value="" />
+          <span style="font-size:11px;color:var(--text-2);margin-top:2px">Optional — leave blank for no due date / ongoing</span>
+        </div>
+
+        <div class="field">
+          <label style="font-weight:600">Description</label>
+          <textarea name="desc" placeholder="Provide background, steps to reproduce, or acceptance criteria..."></textarea>
+        </div>
+
+        <div class="field">
+          <label style="font-weight:600">Subtasks &amp; Checklist <span style="font-weight:400;color:var(--text-2)">(Optional)</span></label>
+          <div id="subtaskDraftList" class="subtask-list" style="margin-bottom:6px"></div>
+          <div style="display:flex;gap:6px">
+            <input id="newSubtaskInput" placeholder="Add a subtask / checklist item..." style="flex:1;height:34px;font-size:12.5px" />
+            <button type="button" id="btnAddSubtask" class="btn" style="height:34px;padding:0 12px;font-size:12px">${icon('plus', 'sm')} Add</button>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top:16px">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button type="submit" class="btn gold">${icon('check', 'sm')} Create Task</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(ov);
+  renderDraftList();
+
+  const close = () => ov.remove();
+  ov.addEventListener('click', e => {
+    if (e.target === ov || e.target.closest('[data-close]')) close();
+    const delBtn = e.target.closest('[data-del-subtask]');
+    if (delBtn) {
+      const idx = parseInt(delBtn.dataset.delSubtask, 10);
+      draftChecklist.splice(idx, 1);
+      renderDraftList();
+    }
+  });
+
+  const addSubtask = () => {
+    const input = ov.querySelector('#newSubtaskInput');
+    const val = (input?.value || '').trim();
+    if (!val) return;
+    draftChecklist.push({ text: val, done: false });
+    input.value = '';
+    renderDraftList();
+    input.focus();
+  };
+
+  ov.querySelector('#btnAddSubtask')?.addEventListener('click', addSubtask);
+  ov.querySelector('#newSubtaskInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSubtask();
+    }
+  });
+
+  ov.querySelector('#newTaskForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const title = (fd.get('title') || '').trim();
+    if (!title) return;
+    const taskData = {
+      project: p.id,
+      title,
+      task_type: fd.get('task_type') || 'task',
+      category: fd.get('category') || '',
+      assignee: fd.get('assignee') || '',
+      priority: fd.get('priority') || 'Medium',
+      status: fd.get('status') || 'pending',
+      due: (fd.get('due') || '').trim(),
+      desc: (fd.get('desc') || '').trim(),
+      checklist: draftChecklist
+    };
+
+    close();
+    toast('Creating task...');
+
+    try {
+      const created = await apiCreateTask(taskData);
+      if (created && created.id) {
+        p.tasks.push(created);
+      } else {
+        p.tasks.push({ id: Date.now(), ...taskData });
+      }
+      rerender();
+      const colName = taskData.status === 'done' ? 'Completed' : taskData.status === 'progress' ? 'In Progress' : 'To Do';
+      toast(`Task "${title}" created in ${colName}`);
+    } catch (err) {
+      p.tasks.push({ id: Date.now(), ...taskData });
+      rerender();
+      toast(`Task "${title}" created`);
+    }
+  });
+}
+
+function openTaskDetailsModal(p, task) {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  if (!Array.isArray(task.checklist)) task.checklist = [];
+
+  const renderModalContent = () => {
+    const type = TASK_TYPES[task.task_type] || TASK_TYPES['task'];
+    const chkDone = task.checklist.filter(c => c.done).length;
+    const chkTotal = task.checklist.length;
+    ov.innerHTML = `
+      <div class="modal task-modal" style="width:560px;max-width:calc(100vw - 32px);max-height:90vh;overflow-y:auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="k-type-badge ${task.task_type || 'task'}">${icon(type.icon, 'xs')} ${type.label}</span>
+            ${task.category ? `<span class="k-cat-pill">${esc(task.category)}</span>` : ''}
+            <span class="badge ${task.priority ? task.priority.toLowerCase() : 'medium'}">${task.priority || 'Medium'}</span>
+            <span class="badge ${STATUS[task.status]?.cls || 'progress'}">${task.status === 'pending' ? 'To Do' : (STATUS[task.status]?.label || 'In Progress')}</span>
+          </div>
+          <button type="button" class="icon-btn" data-close style="width:30px;height:30px">${icon('x', 'sm')}</button>
+        </div>
+
+        <h3 style="margin:0 0 10px;font-size:18px;line-height:1.35">${esc(task.title)}</h3>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;background:rgba(255,255,255,.02);padding:10px 12px;border-radius:8px;border:1px solid var(--line)">
+          <div>
+            <div style="font-size:11px;color:var(--text-2);margin-bottom:4px">Assignee</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              ${av(task.assignee, 's24')}
+              <span style="font-weight:500;font-size:13px">${esc((PEOPLE[task.assignee] && PEOPLE[task.assignee].name) || task.assignee || 'Unassigned')}</span>
+              ${userModeIcon(task.assignee, 'xs')}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-2);margin-bottom:4px">Due Date</div>
+            <div style="font-size:13px">${task.due ? `${icon('calendar', 'xs')} ${fmtLong(task.due)}` : '<span class="muted">No due date (Ongoing)</span>'}</div>
+          </div>
+        </div>
+
+        ${task.desc ? `
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Description</div>
+            <div style="font-size:13px;line-height:1.5;color:var(--text);white-space:pre-wrap;background:rgba(255,255,255,.02);padding:10px 12px;border-radius:8px;border:1px solid var(--line)">${esc(task.desc)}</div>
+          </div>
+        ` : ''}
+
+        <div style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-2)">Subtasks &amp; Checklist (${chkDone}/${chkTotal})</div>
+            ${chkTotal > 0 ? `<div style="font-size:11px;color:var(--text-2)">${Math.round((chkDone/chkTotal)*100)}% complete</div>` : ''}
+          </div>
+          ${chkTotal > 0 ? `
+            <div class="bar" style="margin-bottom:10px;height:5px"><i style="width:${Math.round((chkDone/chkTotal)*100)}%"></i></div>
+          ` : ''}
+          <div class="subtask-list" style="margin-bottom:8px">
+            ${task.checklist.map((c, idx) => `
+              <div class="chk-item ${c.done ? 'done' : ''}">
+                <input type="checkbox" data-modal-chk="${idx}" ${c.done ? 'checked' : ''} style="cursor:pointer" />
+                <span style="flex:1">${esc(c.text)}</span>
+                <button type="button" class="del-btn" data-modal-del-chk="${idx}" title="Delete subtask">${icon('trash', 'xs')}</button>
+              </div>
+            `).join('')}
+          </div>
+          <div style="display:flex;gap:6px">
+            <input id="modalSubtaskInput" placeholder="Add subtask / checklist item..." style="flex:1;height:34px;font-size:12.5px" />
+            <button type="button" id="modalBtnAddSubtask" class="btn" style="height:34px;padding:0 12px;font-size:12px">${icon('plus', 'sm')} Add</button>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:6px">
+            ${task.status !== 'pending' ? `<button type="button" class="btn" data-modal-set-status="pending">← To Do</button>` : ''}
+            ${(task.status !== 'progress' && task.status !== 'review') ? `<button type="button" class="btn" data-modal-set-status="progress">In Progress →</button>` : ''}
+            ${task.status !== 'done' ? `<button type="button" class="btn ok" data-modal-set-status="done">${icon('check', 'sm')} Completed</button>` : ''}
+          </div>
+          <button type="button" class="btn danger" data-modal-del-task style="color:var(--red)">${icon('trash', 'sm')} Delete</button>
+        </div>
+      </div>
+    `;
+  };
+
+  renderModalContent();
+  document.body.appendChild(ov);
+
+  const close = () => ov.remove();
+  ov.addEventListener('click', async e => {
+    if (e.target === ov || e.target.closest('[data-close]')) close();
+
+    // Checkbox toggle
+    const chk = e.target.closest('[data-modal-chk]');
+    if (chk) {
+      const idx = parseInt(chk.dataset.modalChk, 10);
+      if (task.checklist[idx]) {
+        task.checklist[idx].done = chk.checked;
+        apiPatchTask(task.id, { checklist: task.checklist });
+        rerender();
+        renderModalContent();
+      }
+      return;
+    }
+
+    // Delete subtask
+    const delSub = e.target.closest('[data-modal-del-chk]');
+    if (delSub) {
+      const idx = parseInt(delSub.dataset.modalDelChk, 10);
+      task.checklist.splice(idx, 1);
+      apiPatchTask(task.id, { checklist: task.checklist });
+      rerender();
+      renderModalContent();
+      return;
+    }
+
+    // Add subtask button
+    if (e.target.closest('#modalBtnAddSubtask')) {
+      const input = ov.querySelector('#modalSubtaskInput');
+      const text = (input?.value || '').trim();
+      if (text) {
+        task.checklist.push({ text, done: false });
+        apiPatchTask(task.id, { checklist: task.checklist });
+        rerender();
+        renderModalContent();
+      }
+      return;
+    }
+
+    // Status changes
+    const setStatus = e.target.closest('[data-modal-set-status]');
+    if (setStatus) {
+      task.status = setStatus.dataset.modalSetStatus;
+      apiPatchTask(task.id, { status: task.status });
+      rerender();
+      renderModalContent();
+      const colName = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do';
+      toast(`Task moved to ${colName}`);
+      return;
+    }
+
+    // Delete task
+    if (e.target.closest('[data-modal-del-task]')) {
+      if (confirm(`Are you sure you want to delete task "${task.title}"?`)) {
+        p.tasks.splice(p.tasks.indexOf(task), 1);
+        apiDeleteTask(task.id);
+        rerender();
+        close();
+        toast('Task deleted');
+      }
+      return;
+    }
+  });
+
+  ov.addEventListener('keydown', e => {
+    if (e.target.id === 'modalSubtaskInput' && e.key === 'Enter') {
+      e.preventDefault();
+      const text = (e.target.value || '').trim();
+      if (text) {
+        task.checklist.push({ text, done: false });
+        apiPatchTask(task.id, { checklist: task.checklist });
+        rerender();
+        renderModalContent();
+      }
+    }
+  });
+}
+
 function openModal(title, fields, onSubmit, submitLabel = 'Save', onMount = null) {
   const ov = document.createElement('div');
   ov.className = 'overlay';
@@ -970,6 +1497,44 @@ document.addEventListener('click', e => {
   if (pf) { state.projectFilter = state.projectFilter === pf.dataset.pfilter ? 'all' : pf.dataset.pfilter; rerender(); return; }
 
   // Tasks
+  const tv = t.closest('[data-taskview]');
+  if (tv) { state.taskView = tv.dataset.taskview; rerender(); return; }
+
+  const mv = t.closest('[data-move-task]');
+  if (mv) {
+    const p = currentProject();
+    const task = p && p.tasks.find(x => x.id == mv.dataset.moveTask);
+    if (task) {
+      task.status = mv.dataset.targetStatus;
+      rerender();
+      apiPatchTask(task.id, { status: task.status });
+      const targetName = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do';
+      toast(`Task moved to ${targetName}`);
+    }
+    return;
+  }
+
+  const opTask = t.closest('[data-open-task-modal]');
+  if (opTask) {
+    const p = currentProject();
+    const task = p && p.tasks.find(x => x.id == opTask.dataset.openTaskModal);
+    if (p && task) openTaskDetailsModal(p, task);
+    return;
+  }
+
+  const tgChk = t.closest('[data-toggle-chk]');
+  if (tgChk) {
+    const p = currentProject();
+    const task = p && p.tasks.find(x => x.id == tgChk.dataset.taskId);
+    const idx = parseInt(tgChk.dataset.toggleChk, 10);
+    if (task && Array.isArray(task.checklist) && task.checklist[idx]) {
+      task.checklist[idx].done = !task.checklist[idx].done;
+      rerender();
+      apiPatchTask(task.id, { checklist: task.checklist });
+    }
+    return;
+  }
+
   const tg = t.closest('[data-toggle-task]');
   if (tg) { const p = currentProject(), task = p.tasks.find(x => x.id == tg.dataset.toggleTask); task.status = task.status === 'done' ? 'progress' : 'done'; rerender(); apiPatchTask(task.id, { status: task.status }); return; }
   const cy = t.closest('[data-cycle-task]');
@@ -980,10 +1545,16 @@ document.addEventListener('click', e => {
   if (tm) {
     const p = currentProject(), task = p.tasks.find(x => x.id == tm.dataset.tmenu);
     openMenu(tm, [
-      { label: 'Mark Completed', icon: 'check', run: () => { task.status = 'done'; rerender(); } },
-      { label: 'Mark In Progress', icon: 'clock', run: () => { task.status = 'progress'; rerender(); } },
-      { label: 'Mark Pending', icon: 'hourglass', run: () => { task.status = 'pending'; rerender(); } },
-      { label: 'Delete task', icon: 'trash', danger: true, run: () => { p.tasks.splice(p.tasks.indexOf(task), 1); rerender(); toast('Task deleted'); } },
+      { label: 'View / Edit Task', icon: 'edit', run: () => openTaskDetailsModal(p, task) },
+      { label: 'Mark Completed', icon: 'check', run: () => { task.status = 'done'; rerender(); apiPatchTask(task.id, { status: task.status }); } },
+      { label: 'Mark In Progress', icon: 'clock', run: () => { task.status = 'progress'; rerender(); apiPatchTask(task.id, { status: task.status }); } },
+      { label: 'Mark To Do', icon: 'hourglass', run: () => { task.status = 'pending'; rerender(); apiPatchTask(task.id, { status: task.status }); } },
+      { label: 'Delete task', icon: 'trash', danger: true, run: () => {
+        p.tasks.splice(p.tasks.indexOf(task), 1);
+        rerender();
+        apiDeleteTask(task.id);
+        toast('Task deleted');
+      } },
     ]);
     return;
   }
@@ -1202,16 +1773,11 @@ function handleAction(a, el) {
       state.starredProjects.has(el.dataset.id) ? state.starredProjects.delete(el.dataset.id) : state.starredProjects.add(el.dataset.id);
       rerender();
       break;
-    case 'add-task':
-      openModal('Add Task', [
-        { name: 'title', label: 'Task', required: true, placeholder: 'What needs to be done?' },
-        { name: 'assignee', label: 'Assignee', type: 'select', half: true, value: 'karthik', options: MEMBER_ROWS.map(id => [id, PEOPLE[id].name]) },
-        { name: 'priority', label: 'Priority', type: 'select', half: true, value: 'Medium', options: [['High', 'High'], ['Medium', 'Medium'], ['Low', 'Low']] },
-        { name: 'due', label: 'Due date', type: 'date', half: true, value: '2026-11-30' },
-        { name: 'status', label: 'Status', type: 'select', half: true, value: 'pending', options: [['pending', 'Pending'], ['progress', 'In Progress'], ['done', 'Completed']] },
-        { name: 'desc', label: 'Description', type: 'textarea' },
-      ], d => { p.tasks.push({ id: Date.now(), ...d }); rerender(); toast('Task added'); }, 'Add Task');
+    case 'add-task': {
+      const defaultStatus = el.dataset.defaultStatus || 'pending';
+      openNewTaskModal(p, defaultStatus);
       break;
+    }
     case 'check-all': {
       const allDone = p.tasks.every(t => t.status === 'done');
       p.tasks.forEach(t => (t.status = allDone ? 'progress' : 'done'));
@@ -2083,11 +2649,25 @@ async function apiPatchMember(id, patchData) {
   });
 }
 
+async function apiCreateTask(taskData) {
+  return await fetchFromAPI(`/tasks/`, {
+    method: 'POST',
+    body: JSON.stringify(taskData)
+  });
+}
+
 async function apiPatchTask(taskId, patchData) {
   if (!taskId || isNaN(taskId)) return null;
   return await fetchFromAPI(`/tasks/${taskId}/`, {
     method: 'PATCH',
     body: JSON.stringify(patchData)
+  });
+}
+
+async function apiDeleteTask(taskId) {
+  if (!taskId || isNaN(taskId)) return null;
+  return await fetchFromAPI(`/tasks/${taskId}/`, {
+    method: 'DELETE'
   });
 }
 
@@ -2197,6 +2777,53 @@ async function loadInitialData() {
     }, 350);
   }
 }
+
+/* ---------------- Drag and Drop for Kanban Board ---------------- */
+document.addEventListener('dragstart', e => {
+  const card = e.target.closest('[data-k-task]');
+  if (card) {
+    e.dataTransfer.setData('text/plain', card.dataset.kTask);
+    card.style.opacity = '0.5';
+  }
+});
+document.addEventListener('dragend', e => {
+  const card = e.target.closest('[data-k-task]');
+  if (card) card.style.opacity = '1';
+  $$('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+});
+document.addEventListener('dragover', e => {
+  const col = e.target.closest('.kanban-col');
+  if (col) {
+    e.preventDefault();
+    col.classList.add('drag-over');
+  }
+});
+document.addEventListener('dragleave', e => {
+  const col = e.target.closest('.kanban-col');
+  if (col && !col.contains(e.relatedTarget)) {
+    col.classList.remove('drag-over');
+  }
+});
+document.addEventListener('drop', e => {
+  const col = e.target.closest('.kanban-col');
+  if (col) {
+    e.preventDefault();
+    col.classList.remove('drag-over');
+    const taskId = e.dataTransfer.getData('text/plain');
+    const targetStatus = col.dataset.colStatus;
+    const p = currentProject();
+    if (p && taskId && targetStatus) {
+      const task = p.tasks.find(x => x.id == taskId);
+      if (task && task.status !== targetStatus) {
+        task.status = targetStatus;
+        rerender();
+        apiPatchTask(task.id, { status: task.status });
+        const targetName = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do';
+        toast(`Task moved to ${targetName}`);
+      }
+    }
+  }
+});
 
 /* ---------------- Boot ---------------- */
 function refreshSide() {

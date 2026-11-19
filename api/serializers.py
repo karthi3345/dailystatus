@@ -8,6 +8,12 @@ class MemberSerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    due = serializers.CharField(required=False, allow_blank=True, default='')
+    desc = serializers.CharField(required=False, allow_blank=True, default='')
+    category = serializers.CharField(required=False, allow_blank=True, default='')
+    task_type = serializers.CharField(required=False, default='task')
+    checklist = serializers.ListField(required=False, default=list)
+
     class Meta:
         model = Task
         fields = '__all__'
