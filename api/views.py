@@ -1,15 +1,138 @@
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.authtoken.models import Token
+
 from .models import Member, Project, Task, DailyWorkLog, ChatMessage
 from .serializers import (
     MemberSerializer, ProjectSerializer, TaskSerializer,
     DailyWorkLogSerializer, ChatMessageSerializer
 )
 
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        data = request.data
+        username = (data.get('username') or '').strip()
+        email = (data.get('email') or '').strip()
+        password = data.get('password') or ''
+        name = (data.get('name') or username).strip()
+        role = (data.get('role') or 'Developer').strip()
+
+        if not username or not password:
+            return Response({'error': 'Username and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(password) < 6:
+            return Response({'error': 'Password must be at least 6 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(username__iexact=username).exists():
+            return Response({'error': 'A user with this username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=name
+        )
+
+        member, _ = Member.objects.update_or_create(
+            id=username.lower(),
+            defaults={
+                'name': name or username.capitalize(),
+                'role': role,
+                'title': role,
+                'availability': 'available',
+                'mode': 'office'
+            }
+        )
+
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'token': token.key,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'name': member.name,
+                'role': member.role,
+                'email': user.email,
+                'availability': member.availability,
+                'mode': member.mode,
+            }
+        }, status=status.HTTP_201_CREATED)
+
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        data = request.data
+        identifier = (data.get('username') or '').strip()
+        password = data.get('password') or ''
+
+        if not identifier or not password:
+            return Response({'error': 'Username and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        username = identifier
+        if '@' in identifier:
+            matched_user = User.objects.filter(email__iexact=identifier).first()
+            if matched_user:
+                username = matched_user.username
+
+        user = authenticate(username=username, password=password)
+        if not user:
+            return Response({'error': 'Invalid username/email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        token, _ = Token.objects.get_or_create(user=user)
+        member = Member.objects.filter(id=user.username.lower()).first()
+
+        return Response({
+            'token': token.key,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'name': member.name if member else user.username,
+                'role': member.role if member else 'Team Member',
+                'email': user.email,
+                'availability': member.availability if member else 'available',
+                'mode': member.mode if member else 'office',
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class MeView(APIView):
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response({'authenticated': False}, status=status.HTTP_200_OK)
+
+        member = Member.objects.filter(id=request.user.username.lower()).first()
+        return Response({
+            'authenticated': True,
+            'user': {
+                'id': request.user.id,
+                'username': request.user.username,
+                'name': member.name if member else request.user.username,
+                'role': member.role if member else 'Team Member',
+                'email': request.user.email,
+                'availability': member.availability if member else 'available',
+                'mode': member.mode if member else 'office',
+            }
+        })
+
+
+class LogoutView(APIView):
+    def post(self, request):
+        if request.user and request.user.is_authenticated:
+            Token.objects.filter(user=request.user).delete()
+        return Response({'success': True, 'message': 'Logged out successfully.'})
+
+
 class MemberViewSet(viewsets.ModelViewSet):
     queryset = Member.objects.all()
-    serializer_mapper = MemberSerializer
     serializer_class = MemberSerializer
 
 

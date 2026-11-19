@@ -1,48 +1,59 @@
 # Kathir Studios – Workspace & Daily Status Platform
 
-A lightweight, high-performance workspace and daily work logging web application built with **Django REST Framework**, **PostgreSQL**, and a modern, dependency-free **Vanilla JavaScript Single-Page Application (SPA)** frontend.
+A lightweight, full-stack workspace, project tracking, daily status, and team messaging web application built with **Django REST Framework**, **Neon PostgreSQL (Cloud Serverless)**, and an ultra-lightweight **Vanilla JavaScript Single-Page Application (SPA)** frontend, ready for 1-click deployment on **Vercel**.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue.svg)
 ![Django](https://img.shields.io/badge/Django-5.2-green.svg)
 ![DRF](https://img.shields.io/badge/Django_REST_Framework-3.16-red.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue.svg)
+![Database](https://img.shields.io/badge/PostgreSQL-Neon_Cloud-blue.svg)
+![Deployment](https://img.shields.io/badge/Deploy-Vercel-black.svg)
 ![Frontend](https://img.shields.io/badge/Frontend-Vanilla_JS_/_CSS3-yellow.svg)
 
 ---
 
 ## 🌟 Key Features
 
-1. **Projects Management (`#/projects` & `#/project/:id`)**:
+1. **Authentication & Dynamic Users**:
+   - Built-in **Register** and **Login** system (`/api/auth/register/`, `/api/auth/login/`).
+   - Dynamic user profiles: each user has their own customized presence, availability, daily work logs, and chats.
+   - Demo Accounts (pre-seeded):
+     - `kathir` / `password123` (Administrator)
+     - `arun` / `password123` (Project Lead)
+     - `karthik` / `password123` (Backend Developer)
+     - Or register any new account directly in the UI!
+
+2. **Projects Management (`#/projects` & `#/project/:id`)**:
    - Multi-view project tracking (Grid and List layouts).
    - Real-time search and status filtering (*In Progress*, *In Review*, *Completed*, *On Hold*).
    - Visual progress indicators with dynamic SVG circular rings and task completion counters.
    - Project detail views with task breakdowns, team members, deliverables, and notes.
 
-2. **Daily Work Log & Timesheet (`#/worklog`)**:
+3. **Daily Work Log & Timesheet (`#/worklog`)**:
    - Team presence dashboard showing real-time work modes (*In Office*, *WFH*, *Hybrid*).
    - Daily task log entry, time tracking, and productivity summaries.
    - Interactive date navigation.
 
-3. **Team Messenger (`#/messenger`)**:
+4. **Team Messenger (`#/messenger`)**:
    - Direct messaging channels and project group chats.
    - Message history with timestamps, file attachment badges, and unread notification indicators.
    - Real-time simulated team responses and typing indicators.
 
-4. **Availability & Status Manager**:
+5. **Availability & Status Manager**:
    - Quick availability toggles (*Available*, *Focus Mode*, *In a Meeting*, *Away*).
-   - Instant updates across sidebar, team rosters, and backend database.
+   - Instant updates across sidebar, team rosters, and the Neon PostgreSQL backend.
 
 ---
 
-## 🛠️ Architecture & Tech Stack
+## 🛠️ Tech Stack & Architecture
 
 * **Backend**:
   * **Framework**: Django 5 + Django REST Framework (DRF)
-  * **Database**: PostgreSQL (with automatic development fallback to SQLite if PostgreSQL credentials are not set)
-  * **Middleware**: `django-cors-headers` for cross-origin requests, `whitenoise` for fast static asset delivery.
+  * **Database**: Neon Serverless PostgreSQL with SSL pooling
+  * **Authentication**: Token Authentication & Session Authentication
+  * **Static & Serverless Handling**: WhiteNoise + Vercel Python WSGI Serverless Function
 * **Frontend**:
-  * Ultra-lightweight Vanilla HTML5, CSS3, and modern JavaScript (ES6+).
-  * Zero NPM builds, zero bundlers, instant loading and zero lag.
+  * Ultra-lightweight Vanilla HTML5, modern CSS3, and ES6+ JavaScript.
+  * Zero NPM builds or bundlers needed — instant, snappy loading.
   * Direct asynchronous REST API sync via `fetch()`.
 
 ---
@@ -51,6 +62,10 @@ A lightweight, high-performance workspace and daily work logging web application
 
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
+| `/api/auth/register/` | `POST` | Register a new user and create their team profile |
+| `/api/auth/login/` | `POST` | Authenticate user via username or email; returns token & profile |
+| `/api/auth/me/` | `GET` | Get authenticated user info & active team profile |
+| `/api/auth/logout/` | `POST` | Invalidate token and log out |
 | `/api/members/` | `GET`, `POST` | List and create studio team members |
 | `/api/members/<id>/` | `GET`, `PATCH` | Retrieve or update availability and work mode |
 | `/api/projects/` | `GET`, `POST` | List and create studio projects |
@@ -64,62 +79,52 @@ A lightweight, high-performance workspace and daily work logging web application
 
 ---
 
-## 📦 Getting Started
+## ⚡ Deploying to Vercel
 
-### 1. Prerequisites
-* Python 3.10+
-* PostgreSQL (Optional for local development; SQLite works out-of-the-box)
+The project is pre-configured with `vercel.json` and `build_files.sh` for effortless deployment to Vercel.
 
-### 2. Installation & Setup
+### Method 1: Deploy via Vercel Dashboard (Recommended)
+1. Go to [Vercel](https://vercel.com/) and click **"Add New Project"**.
+2. Select your GitHub repository: **`karthi3345/dailystatus`**.
+3. Under **Environment Variables**, add:
+   * **`DATABASE_URL`**: `postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require`
+   * **`SECRET_KEY`**: Any random secret key string
+   * **`DEBUG`**: `False`
+4. Click **Deploy**!
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/karthi3345/dailystatus.git
-   cd dailystatus
-   ```
+### Method 2: Deploy via Vercel CLI
+```bash
+npm i -g vercel
+vercel
+```
 
-2. **Create and activate a virtual environment** (optional):
-   ```bash
-   python -m venv venv
-   # Windows:
-   venv\Scripts\activate
-   # Linux/Mac:
-   source venv/bin/activate
-   ```
+---
 
-3. **Install dependencies**:
+## 💻 Local Development
+
+1. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Configure Environment Variables**:
-   Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-   For PostgreSQL, configure `DATABASE_URL`:
-   ```env
-   DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/dailystatus_db
-   ```
-   *(If left blank or unavailable, the backend automatically uses SQLite)*.
+2. **Configure `.env`**:
+   Ensure `DATABASE_URL` points to your Neon PostgreSQL database (or leave empty to fallback to SQLite).
 
-5. **Run Migrations & Seed Initial Data**:
+3. **Run Migrations & Seed Initial Data**:
    ```bash
-   python manage.py makemigrations api
    python manage.py migrate
    python manage.py seed_data
    ```
 
-6. **Start the Development Server**:
+4. **Start the Development Server**:
    ```bash
    python manage.py runserver 8000
    ```
 
-7. **Open Application**:
-   Open your browser and navigate to:
-   - Web App: [http://localhost:8000/](http://localhost:8000/)
-   - REST API Root: [http://localhost:8000/api/](http://localhost:8000/api/)
-   - Admin Panel: [http://localhost:8000/admin/](http://localhost:8000/admin/)
+5. **Open in Browser**:
+   * Application: [http://localhost:8000/](http://localhost:8000/)
+   * REST API Root: [http://localhost:8000/api/](http://localhost:8000/api/)
+   * Admin Panel: [http://localhost:8000/admin/](http://localhost:8000/admin/)
 
 ---
 

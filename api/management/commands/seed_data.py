@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.contrib.auth.models import User
 from api.models import Member, Project, Task, DailyWorkLog, ChatMessage
 
 class Command(BaseCommand):
@@ -6,6 +7,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.stdout.write('Seeding Kathir Studios data...')
+
+        # 0. User accounts for members
+        for u, p, name in [('kathir', 'password123', 'Kathir'), ('arun', 'password123', 'Arun'), ('karthik', 'password123', 'Karthik'), ('divya', 'password123', 'Divya'), ('meena', 'password123', 'Meena'), ('sathish', 'password123', 'Sathish')]:
+            user, _ = User.objects.get_or_create(username=u, defaults={'email': f'{u}@kathirstudios.com', 'first_name': name})
+            user.set_password(p)
+            user.save()
 
         # 1. Members
         members_data = [

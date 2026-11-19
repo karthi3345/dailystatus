@@ -1,8 +1,12 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file
+load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-kathir-studios-dailystatus-secret-key-3345')
 
@@ -18,6 +22,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'api',
 ]
@@ -54,7 +59,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dailystatus.wsgi.application'
 
-# Database Configuration: PostgreSQL with SQLite fallback
+# Database Configuration: Neon PostgreSQL with SQLite fallback
 DATABASE_URL = os.getenv('DATABASE_URL')
 if not DATABASE_URL and os.getenv('POSTGRES_DB') and os.getenv('POSTGRES_PASSWORD'):
     pg_user = os.getenv('POSTGRES_USER', 'postgres')
@@ -70,7 +75,8 @@ if DATABASE_URL:
             'default': dj_database_url.config(
                 default=DATABASE_URL,
                 conn_max_age=600,
-                conn_health_checks=True
+                conn_health_checks=True,
+                ssl_require=True if any(h in DATABASE_URL for h in ['neon', 'aws', 'pooler', 'supabase']) else False
             )
         }
     except Exception:
@@ -112,6 +118,10 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Django REST Framework configuration
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],

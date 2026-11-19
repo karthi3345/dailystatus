@@ -99,7 +99,8 @@ const THUMBS = {
 };
 
 /* ---------------- Data store ---------------- */
-const ME = 'kathir';
+let ME = localStorage.getItem('kathir_auth_user') || 'kathir';
+let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
 const PEOPLE = {
   kathir:  { name: 'Kathir',  role: 'Administrator',     availability: 'available', mode: 'office' },
   arun:    { name: 'Arun',    role: 'Project Lead',      availability: 'available', mode: 'office', today: 'Review sprint & merge' },
@@ -761,16 +762,21 @@ function place(el, anchor) {
 }
 function openProfile(id, anchor) {
   closeFloating();
-  const P = PEOPLE[id];
+  const P = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Developer', availability: 'available', mode: 'office' };
   const el = document.createElement('div');
   el.className = 'pop';
   el.innerHTML = `
-    <div class="pop-head">${av(id, 's64')}<div><div class="n">${P.name}</div><div class="r">${TITLES[id]}</div>${availBadge(id)}</div></div>
+    <div class="pop-head">${av(id, 's64')}<div><div class="n">${P.name}</div><div class="r">${TITLES[id] || P.role || 'Member'}</div>${availBadge(id)}</div></div>
     <h5>Availability</h5>
     ${Object.entries(AVAIL).map(([k, a]) => `<button class="opt ${P.availability === k ? 'on' : ''}" data-set-avail="${k}"><i class="sdot ${a.cls}"></i>${a.short || a.label}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
     <div class="sep"></div>
     <h5>Work Location</h5>
     ${Object.entries(MODES).map(([k, m]) => `<button class="opt ${P.mode === k ? 'on' : ''}" data-set-mode="${k}">${icon(m.icon)}${m.long}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
+    <div class="sep"></div>
+    <h5>Account</h5>
+    <button class="opt" data-action="open-login">${icon('user')}Switch Account / Sign In</button>
+    <button class="opt" data-action="open-register">${icon('userPlus')}Register New Account</button>
+    ${AUTH_TOKEN ? `<button class="opt" data-action="auth-logout" style="color:var(--red)">${icon('x')}Log Out</button>` : ''}
     ${id !== ME ? `<div class="sep"></div><button class="opt" data-dm="${id}" style="margin-top:8px">${icon('message')}Send message</button>` : ''}`;
   el.dataset.person = id;
   place(el, anchor);
@@ -1001,6 +1007,9 @@ function handleAction(a, el) {
       else toast(`${c.members} members in ${c.name}`);
       break;
     }
+    case 'open-login': openLoginModal(); break;
+    case 'open-register': openRegisterModal(); break;
+    case 'auth-logout': handleLogout(); break;
     case 'new-chat':
       openModal('New Message', [
         { name: 'to', label: 'To', type: 'select', value: 'karthik', options: MEMBER_ROWS.map(id => [id, PEOPLE[id].name]) },
@@ -1062,8 +1071,12 @@ const API_BASE = '/api';
 
 async function fetchFromAPI(endpoint, options = {}) {
   try {
+    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    if (AUTH_TOKEN) {
+      headers['Authorization'] = `Token ${AUTH_TOKEN}`;
+    }
     const res = await fetch(`${API_BASE}${endpoint}`, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers,
       ...options
     });
     if (!res.ok) return null;
@@ -1071,6 +1084,156 @@ async function fetchFromAPI(endpoint, options = {}) {
   } catch (err) {
     return null;
   }
+}
+
+function openLoginModal() {
+  closeFloating();
+  $('#authModal')?.remove();
+  const modalHtml = `
+    <div class="overlay" id="authModal">
+      <div class="modal">
+        <h3>Sign In to Kathir Studios</h3>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Login to sync your daily work log and chat.</p>
+        <div id="authErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+        <form id="loginForm">
+          <div class="field">
+            <label>Username or Email</label>
+            <input type="text" id="authUsername" required placeholder="e.g. kathir" autofocus />
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input type="password" id="authPassword" required placeholder="••••••••" />
+          </div>
+          <div class="modal-actions" style="margin-top:16px">
+            <button type="button" class="btn flat" onclick="document.getElementById('authModal').remove()">Cancel</button>
+            <button type="button" class="btn flat" onclick="openRegisterModal()" style="color:var(--gold)">Register</button>
+            <button type="submit" class="btn primary">Sign In</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  $('#loginForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const username = $('#authUsername').value.trim();
+    const password = $('#authPassword').value;
+    const errBox = $('#authErr');
+    errBox.style.display = 'none';
+    const res = await fetch(`${API_BASE}/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errBox.textContent = data.error || 'Login failed. Please check your credentials.';
+      errBox.style.display = 'block';
+      return;
+    }
+    AUTH_TOKEN = data.token;
+    localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+    ME = data.user.username.toLowerCase();
+    localStorage.setItem('kathir_auth_user', ME);
+    if (!PEOPLE[ME]) {
+      PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: data.user.availability || 'available', mode: data.user.mode || 'office' };
+    } else {
+      PEOPLE[ME].name = data.user.name;
+      PEOPLE[ME].role = data.user.role;
+    }
+    $('#authModal').remove();
+    toast(`Welcome, ${data.user.name}!`);
+    refreshSide();
+    rerender();
+  };
+}
+
+function openRegisterModal() {
+  closeFloating();
+  $('#authModal')?.remove();
+  const modalHtml = `
+    <div class="overlay" id="authModal">
+      <div class="modal">
+        <h3>Create New Account</h3>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Register a new studio member profile.</p>
+        <div id="authErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+        <form id="regForm">
+          <div class="field">
+            <label>Full Name</label>
+            <input type="text" id="regName" required placeholder="e.g. Karthik Raja" />
+          </div>
+          <div class="field">
+            <label>Username</label>
+            <input type="text" id="regUsername" required placeholder="e.g. karthik" />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="regEmail" placeholder="name@company.com" />
+          </div>
+          <div class="field">
+            <label>Role / Title</label>
+            <input type="text" id="regRole" placeholder="e.g. Full Stack Developer" value="Developer" />
+          </div>
+          <div class="field">
+            <label>Password (min 6 chars)</label>
+            <input type="password" id="regPassword" required minlength="6" placeholder="••••••••" />
+          </div>
+          <div class="modal-actions" style="margin-top:16px">
+            <button type="button" class="btn flat" onclick="document.getElementById('authModal').remove()">Cancel</button>
+            <button type="button" class="btn flat" onclick="openLoginModal()" style="color:var(--gold)">Sign In</button>
+            <button type="submit" class="btn primary">Register</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  $('#regForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $('#regName').value.trim();
+    const username = $('#regUsername').value.trim().toLowerCase();
+    const email = $('#regEmail').value.trim();
+    const role = $('#regRole').value.trim();
+    const password = $('#regPassword').value;
+    const errBox = $('#authErr');
+    errBox.style.display = 'none';
+    const res = await fetch(`${API_BASE}/auth/register/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, username, email, role, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errBox.textContent = data.error || 'Registration failed.';
+      errBox.style.display = 'block';
+      return;
+    }
+    AUTH_TOKEN = data.token;
+    localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+    ME = data.user.username.toLowerCase();
+    localStorage.setItem('kathir_auth_user', ME);
+    PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: 'available', mode: 'office' };
+    TITLES[ME] = data.user.role;
+    $('#authModal').remove();
+    toast(`Account created! Welcome, ${data.user.name}!`);
+    refreshSide();
+    rerender();
+  };
+}
+
+function handleLogout() {
+  closeFloating();
+  fetch(`${API_BASE}/auth/logout/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(AUTH_TOKEN ? { 'Authorization': `Token ${AUTH_TOKEN}` } : {}) }
+  }).catch(() => {});
+  AUTH_TOKEN = null;
+  localStorage.removeItem('kathir_auth_token');
+  localStorage.removeItem('kathir_auth_user');
+  ME = 'kathir';
+  toast('Signed out successfully');
+  refreshSide();
+  rerender();
 }
 
 async function apiPatchMember(id, patchData) {
@@ -1103,6 +1266,20 @@ async function apiSendMessage(chatId, messageData) {
 }
 
 async function loadInitialData() {
+  if (AUTH_TOKEN) {
+    const meRes = await fetchFromAPI('/auth/me/');
+    if (meRes && meRes.authenticated && meRes.user) {
+      ME = meRes.user.username.toLowerCase();
+      localStorage.setItem('kathir_auth_user', ME);
+      if (!PEOPLE[ME]) {
+        PEOPLE[ME] = { name: meRes.user.name, role: meRes.user.role, availability: meRes.user.availability, mode: meRes.user.mode };
+      }
+    } else if (meRes && !meRes.authenticated) {
+      AUTH_TOKEN = null;
+      localStorage.removeItem('kathir_auth_token');
+    }
+  }
+
   const [apiMembers, apiProjects, apiLogs, apiChats] = await Promise.all([
     fetchFromAPI('/members/'),
     fetchFromAPI('/projects/'),
@@ -1120,6 +1297,9 @@ async function loadInitialData() {
         PEOPLE[m.id].availability = m.availability || PEOPLE[m.id].availability;
         PEOPLE[m.id].mode = m.mode || PEOPLE[m.id].mode;
         if (m.today) PEOPLE[m.id].today = m.today;
+      } else {
+        PEOPLE[m.id] = { name: m.name, role: m.role, availability: m.availability, mode: m.mode };
+        TITLES[m.id] = m.role;
       }
     });
     updated = true;
@@ -1157,14 +1337,21 @@ async function loadInitialData() {
     updated = true;
   }
 
+  refreshSide();
   if (updated) {
-    refreshSide();
     rerender();
   }
 }
 
 /* ---------------- Boot ---------------- */
-function refreshSide() { $('#sideAvatar').innerHTML = avatarSVG(ME); }
+function refreshSide() {
+  const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'Kathir', role: 'Administrator' };
+  $('#sideAvatar').innerHTML = avatarSVG(ME);
+  const info = $('#sideUser > div');
+  if (info) {
+    info.innerHTML = `<div class="name">${esc(currentPerson.name)}</div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Member')}</div>`;
+  }
+}
 hydrateIcons();
 refreshSide();
 window.addEventListener('hashchange', route);
