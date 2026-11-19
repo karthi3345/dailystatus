@@ -1866,11 +1866,10 @@ function openProfile(id, anchor) {
     el.innerHTML = `
       <div class="pop-head">
         ${av(personId, 's64')}
-        <div>
-          <div class="n" style="display:flex;align-items:center;gap:6px">
+        <div style="min-width:0;flex:1">
+          <div class="n" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
             <span>${esc(P.name)} (You)</span>
             <span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>
-            ${P.availability === 'absent' ? `<span class="user-absent-badge" title="Absent Today">${icon('slashCircle', 'xs')}<span>Absent</span></span>` : ''}
           </div>
           <div class="r">${TITLES[personId] || P.role || 'Member'}</div>
           ${availBadge(personId)}
@@ -1888,11 +1887,10 @@ function openProfile(id, anchor) {
     el.innerHTML = `
       <div class="pop-head">
         ${av(personId, 's64')}
-        <div>
-          <div class="n" style="display:flex;align-items:center;gap:6px">
+        <div style="min-width:0;flex:1">
+          <div class="n" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
             <span>${esc(P.name)}</span>
             <span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>
-            ${P.availability === 'absent' ? `<span class="user-absent-badge" title="Absent Today">${icon('slashCircle', 'xs')}<span>Absent</span></span>` : ''}
           </div>
           <div class="r">${TITLES[personId] || P.role || 'Member'}</div>
           ${availBadge(personId)}
