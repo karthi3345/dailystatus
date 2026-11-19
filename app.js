@@ -2036,13 +2036,8 @@ function openJiraTaskModal(p, task, isNew = false) {
               <div class="jira-sec-head">${icon('chevDown', 'xs')} Description</div>
               <div class="jira-desc-box">
                 <textarea class="jira-desc-area" id="jiraDescArea" placeholder="Add a description...">${esc(task.desc || '')}</textarea>
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;flex-wrap:wrap">
-                  <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 10px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);border-radius:6px;font-size:11.5px;color:var(--text-2);max-width:100%;overflow:hidden">
-                    <svg class="ic xs" viewBox="0 0 24 24" style="color:#60a5fa;flex:none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#93c5fd;font-family:monospace">https://theswipewire.slack.com/archives/C07TGQR032M/p1731037071973119</span>
-                    <button type="button" class="btn-xs" style="background:#2563eb;color:#fff;border-radius:5px;padding:3px 8px;font-size:10.5px;font-weight:600;flex:none;cursor:pointer">Connect Slack to update</button>
-                  </div>
-                  <button type="button" class="btn-xs gold" id="jiraSaveDescBtn" style="padding:4px 12px;margin-left:auto">Save</button>
+                <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:6px">
+                  <button type="button" class="btn-xs gold" id="jiraSaveDescBtn" style="padding:4px 12px">Save</button>
                 </div>
               </div>
             </div>
@@ -2136,13 +2131,7 @@ function openJiraTaskModal(p, task, isNew = false) {
                     ${av(ME || 'raja', 's32')}
                     <textarea id="jiraCommentInput" placeholder="Add a comment..."></textarea>
                   </div>
-                  <div class="jira-pills-row">
-                    <button type="button" class="jira-pill-btn" data-insert-pill="[Status update]: Working on this...">Status update...</button>
-                    <button type="button" class="jira-pill-btn" data-insert-pill="Thanks for the update!">Thanks...</button>
-                    <button type="button" class="jira-pill-btn" data-insert-pill="Looks good, approved.">Agree...</button>
-                    <button type="button" class="jira-pill-btn" data-insert-pill="[Blocker]: Need assistance with dependencies.">Blocker...</button>
-                  </div>
-                  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px">
+                  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:6px">
                     <button type="button" class="btn gold" id="jiraSaveCommentBtn" style="height:30px;padding:0 12px;font-size:12px">Save Comment</button>
                   </div>
                 </div>
@@ -2226,26 +2215,14 @@ function openJiraTaskModal(p, task, isNew = false) {
 
           <!-- Right Column (Sidebar / Details) -->
           <div class="jira-side">
-            <!-- Top action row: Status + Agents + Automations -->
-            <div style="display:flex;gap:6px;align-items:center">
-              <select class="jira-status-select ${task.status}" id="jiraStatusSelect" style="flex:1">
-                <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>To Do ⌄</option>
-                <option value="progress" ${task.status === 'progress' || task.status === 'review' ? 'selected' : ''}>In Progress ⌄</option>
-                <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done ⌄</option>
+            <!-- Top action row: Status -->
+            <div>
+              <select class="jira-status-select ${task.status}" id="jiraStatusSelect" style="width:100%">
+                <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>To Do</option>
+                <option value="progress" ${task.status === 'progress' || task.status === 'review' ? 'selected' : ''}>In Progress</option>
+                <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done</option>
               </select>
-              <button type="button" class="jira-top-btn" id="jiraAgentsTopBtn" title="Agent Workflows" style="height:34px;padding:0 8px;font-size:11.5px;display:flex;align-items:center;gap:4px">
-                <svg class="ic xs" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="2 17 12 22 22 17" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="2 12 12 17 22 12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-                <span>Agents</span>
-              </button>
-              <button type="button" class="jira-top-btn" id="jiraAutomationsTopBtn" title="Automations" style="height:34px;padding:0 9px;font-size:13px;color:var(--gold)">
-                ⚡
-              </button>
             </div>
-
-            <!-- Improve Task AI Button -->
-            <button type="button" class="btn" id="jiraImproveTaskBtn" style="width:100%;height:34px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px">
-              <span style="color:var(--gold)">✦</span> Improve Task
-            </button>
 
             <!-- Details Card -->
             <div class="jira-details-card">
@@ -2270,49 +2247,6 @@ function openJiraTaskModal(p, task, isNew = false) {
                 <div class="jira-field-val">
                   ${av(task.reporter, 's22')}
                   <span style="font-size:12.5px;font-weight:500">${esc(reporterName)}</span>
-                </div>
-              </div>
-
-              <!-- Approver (Team Lead Sign-off) -->
-              <div class="jira-field-row">
-                <span class="jira-field-label">Approver</span>
-                <div class="jira-field-val">
-                  ${av(task.approver || 'raja', 's22')}
-                  <select class="select" id="jiraApproverSelect" style="height:30px;font-size:12px;flex:1">
-                    ${members.map(id => `<option value="${id}" ${id === (task.approver || 'raja') ? 'selected' : ''}>${esc((PEOPLE[id] && PEOPLE[id].name) || id)} (${esc((PEOPLE[id] && PEOPLE[id].role) || 'Lead')})</option>`).join('')}
-                  </select>
-                </div>
-              </div>
-
-              <!-- Lead Approval Status & Actions -->
-              <div class="jira-field-row" style="align-items:flex-start">
-                <span class="jira-field-label" style="margin-top:4px">Lead Approval</span>
-                <div style="flex:1;display:flex;flex-direction:column;gap:6px">
-                  ${task.approval_status === 'approved' ? `
-                    <div style="background:rgba(91,220,142,.12);border:1px solid rgba(91,220,142,.35);padding:6px 10px;border-radius:6px;font-size:11.5px;color:#5bdc8e;display:flex;align-items:center;justify-content:space-between">
-                      <span style="font-weight:600">✓ Approved by ${(PEOPLE[task.approved_by] && PEOPLE[task.approved_by].name) || task.approved_by || (PEOPLE[task.approver] && PEOPLE[task.approver].name) || 'Team Lead'}</span>
-                      <span class="muted" style="font-size:10.5px">${task.approved_at || 'Verified'}</span>
-                    </div>
-                  ` : task.approval_status === 'rejected' ? `
-                    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);padding:6px 10px;border-radius:6px;font-size:11.5px;color:#ff5c5c">
-                      <div style="font-weight:600">✕ Changes Requested by ${(PEOPLE[task.approved_by] && PEOPLE[task.approved_by].name) || task.approved_by || 'Lead'}</div>
-                      <button type="button" class="btn ok" id="jiraApproveTaskBtn" style="height:26px;font-size:11px;margin-top:4px;width:100%;display:flex;align-items:center;justify-content:center;gap:4px">
-                        ${icon('check', 'xs')} Approve Work (Team Lead)
-                      </button>
-                    </div>
-                  ` : `
-                    <div style="display:flex;flex-direction:column;gap:5px">
-                      <span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);padding:3px 8px;font-size:11px;width:fit-content">⏳ Awaiting Lead Approval</span>
-                      <div style="display:flex;gap:4px">
-                        <button type="button" class="btn ok" id="jiraApproveTaskBtn" style="height:28px;font-size:11.5px;flex:1;display:flex;align-items:center;justify-content:center;gap:4px">
-                          ${icon('check', 'xs')} Approve
-                        </button>
-                        <button type="button" class="btn" id="jiraRejectTaskBtn" style="height:28px;font-size:11.5px;color:#ff6b6b;border-color:rgba(239,68,68,.3);display:flex;align-items:center;justify-content:center;gap:4px">
-                          ${icon('x', 'xs')} Reject
-                        </button>
-                      </div>
-                    </div>
-                  `}
                 </div>
               </div>
 
@@ -2351,23 +2285,6 @@ function openJiraTaskModal(p, task, isNew = false) {
                 <div class="jira-field-val">
                   <input type="date" id="jiraDueInput" value="${task.due || ''}" style="height:30px;font-size:11.5px;flex:1" />
                 </div>
-              </div>
-              <div style="font-size:11px;color:var(--text-2);background:rgba(255,255,255,.025);padding:6px 10px;border-radius:6px;line-height:1.45;border-left:3px solid var(--gold);margin-top:2px">
-                <b>📅 Scheduled Date Rule:</b><br>
-                • <b>November 19:</b> Status shows as <span style="color:var(--gold);font-weight:600">⏳ In Progress</span><br>
-                • <b>November 20:</b> Status automatically shows as <span style="color:#5bdc8e;font-weight:600">✅ Completed</span>
-              </div>
-            </div>
-
-            <!-- Automation & Checklist Accordions -->
-            <div class="jira-details-card" style="padding:10px 14px;gap:8px">
-              <div id="jiraAutomationRow" style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
-                <span>› Automation ⚡</span>
-                <span class="muted" style="font-size:11px">Rule executions</span>
-              </div>
-              <div id="jiraChecklistRow" style="font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
-                <span>› Checklist ☑</span>
-                <span class="badge ok" style="font-size:10px">${chkDone}/${chkTotal}</span>
               </div>
             </div>
 
@@ -2486,25 +2403,6 @@ function openJiraTaskModal(p, task, isNew = false) {
       return;
     }
 
-    // Improve Task AI button
-    if (e.target.closest('#jiraImproveTaskBtn')) {
-      toast('AI Assistant improving task...');
-      if (!task.desc) {
-        task.desc = `Objective: ${task.title || 'Implement project requirement'}\n\nAcceptance Criteria:\n1. Verify edge case handling and responsiveness.\n2. Ensure proper authentication & permission checks.\n3. Validate unit & integration test coverage.`;
-      }
-      if (!task.checklist.length) {
-        task.checklist.push(
-          { text: 'Analyze technical requirements & architecture', done: false },
-          { text: 'Implement core functionality & error states', done: false },
-          { text: 'Verify QA testing & lead sign-off', done: false }
-        );
-      }
-      await saveTask();
-      renderModal();
-      toast('✦ Task improved with AI suggestions!');
-      return;
-    }
-
     // Start work / Agent sessions
     if (e.target.closest('#jiraStartWorkBtn')) {
       task.status = 'progress';
@@ -2517,18 +2415,6 @@ function openJiraTaskModal(p, task, isNew = false) {
     // Top Agents button
     if (e.target.closest('#jiraAgentsTopBtn')) {
       toast(`⬡ AI Agent session connected to [${task.key}]`);
-      return;
-    }
-
-    // Automations trigger / row
-    if (e.target.closest('#jiraAutomationsTopBtn') || e.target.closest('#jiraAutomationRow')) {
-      toast('⚡ Automation Rules: Lead Approval + Date Sync + Auto-Progress Active');
-      return;
-    }
-
-    // Checklist row click
-    if (e.target.closest('#jiraChecklistRow')) {
-      ov.querySelector('#jiraSubtaskInp')?.focus();
       return;
     }
 
@@ -2679,30 +2565,6 @@ function openJiraTaskModal(p, task, isNew = false) {
       return;
     }
 
-    // Lead Approve Task
-    if (e.target.closest('#jiraApproveTaskBtn')) {
-      task.approval_status = 'approved';
-      task.approved_by = ME || 'raja';
-      task.approved_at = `${nowTime()}, today`;
-      await saveTask();
-      renderModal();
-      rerender();
-      toast(`Task approved by Team Lead (${(PEOPLE[task.approved_by] && PEOPLE[task.approved_by].name) || task.approved_by})! ✅`);
-      return;
-    }
-
-    // Lead Reject / Request Changes Task
-    if (e.target.closest('#jiraRejectTaskBtn')) {
-      task.approval_status = 'rejected';
-      task.approved_by = ME || 'raja';
-      task.approved_at = `${nowTime()}, today`;
-      await saveTask();
-      renderModal();
-      rerender();
-      toast(`Changes requested by Team Lead! ✕`);
-      return;
-    }
-
     // Delete issue
     if (e.target.closest('#jiraDeleteTaskBtn') || e.target.closest('#jiraMenuBtn')) {
       if (confirm(`Delete issue ${task.key}: "${task.title}"?`)) {
@@ -2733,15 +2595,6 @@ function openJiraTaskModal(p, task, isNew = false) {
       await saveTask();
       renderModal();
       toast(`Reassigned to ${(PEOPLE[task.assignee] && PEOPLE[task.assignee].name) || task.assignee}`);
-      return;
-    }
-
-    // Approver change
-    if (e.target.id === 'jiraApproverSelect') {
-      task.approver = e.target.value;
-      await saveTask();
-      renderModal();
-      toast(`Approver set to ${(PEOPLE[task.approver] && PEOPLE[task.approver].name) || task.approver}`);
       return;
     }
 
