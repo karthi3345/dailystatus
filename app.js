@@ -50,6 +50,7 @@ const ICONS = {
   hourglass: '<path d="M6 2h12M6 22h12M7 2v4a5 5 0 0 0 10 0V2M7 22v-4a5 5 0 0 1 10 0v4"/>',
   checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
   pendingSq: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7v5l3 2"/>',
+  slashCircle: '<circle cx="12" cy="12" r="10"/><line x1="5" y1="5" x2="19" y2="19"/>',
 };
 const PLAY = '<svg class="ic" viewBox="0 0 24 24"><path class="fill" d="M7 4.5v15l13-7.5z"/></svg>';
 const PAUSE = '<svg class="ic" viewBox="0 0 24 24"><rect class="fill" x="6" y="4.5" width="4" height="15" rx="1"/><rect class="fill" x="14" y="4.5" width="4" height="15" rx="1"/></svg>';
@@ -111,6 +112,7 @@ const AVAIL = {
   meeting:   { label: 'In a Meeting', cls: 'meeting' },
   away:      { label: 'Away (1 hr)', short: 'Away', cls: 'away' },
   dnd:       { label: 'Do Not Disturb', cls: 'dnd' },
+  absent:    { label: 'Absent Today', short: 'Absent', cls: 'absent' },
 };
 const MODES = {
   office: { label: 'Office', long: 'Work from Office', icon: 'building' },
@@ -188,7 +190,9 @@ const userModeIcon = (id, cls = 'xs') => {
   const p = id ? PEOPLE[id] : null;
   const modeKey = (p && p.mode) || 'office';
   const m = MODES[modeKey] || MODES['office'];
-  return `<span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, cls)}</span>`;
+  const isAbsent = p && p.availability === 'absent';
+  const absentHtml = isAbsent ? `<span class="user-absent-ic" title="Absent Today">${icon('slashCircle', cls)}</span>` : '';
+  return `<span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, cls)}</span>${absentHtml}`;
 };
 function ring(pct, size = 118, stroke = 12, color = 'url(#ringGrad)') {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
@@ -415,13 +419,18 @@ function tabTasks(p) {
 }
 
 function tabTeam(p) {
-  const counts = MEMBER_ROWS.reduce((a, id) => { a[PEOPLE[id].availability]++; return a; }, { available: 0, meeting: 0, away: 0, dnd: 0 });
-  const avg = p.avgWorkload ?? Math.round(MEMBER_ROWS.reduce((a, id) => a + (p.workload[id] || 0), 0) / MEMBER_ROWS.length);
+  const counts = MEMBER_ROWS.reduce((a, id) => {
+    const st = PEOPLE[id]?.availability || 'available';
+    a[st] = (a[st] || 0) + 1;
+    return a;
+  }, { available: 0, meeting: 0, away: 0, dnd: 0, absent: 0 });
+  const avg = p.avgWorkload ?? Math.round(MEMBER_ROWS.reduce((a, id) => a + (p.workload[id] || 0), 0) / (MEMBER_ROWS.length || 1));
   return `
   <div class="team-stats">
     <div class="card stat"><span class="stat-ic" style="color:var(--gold)">${icon('users', 'lg')}</span><div><div class="stat-num">${MEMBER_ROWS.length}</div><div class="stat-label">Team Members</div></div></div>
-    <div class="card stat"><span class="stat-ic" style="color:var(--green)"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="currentColor"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1z" fill="currentColor"/></svg></span><div><div class="stat-num">${counts.available}</div><div class="stat-label">Available</div></div></div>
-    <div class="card stat"><span class="stat-ic" style="background:var(--gold);color:#3d2a05;border-radius:50%;width:30px;height:30px">${icon('message', 'sm')}</span><div><div class="stat-num">${counts.meeting}</div><div class="stat-label">In a Meeting</div></div></div>
+    <div class="card stat"><span class="stat-ic" style="color:var(--green)"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="currentColor"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1z" fill="currentColor"/></svg></span><div><div class="stat-num">${counts.available || 0}</div><div class="stat-label">Available</div></div></div>
+    <div class="card stat"><span class="stat-ic" style="background:var(--gold);color:#3d2a05;border-radius:50%;width:30px;height:30px">${icon('message', 'sm')}</span><div><div class="stat-num">${counts.meeting || 0}</div><div class="stat-label">In a Meeting</div></div></div>
+    <div class="card stat"><span class="stat-ic" style="color:#fb7185"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="currentColor" stroke-width="2"/></svg></span><div><div class="stat-num">${counts.absent || 0}</div><div class="stat-label">Absent</div></div></div>
     <div class="card stat" style="flex-direction:column;align-items:stretch;gap:6px"><div><div class="stat-num">${avg}%</div><div class="stat-label">Avg. Workload</div></div><div class="bar"><i style="width:${avg}%"></i></div></div>
     <button class="btn gold" data-action="invite">${icon('user', 'sm')} Invite Member</button>
   </div>
@@ -683,7 +692,7 @@ function renderMessenger() {
   const list = chats.filter(c => !q || c.name.toLowerCase().includes(q) || (c.msgs && c.msgs.some(m => (m.text || '').toLowerCase().includes(q))));
   const c = chats.find(x => x.id === state.chatId) || chats[0];
   if (c) c.unread = 0;
-  const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person]?.availability === 'available' ? '<i class="online"></i>' : '') : `<span class="group-av">${icon('users', 'sm')}</span>`;
+  const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person]?.availability === 'available' ? '<i class="online"></i>' : (PEOPLE[ch.person]?.availability === 'absent' ? '<i class="absent-dot"></i>' : '')) : `<span class="group-av">${icon('users', 'sm')}</span>`;
   const preview = ch => { const m = lastMsg(ch); const who = m.from === ME ? 'You' : ((PEOPLE[m.from]?.name) || m.from || 'User'); return ch.kind === 'dm' ? esc((m.text || '').split('\n')[0]) : `${who}: ${esc((m.text || '').split('\n')[0])}`; };
   return `<section class="view">
     <div class="page-head" style="margin-bottom:16px">
@@ -826,7 +835,7 @@ function openProfile(id, anchor) {
   const el = document.createElement('div');
   el.className = 'pop';
   el.innerHTML = `
-    <div class="pop-head">${av(personId, 's64')}<div><div class="n" style="display:flex;align-items:center;gap:6px"><span>${esc(P.name)}</span><span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span></div><div class="r">${TITLES[personId] || P.role || 'Member'}</div>${availBadge(personId)}</div></div>
+    <div class="pop-head">${av(personId, 's64')}<div><div class="n" style="display:flex;align-items:center;gap:6px"><span>${esc(P.name)}</span><span class="user-mode-badge" title="${esc(mInfo.long)}">${icon(mInfo.icon, 'xs')}<span>${mInfo.label}</span></span>${P.availability === 'absent' ? `<span class="user-absent-badge" title="Absent Today">${icon('slashCircle', 'xs')}<span>Absent</span></span>` : ''}</div><div class="r">${TITLES[personId] || P.role || 'Member'}</div>${availBadge(personId)}</div></div>
     <h5>Availability</h5>
     ${Object.entries(AVAIL).map(([k, a]) => `<button class="opt ${P.availability === k ? 'on' : ''}" data-set-avail="${k}"><i class="sdot ${a.cls}"></i>${a.short || a.label}<span class="tick">${icon('check', 'sm')}</span></button>`).join('')}
     <div class="sep"></div>

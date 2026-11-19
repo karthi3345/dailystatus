@@ -200,6 +200,7 @@ svg { display: block; }
 .badge.avail.meeting { background: var(--gold-dim); color: var(--gold-2); }
 .badge.avail.away { background: var(--red-dim); color: #ff8f8f; }
 .badge.avail.dnd { background: rgba(255,255,255,.07); color: #c8c8cf; }
+.badge.avail.absent { background: rgba(244,63,94,.18); color: #fb7185; border: 1px solid rgba(244,63,94,.32); }
 .badge.clickable:hover { filter: brightness(1.2); }
 
 /* ---------- Progress bars ---------- */
@@ -431,6 +432,10 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 .pop-head .r { font-size: 13px; color: var(--text-2); margin: 2px 0 6px; }
 .user-mode-ic { display: inline-flex; align-items: center; justify-content: center; color: var(--gold); vertical-align: middle; margin-left: 5px; flex-shrink: 0; }
 .user-mode-badge { display: inline-flex; align-items: center; gap: 4px; color: var(--gold); background: rgba(245,184,46,.15); border: 1px solid rgba(245,184,46,.25); padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 500; line-height: 1.2; vertical-align: middle; }
+.user-absent-ic { display: inline-flex; align-items: center; justify-content: center; color: #fb7185; background: rgba(244,63,94,.16); border-radius: 4px; padding: 1px 3px; margin-left: 3px; vertical-align: middle; flex-shrink: 0; }
+.user-absent-ic svg { width: 12px; height: 12px; }
+.user-absent-badge { display: inline-flex; align-items: center; gap: 4px; color: #fb7185; background: rgba(244,63,94,.16); border: 1px solid rgba(244,63,94,.32); padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 500; line-height: 1.2; vertical-align: middle; }
+.absent-dot { position: absolute; right: 0; bottom: 0; width: 10px; height: 10px; border-radius: 50%; background: #f43f5e; border: 2px solid var(--bg); }
 .pop h5 { font-size: 14px; font-weight: 600; padding: 14px 4px 8px; }
 .pop .sep { border-top: 1px solid var(--line); margin-top: 8px; }
 .opt { display: flex; align-items: center; gap: 14px; width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; text-align: left; color: var(--text); }
@@ -443,6 +448,23 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 .sdot.meeting { background: var(--gold); }
 .sdot.away { background: var(--red); }
 .sdot.dnd { background: #8e8e96; }
+.sdot.absent {
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244,63,94,.6);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sdot.absent::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 2px;
+  background: #ffffff;
+  border-radius: 1px;
+  transform: rotate(-45deg);
+}
 
 /* ---------- Menus / modal / toast ---------- */
 .menu { position: fixed; z-index: 60; min-width: 170px; padding: 6px; border-radius: 10px; background: #1d1d22; border: 1px solid var(--line-2); box-shadow: var(--shadow); }
