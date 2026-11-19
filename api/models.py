@@ -21,6 +21,8 @@ class Project(models.Model):
     status = models.CharField(max_length=30, default='progress')
     start = models.CharField(max_length=50, default='2026-01-01', blank=True)
     end = models.CharField(max_length=50, default='', blank=True)
+    owner = models.CharField(max_length=50, blank=True, default='')
+    created_by = models.CharField(max_length=50, blank=True, default='')
     team = models.JSONField(default=list)
     extra = models.IntegerField(default=0)
     totals = models.JSONField(default=dict)

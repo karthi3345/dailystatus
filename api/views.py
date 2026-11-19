@@ -256,16 +256,39 @@ class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
 
     def get_queryset(self):
-        return Project.objects.all().order_by('id')
+        user = self.request.user
+        member_param = self.request.query_params.get('member')
+        user_id = (user.username.lower() if (user and user.is_authenticated) else (member_param or '')).lower().strip()
+
+        qs = Project.objects.all().order_by('id')
+        if not user_id:
+            return qs
+
+        accessible_ids = []
+        for p in qs:
+            owner = (p.owner or p.created_by or '').lower().strip()
+            team = [str(m).lower().strip() for m in (p.team or [])]
+            if not owner or owner == user_id or user_id in team:
+                accessible_ids.append(p.id)
+        return qs.filter(id__in=accessible_ids)
 
     def perform_create(self, serializer):
-        project = serializer.save()
-        group_id = f"proj-grp-{project.id}"
-        group_name = project.name
-        creator = self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin'
+        creator = (
+            (self.request.user.username.lower() if self.request.user and self.request.user.is_authenticated else '')
+            or self.request.data.get('owner')
+            or self.request.data.get('created_by')
+            or 'admin'
+        ).lower().strip()
+
+        project = serializer.save(owner=creator, created_by=creator)
         members = list(project.team or [])
         if creator not in members:
             members.append(creator)
+            project.team = members
+            project.save(update_fields=['team'])
+
+        group_id = f"proj-grp-{project.id}"
+        group_name = project.name
 
         thread, created = ChatThread.objects.get_or_create(
             id=group_id,
@@ -289,6 +312,27 @@ class ProjectViewSet(viewsets.ModelViewSet):
         broadcast_global_event('project_created', {
             'id': project.id,
             'name': project.name,
+            'owner': project.owner,
+            'team': project.team,
+            'status': project.status
+        })
+
+    def perform_update(self, serializer):
+        project = serializer.save()
+        # Keep project group chat members in sync with project team
+        group_id = f"proj-grp-{project.id}"
+        thread = ChatThread.objects.filter(id=group_id).first()
+        if thread:
+            members = list(project.team or [])
+            if project.owner and project.owner not in members:
+                members.append(project.owner)
+            thread.members = members
+            thread.save(update_fields=['members'])
+        broadcast_global_event('project_updated', {
+            'id': project.id,
+            'name': project.name,
+            'owner': project.owner,
+            'team': project.team,
             'status': project.status
         })
 
@@ -573,11 +617,33 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
 class ChatThreadsView(APIView):
     """Returns all chat threads grouped with their messages, and allows creating new groups or DMs."""
     def get(self, request):
+        user = request.user
+        member_param = request.query_params.get('member')
+        user_id = (user.username.lower() if (user and user.is_authenticated) else (member_param or '')).lower().strip()
+
         threads = ChatThread.objects.all().order_by('created_at')
         result = []
         seen_dm_persons = {}
 
         for t in threads:
+            if user_id:
+                if t.kind == 'dm':
+                    t_members = [str(x).lower().strip() for x in (t.members or [])]
+                    if t_members and user_id not in t_members and (t.person or '').lower().strip() != user_id:
+                        continue
+                elif t.kind == 'group':
+                    creator = (t.created_by or '').lower().strip()
+                    m_lower = [str(x).lower().strip() for x in (t.members or [])]
+                    has_proj_access = False
+                    if t.project:
+                        proj = Project.objects.filter(id=t.project).first()
+                        if proj:
+                            p_owner = (proj.owner or proj.created_by or '').lower().strip()
+                            p_team = [str(x).lower().strip() for x in (proj.team or [])]
+                            if not p_owner or p_owner == user_id or user_id in p_team:
+                                has_proj_access = True
+                    if creator and creator != user_id and user_id not in m_lower and not has_proj_access:
+                        continue
             msgs = ChatMessage.objects.filter(chat_id=t.id).order_by('created_at')
             m_list = []
             for m in msgs:
@@ -749,6 +815,13 @@ class AddChatMemberView(APIView):
             return Response({'error': 'Group chat not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         data = request.data
+        user_id = (request.user.username.lower() if request.user and request.user.is_authenticated else (data.get('user') or '')).lower().strip()
+        proj_id = thread.project or (thread.id.replace('proj-grp-', '') if thread.id.startswith('proj-grp-') else None)
+        if proj_id:
+            proj = Project.objects.filter(id=proj_id).first()
+            if proj and proj.owner and user_id and proj.owner.lower() != user_id:
+                return Response({'error': f'Only the Project Owner (@{proj.owner}) can add members to this project and its group.'}, status=status.HTTP_403_FORBIDDEN)
+
         member_id = data.get('member_id')
         member_ids = data.get('member_ids') or ([member_id] if member_id else [])
 
@@ -765,6 +838,16 @@ class AddChatMemberView(APIView):
 
         thread.members = current_members
         thread.save()
+
+        if proj_id:
+            proj = Project.objects.filter(id=proj_id).first()
+            if proj:
+                proj_team = list(proj.team or [])
+                for mid in added:
+                    if mid not in proj_team:
+                        proj_team.append(mid)
+                proj.team = proj_team
+                proj.save(update_fields=['team'])
 
         creator = request.user.username.lower() if (request.user and request.user.is_authenticated) else 'kathir'
         creator_name = Member.objects.filter(id=creator).first()

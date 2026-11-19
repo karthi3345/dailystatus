@@ -204,6 +204,49 @@ const workLogs = (cachedInitialWorkLogs && cachedInitialWorkLogs.length)
   ? cachedInitialWorkLogs
   : [];
 
+/* ---------------- Project & Group Ownership and Access Control ---------------- */
+function isProjectOwner(p, userId = ME) {
+  if (!p) return false;
+  const uid = (userId || '').toLowerCase().trim();
+  const owner = (p.owner || p.created_by || '').toLowerCase().trim();
+  return Boolean(owner && owner === uid);
+}
+
+function canAccessProject(p, userId = ME) {
+  if (!p) return false;
+  const uid = (userId || '').toLowerCase().trim();
+  const owner = (p.owner || p.created_by || '').toLowerCase().trim();
+  if (owner && owner === uid) return true;
+  const team = Array.isArray(p.team) ? p.team.map(m => String(m).toLowerCase().trim()) : [];
+  if (team.includes(uid)) return true;
+  // If project has no owner or team set yet (legacy), fallback to true
+  if (!owner && team.length === 0) return true;
+  return false;
+}
+
+function canAccessChat(c, userId = ME) {
+  if (!c) return false;
+  const uid = (userId || '').toLowerCase().trim();
+  if (c.kind === 'dm') {
+    const p = (c.person || '').toLowerCase().trim();
+    if (p === uid) return false;
+    const mList = Array.isArray(c.memberList) ? c.memberList.map(x => String(x).toLowerCase().trim()) : [];
+    if (mList.length && !mList.includes(uid) && p !== uid) return false;
+    return true;
+  }
+  // Group Channel
+  const creator = (c.created_by || '').toLowerCase().trim();
+  if (creator && creator === uid) return true;
+  const mList = Array.isArray(c.memberList || c.members) ? (c.memberList || c.members).map(x => String(x).toLowerCase().trim()) : [];
+  if (mList.includes(uid)) return true;
+  // If project group channel, check project membership
+  if (c.project) {
+    const proj = projects.find(x => x.id === c.project);
+    if (proj) return canAccessProject(proj, uid);
+  }
+  return false;
+}
+
 function getTaskEffectiveStatus(t, curDate = state.currentDate || state.logDate || isoDate(new Date())) {
   if (!t) return 'pending';
   // Respect custom column statuses
@@ -466,10 +509,11 @@ const go = h => { if (location.hash === h) rerender(); else location.hash = h; }
 
 /* ---------------- Projects screen ---------------- */
 function renderProjects() {
-  const c = { all: projects.length, progress: 0, done: 0, hold: 0 };
-  projects.forEach(p => { if (p.status === 'progress' || p.status === 'review') c.progress++; else c[p.status]++; });
+  const visibleProjects = projects.filter(p => canAccessProject(p, ME));
+  const c = { all: visibleProjects.length, progress: 0, done: 0, hold: 0 };
+  visibleProjects.forEach(p => { if (p.status === 'progress' || p.status === 'review') c.progress++; else c[p.status]++; });
   const q = state.projectQuery.toLowerCase();
-  const list = projects.filter(p =>
+  const list = visibleProjects.filter(p =>
     (!q || p.name.toLowerCase().includes(q) || p.type.toLowerCase().includes(q)) &&
     (state.projectFilter === 'all' || (state.projectFilter === 'progress' ? ['progress', 'review'].includes(p.status) : p.status === state.projectFilter)));
   const statTile = (key, ic, num, label) => `
@@ -494,22 +538,29 @@ function renderProjects() {
       ${list.length ? list.map(projectRow).join('') : `
         <div class="card empty" style="padding:48px 24px;text-align:center">
           <div style="font-size:36px;margin-bottom:12px">📁</div>
-          <h3 style="font-size:16px;font-weight:600;margin-bottom:6px">No projects yet</h3>
-          <p style="color:var(--text-2);font-size:13px;margin-bottom:18px">Get started by creating your first project.</p>
-          <button class="btn gold" data-action="new-project" style="margin:0 auto">${icon('plus', 'sm')} Create First Project</button>
+          <h3 style="font-size:16px;font-weight:600;margin-bottom:6px">No accessible projects</h3>
+          <p style="color:var(--text-2);font-size:13px;margin-bottom:18px">Only projects you own or have been added to as a team member appear here.</p>
+          <button class="btn gold" data-action="new-project" style="margin:0 auto">${icon('plus', 'sm')} Create New Project</button>
         </div>`}
     </div>
   </section>`;
 }
 function projectRow(p) {
   const s = projectStats(p);
-  const shown = (p.team || []).slice(0, 2);
+  const shown = (p.team || []).slice(0, 3);
   const thumbSvg = THUMBS[p.thumb] || THUMBS['portfolio'];
+  const isOwner = isProjectOwner(p, ME);
   return `<div class="card proj-row" data-open="${p.id}">
     <div class="thumb">${thumbSvg}</div>
-    <div><div class="proj-name">${esc(p.name)}</div><span class="badge tag">${p.type}</span></div>
+    <div>
+      <div class="proj-name">${esc(p.name)}</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+        <span class="badge tag">${p.type}</span>
+        ${isOwner ? '<span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:10px;padding:1px 5px;font-weight:600">👑 Owner</span>' : ''}
+      </div>
+    </div>
     <div><div class="proj-pct">${s.pct}%</div><div class="bar ${s.pct === 100 || s.pct >= 80 ? 'green' : ''}"><i style="width:${s.pct}%"></i></div></div>
-    <div class="av-stack team-col">${shown.map(id => av(id)).join('')}${p.extra ? `<span class="av-more">+${p.extra}</span>` : ''}</div>
+    <div class="av-stack team-col">${shown.map(id => av(id)).join('')}${p.team && p.team.length > 3 ? `<span class="av-more">+${p.team.length - 3}</span>` : ''}</div>
     <div>${statusBadge(p.status)}</div>
     <button class="kebab" data-pmenu="${p.id}">${icon('more', 'sm')}</button>
   </div>`;
@@ -522,6 +573,16 @@ function renderProject(id, tab) {
   if (!p) {
     return `<section class="view"><div class="card empty" style="padding:48px 24px;text-align:center"><p style="color:var(--text-2);margin-bottom:12px">Project not found or no longer exists.</p><a class="btn gold" data-go="#/projects">Back to Projects</a></div></section>`;
   }
+  if (!canAccessProject(p, ME)) {
+    return `<section class="view">
+      <div class="card empty" style="padding:48px 24px;text-align:center">
+        <div style="font-size:36px;margin-bottom:12px">🔒</div>
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:6px">Private Project</h3>
+        <p style="color:var(--text-2);margin-bottom:18px">You do not have access to view this project. Only the project owner (@${esc(p.owner || p.created_by || 'owner')}) and assigned members can access it.</p>
+        <a class="btn gold" data-go="#/projects">Back to My Projects</a>
+      </div>
+    </section>`;
+  }
   if (!TABS.includes(tab)) tab = 'overview';
   let body = '';
   try {
@@ -530,15 +591,28 @@ function renderProject(id, tab) {
     console.error('Error rendering project tab:', err);
     body = `<div class="card empty" style="padding:48px 24px;text-align:center"><p style="color:var(--text-2);margin-bottom:12px">Unable to display ${tab}.</p></div>`;
   }
+  const isOwner = isProjectOwner(p, ME);
+  const ownerId = p.owner || p.created_by || '';
+  const ownerName = (ownerId && PEOPLE[ownerId] && PEOPLE[ownerId].name) || ownerId || 'Project Owner';
+
   return `<section class="view">
     <div class="crumbs"><a data-go="#/projects">Projects</a>${icon('chevRight', 'xs')}<span>${esc(p.name)}</span></div>
     <div class="page-head" style="margin-bottom:0">
       <div>
-        <div class="detail-title"><h1>${esc(p.name)}</h1>${statusBadge(p.status)}</div>
+        <div class="detail-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <h1 style="margin:0">${esc(p.name)}</h1>
+          ${statusBadge(p.status)}
+          <span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600">👑 Project Owner: ${esc(ownerName)} ${isOwner ? '(You)' : ''}</span>
+        </div>
         <div class="dates">${icon('calendar', 'sm')} ${fmtLong(p.start).replace(/^(\w+ \d+), (\d+)$/, '$1, $2')}${p.end ? ' – ' + fmtLong(p.end) : ' – Ongoing (No end date)'}</div>
       </div>
       <div class="head-actions" style="display:flex;align-items:center;gap:8px">
-        <button class="btn gold" data-action="open-project-chat" data-id="${p.id}" style="height:34px;padding:0 12px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px" title="Open Project Chat in Messenger">
+        ${isOwner ? `
+          <button class="btn gold" data-action="add-project-member" data-pid="${p.id}" style="height:34px;padding:0 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px" title="Add members to this project">
+            ${icon('userPlus', 'sm')} <span>Add Member</span>
+          </button>
+        ` : ''}
+        <button class="btn flat" data-action="open-project-chat" data-id="${p.id}" style="height:34px;padding:0 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px" title="Open Project Chat in Messenger">
           ${icon('message', 'sm')} <span>Project Chat</span>
         </button>
         <button class="icon-btn ${state.starredProjects.has(p.id) ? 'starred' : ''}" data-action="star-project" data-id="${p.id}" title="Star">${icon('star', 'sm')}</button>
@@ -551,17 +625,34 @@ function renderProject(id, tab) {
 }
 
 function teamTable(p, cols) {
-  const teamIds = (p.team && p.team.length) ? p.team : (Object.keys(PEOPLE).length ? Object.keys(PEOPLE) : [ME].filter(Boolean));
+  const isOwner = isProjectOwner(p, ME);
+  const teamIds = (p.team && p.team.length) ? p.team : [p.owner || p.created_by || ME].filter(Boolean);
   const rows = teamIds.map(id => {
     const P = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member', today: 'Active' };
     const w = (p.workload && p.workload[id]) ?? 0;
+    const isMemberOwner = (p.owner && p.owner.toLowerCase() === id.toLowerCase()) || (p.created_by && p.created_by.toLowerCase() === id.toLowerCase());
     return `<tr>
-      <td><span class="cell-user">${av(id)}<span class="clickable" data-profile="${id}" style="display:inline-flex;align-items:center;gap:4px">${esc(P.name)} ${userModeIcon(id, 'xs')}</span></span></td>
+      <td>
+        <span class="cell-user">
+          ${av(id)}
+          <span class="clickable" data-profile="${id}" style="display:inline-flex;align-items:center;gap:6px">
+            ${esc(P.name)} ${userModeIcon(id, 'xs')}
+            ${isMemberOwner ? '<span style="font-size:9.5px;padding:1px 5px;background:rgba(245,184,46,.15);color:var(--gold);border-radius:4px;font-weight:600">👑 Owner</span>' : ''}
+          </span>
+        </span>
+      </td>
       <td>${P.role || 'Member'}</td>
       <td>${availBadge(id)}</td>
       <td>${modeCell(id)}</td>
       <td>${cols === 'overview' ? (P.today || 'Working on tasks') : `${((p.currentTasks || {})[id]) ?? ((p.tasks || []).filter(t => t.assignee === id && t.status !== 'done').length)} Tasks`}</td>
-      <td><div class="cell-bar"><div class="bar ${barColor(w)}"><i style="width:${w}%"></i></div><span>${w}%</span></div></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cell-bar" style="flex:1"><div class="bar ${barColor(w)}"><i style="width:${w}%"></i></div><span>${w}%</span></div>
+          ${(isOwner && !isMemberOwner && cols === 'team') ? `
+            <button type="button" class="btn flat" data-action="remove-project-member" data-pid="${p.id}" data-uid="${id}" title="Remove member from project" style="color:#ef4444;padding:2px 6px;font-size:11px;opacity:0.85;border-radius:4px">✕ Remove</button>
+          ` : ''}
+        </div>
+      </td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-2);padding:16px">No team members assigned</td></tr>';
   return `<table><thead><tr><th>Member</th><th>Role</th><th>Availability</th><th>Work Mode</th><th>${cols === 'overview' ? "Today's Task" : 'Current Tasks'}</th><th style="width:22%">${cols === 'overview' ? "Work's Task" : 'Workload'}</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -881,20 +972,22 @@ function tabTasks(p) {
 }
 
 function tabTeam(p) {
-  const counts = MEMBER_ROWS.reduce((a, id) => {
+  const isOwner = isProjectOwner(p, ME);
+  const teamList = (p.team && p.team.length) ? p.team : [p.owner || p.created_by || ME].filter(Boolean);
+  const counts = teamList.reduce((a, id) => {
     const st = PEOPLE[id]?.availability || 'available';
     a[st] = (a[st] || 0) + 1;
     return a;
   }, { available: 0, meeting: 0, away: 0, dnd: 0, absent: 0 });
-  const avg = p.avgWorkload ?? Math.round(MEMBER_ROWS.reduce((a, id) => a + (p.workload[id] || 0), 0) / (MEMBER_ROWS.length || 1));
+  const avg = p.avgWorkload ?? Math.round(teamList.reduce((a, id) => a + (p.workload[id] || 0), 0) / (teamList.length || 1));
   return `
   <div class="team-stats">
-    <div class="card stat"><span class="stat-ic" style="color:var(--gold)">${icon('users', 'lg')}</span><div><div class="stat-num">${MEMBER_ROWS.length}</div><div class="stat-label">Team Members</div></div></div>
+    <div class="card stat"><span class="stat-ic" style="color:var(--gold)">${icon('users', 'lg')}</span><div><div class="stat-num">${teamList.length}</div><div class="stat-label">Project Members</div></div></div>
     <div class="card stat"><span class="stat-ic" style="color:var(--green)"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4" fill="currentColor"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1z" fill="currentColor"/></svg></span><div><div class="stat-num">${counts.available || 0}</div><div class="stat-label">Available</div></div></div>
     <div class="card stat"><span class="stat-ic" style="background:var(--gold);color:#3d2a05;border-radius:50%;width:30px;height:30px">${icon('message', 'sm')}</span><div><div class="stat-num">${counts.meeting || 0}</div><div class="stat-label">In a Meeting</div></div></div>
     <div class="card stat"><span class="stat-ic" style="color:#fb7185"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="currentColor" stroke-width="2"/></svg></span><div><div class="stat-num">${counts.absent || 0}</div><div class="stat-label">Absent</div></div></div>
     <div class="card stat" style="flex-direction:column;align-items:stretch;gap:6px"><div><div class="stat-num">${avg}%</div><div class="stat-label">Avg. Workload</div></div><div class="bar"><i style="width:${avg}%"></i></div></div>
-    <button class="btn gold" data-action="invite">${icon('user', 'sm')} Invite Member</button>
+    ${isOwner ? `<button class="btn gold" data-action="add-project-member" data-pid="${p.id}">${icon('userPlus', 'sm')} Add Member</button>` : ''}
   </div>
   <div class="card tbl-card" style="padding-top:4px">${teamTable(p, 'team')}</div>`;
 }
@@ -1544,9 +1637,10 @@ function playSynthesizedVoiceTone(durationSecs) {
 function lastMsg(c) { return (c && c.msgs && c.msgs.length) ? c.msgs[c.msgs.length - 1] : { time: '', text: '' }; }
 function renderMessenger() {
   deduplicateChats();
+  const visibleChats = chats.filter(ch => canAccessChat(ch, ME));
   const q = state.chatQuery.toLowerCase();
-  const list = chats.filter(c => !q || c.name.toLowerCase().includes(q) || (c.msgs && c.msgs.some(m => (m.text || '').toLowerCase().includes(q))));
-  const c = chats.find(x => x.id === state.chatId) || chats[0];
+  const list = visibleChats.filter(c => !q || c.name.toLowerCase().includes(q) || (c.msgs && c.msgs.some(m => (m.text || '').toLowerCase().includes(q))));
+  const c = visibleChats.find(x => x.id === state.chatId) || visibleChats[0];
   if (c) c.unread = 0;
   const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person]?.availability === 'available' ? '<i class="online"></i>' : (PEOPLE[ch.person]?.availability === 'absent' ? '<i class="absent-dot"></i>' : '')) : `<span class="group-av">${icon('users', 'sm')}</span>`;
   const preview = ch => {
@@ -1617,7 +1711,13 @@ function renderMessenger() {
           </div>
           <div class="acts">
             ${c.project ? `<button class="btn flat" data-go="#/project/${c.project}/overview" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="View Project in Projects View">${icon('chevLeft', 'xs')}Project View</button>` : ''}
-            ${c.kind === 'group' ? `<button class="btn flat" data-action="add-group-member" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="Add Employee to this Group">${icon('userPlus', 'xs')}Add Member</button>` : ''}
+            ${(() => {
+              if (c.kind !== 'group') return '';
+              const isProjGrp = Boolean(c.project);
+              const proj = isProjGrp ? projects.find(x => x.id === c.project) : null;
+              const canAdd = isProjGrp ? isProjectOwner(proj, ME) : ((c.created_by && c.created_by.toLowerCase() === (ME || '').toLowerCase()) || !c.created_by);
+              return canAdd ? `<button class="btn flat" data-action="add-group-member" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="Add Employee to this Group">${icon('userPlus', 'xs')}Add Member</button>` : '';
+            })()}
             <button title="Info" data-action="chat-info">${icon('info', 'sm')}</button>
           </div>
         </div>
@@ -3156,10 +3256,11 @@ async function handleAction(a, el) {
           TITLES[lead] = 'Team Lead';
           MEMBER_ROWS = Object.keys(PEOPLE);
         }
-        const teamMembers = Array.from(new Set([lead, ME].filter(Boolean)));
+        const ownerId = (ME || 'kumar').toLowerCase();
+        const teamMembers = Array.from(new Set([ownerId, lead].filter(Boolean)));
         const noEnd = d.noEndDate === 'on' || d.noEndDate === true || !d.end;
         const endDate = noEnd ? '' : d.end;
-        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', start: d.start, end: endDate, team: teamMembers, extra: 0,
+        const np = { id, name: d.name, type: d.type, thumb, status: 'progress', owner: ownerId, created_by: ownerId, start: d.start, end: endDate, team: teamMembers, extra: 0,
           totals: { total: 0, completed: 0, inProgress: 0 }, workload: {}, tasks: [], files: [], notes: [], _other: { completed: 0, inProgress: 0, pending: 0 } };
         projects.unshift(np);
         saveProjectsToCache();
@@ -3730,6 +3831,17 @@ async function handleAction(a, el) {
     }
     case 'new-group': openNewGroupModal(); break;
     case 'add-group-member': openAddMemberModal(state.chatId); break;
+    case 'add-project-member': {
+      const pid = el.dataset.pid || currentProject()?.id;
+      if (pid) openAddProjectMemberModal(pid);
+      break;
+    }
+    case 'remove-project-member': {
+      const pid = el.dataset.pid || currentProject()?.id;
+      const uid = el.dataset.uid;
+      if (pid && uid) removeProjectMember(pid, uid);
+      break;
+    }
     case 'switch-user': {
       const uid = (el.dataset.uid || '').toLowerCase();
       if (uid) {
@@ -3933,6 +4045,7 @@ function handleGlobalRealtimeEvent(event, data) {
       break;
     }
     case 'project_created':
+    case 'project_updated':
     case 'project_deleted': {
       fetchFromAPI('/projects/').then(apiProjects => {
         if (Array.isArray(apiProjects)) {
@@ -3944,6 +4057,8 @@ function handleGlobalRealtimeEvent(event, data) {
               type: ap.type || 'Web',
               category: ap.category || 'Active',
               status: ap.status || 'progress',
+              owner: ap.owner || ap.created_by || '',
+              created_by: ap.created_by || ap.owner || '',
               pct: ap.pct || 0,
               team: ap.team || [],
               desc: ap.desc || '',
@@ -4387,7 +4502,7 @@ function openAddMemberModal(chatId) {
           'Content-Type': 'application/json',
           ...(AUTH_TOKEN ? { 'Authorization': `Token ${AUTH_TOKEN}` } : {})
         },
-        body: JSON.stringify({ member_ids: checked })
+        body: JSON.stringify({ member_ids: checked, user: ME })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -4399,6 +4514,18 @@ function openAddMemberModal(chatId) {
       c.memberList = data.memberList;
       c.members = data.members;
       c.msgs = data.msgs;
+      saveChatsToCache();
+
+      if (c.project) {
+        const proj = projects.find(x => x.id === c.project);
+        if (proj) {
+          proj.team = Array.from(new Set([...(proj.team || []), ...checked]));
+          saveProjectsToCache();
+          apiPatchProject(proj.id, { team: proj.team });
+          broadcastGlobalEventSocket('project_updated', { id: proj.id, name: proj.name, owner: proj.owner, team: proj.team });
+        }
+      }
+
       rerender();
       toast(`Added ${checked.length} employee(s) to ${c.name}`);
     } catch (err) {
@@ -4406,6 +4533,138 @@ function openAddMemberModal(chatId) {
       errBox.style.display = 'block';
     }
   };
+}
+
+function openAddProjectMemberModal(projectId) {
+  closeFloating();
+  const p = projects.find(x => x.id === projectId);
+  if (!p) return;
+  if (!isProjectOwner(p, ME)) {
+    toast('Only the Project Owner can add members to this project');
+    return;
+  }
+  const currentMembers = (p.team || []).map(m => String(m).toLowerCase());
+  const availableEmployees = Object.keys(PEOPLE).filter(id => !currentMembers.includes(id.toLowerCase()));
+
+  if (!availableEmployees.length) {
+    toast('All studio employees are already on this project team!');
+    return;
+  }
+
+  const employeeCheckboxes = availableEmployees.map(id => {
+    const mem = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member' };
+    return `
+      <label class="emp-check-item" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;background:var(--panel-2);border:1px solid var(--line-2);margin-bottom:6px">
+        <input type="checkbox" name="addProjMembers" value="${id}" style="width:16px;height:16px;accent-color:var(--gold)">
+        ${av(id, 's26')}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${esc(mem.name)}</div>
+          <div style="font-size:11px;color:var(--text-2)">${esc(mem.role || TITLES[id] || 'Team Member')}</div>
+        </div>
+      </label>
+    `;
+  }).join('');
+
+  const modalHtml = `
+    <div class="overlay" id="addProjMemberModal">
+      <div class="modal" style="width:440px">
+        <h3>Add Members to "${esc(p.name)}"</h3>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">As Project Owner, you can add team members to this project and its discussion channel.</p>
+        <div id="addProjErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+        <form id="addProjMemberForm">
+          <div class="field">
+            <div style="max-height:220px;overflow-y:auto;padding-right:4px">
+              ${employeeCheckboxes}
+            </div>
+          </div>
+          <div class="modal-actions" style="margin-top:16px">
+            <button type="button" class="btn flat" onclick="document.getElementById('addProjMemberModal').remove()">Cancel</button>
+            <button type="submit" class="btn primary">Add to Project</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  $('#addProjMemberForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const checked = [...document.querySelectorAll('input[name="addProjMembers"]:checked')].map(i => i.value);
+    if (!checked.length) {
+      toast('Please select at least one employee');
+      return;
+    }
+
+    const errBox = $('#addProjErr');
+    errBox.style.display = 'none';
+
+    try {
+      p.team = Array.from(new Set([...(p.team || []), ...checked]));
+      saveProjectsToCache();
+
+      await apiPatchProject(p.id, { team: p.team });
+
+      try {
+        await fetch(`${API_BASE}/chats/proj-grp-${p.id}/add-member/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(AUTH_TOKEN ? { 'Authorization': `Token ${AUTH_TOKEN}` } : {})
+          },
+          body: JSON.stringify({ member_ids: checked, user: ME })
+        });
+      } catch (_) {}
+
+      const projChat = chats.find(x => x.id === `proj-grp-${p.id}` || x.project === p.id);
+      if (projChat) {
+        projChat.memberList = Array.from(new Set([...(projChat.memberList || []), ...checked]));
+        projChat.members = projChat.memberList.length;
+        saveChatsToCache();
+      }
+
+      broadcastGlobalEventSocket('project_updated', { id: p.id, name: p.name, owner: p.owner, team: p.team });
+      $('#addProjMemberModal').remove();
+      rerender();
+      toast(`Added ${checked.length} member(s) to ${p.name}!`);
+    } catch (err) {
+      errBox.textContent = 'Error adding members to project.';
+      errBox.style.display = 'block';
+    }
+  };
+}
+
+async function removeProjectMember(projectId, memberId) {
+  const p = projects.find(x => x.id === projectId);
+  if (!p) return;
+  if (!isProjectOwner(p, ME)) {
+    toast('Only the Project Owner can remove members from this project');
+    return;
+  }
+  const owner = (p.owner || p.created_by || '').toLowerCase();
+  if (memberId.toLowerCase() === owner) {
+    toast('Cannot remove the project owner!');
+    return;
+  }
+  const mName = PEOPLE[memberId]?.name || memberId;
+  if (!confirm(`Are you sure you want to remove ${mName} from ${p.name}?`)) return;
+
+  p.team = (p.team || []).filter(m => m.toLowerCase() !== memberId.toLowerCase());
+  if (p.workload && p.workload[memberId]) delete p.workload[memberId];
+  if (p.currentTasks && p.currentTasks[memberId]) delete p.currentTasks[memberId];
+  saveProjectsToCache();
+
+  await apiPatchProject(p.id, { team: p.team });
+
+  const projChat = chats.find(x => x.id === `proj-grp-${p.id}` || x.project === p.id);
+  if (projChat && projChat.memberList) {
+    projChat.memberList = projChat.memberList.filter(m => m.toLowerCase() !== memberId.toLowerCase());
+    projChat.members = projChat.memberList.length;
+    saveChatsToCache();
+  }
+
+  broadcastGlobalEventSocket('project_updated', { id: p.id, name: p.name, owner: p.owner, team: p.team });
+  rerender();
+  toast(`Removed ${mName} from ${p.name}`);
 }
 
 function openGroupInfoModal(c) {
@@ -4768,6 +5027,15 @@ async function apiPatchMember(id, patchData) {
   });
 }
 
+async function apiPatchProject(id, patchData) {
+  saveProjectsToCache();
+  if (!id) return null;
+  return await fetchFromAPI(`/projects/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(patchData)
+  });
+}
+
 async function apiCreateTask(taskData) {
   return await fetchFromAPI(`/tasks/`, {
     method: 'POST',
@@ -4868,9 +5136,11 @@ async function loadInitialData() {
         type: ap.type || 'Web',
         thumb: ap.thumb || 'portfolio',
         status: ap.status || 'progress',
+        owner: ap.owner || ap.created_by || '',
+        created_by: ap.created_by || ap.owner || '',
         start: ap.start || isoDate(new Date()),
         end: (ap.end !== undefined && ap.end !== null) ? ap.end : '',
-        team: ap.team || [ME].filter(Boolean),
+        team: ap.team || (ap.owner ? [ap.owner] : [ME].filter(Boolean)),
         extra: ap.extra || 0,
         totals: ap.totals || { total: 0, completed: 0, inProgress: 0 },
         workload: ap.workload || {},
