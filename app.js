@@ -295,6 +295,7 @@ function renderProject(id, tab) {
       </div>
       <div class="head-actions">
         <button class="icon-btn ${state.starredProjects.has(p.id) ? 'starred' : ''}" data-action="star-project" data-id="${p.id}" title="Star">${icon('star', 'sm')}</button>
+        <button class="icon-btn" data-action="open-project-chat" data-id="${p.id}" title="Open Project Chat">${icon('message', 'sm')}</button>
         <button class="icon-btn" data-pmenu="${p.id}" title="More">${icon('more', 'sm')}</button>
       </div>
     </div>
@@ -765,9 +766,16 @@ document.addEventListener('click', e => {
     const p = projects.find(x => x.id === pm.dataset.pmenu);
     openMenu(pm, [
       { label: 'Open project', icon: 'folder', run: () => go(`#/project/${p.id}/overview`) },
-      { label: 'Open chat', icon: 'message', run: () => { const c = chats.find(x => x.project === p.id); if (c) { state.chatId = c.id; go('#/messenger/' + c.id); } else toast('No chat for this project yet'); } },
+      { label: 'Open chat', icon: 'message', run: () => { const c = chats.find(x => x.project === p.id || x.id === 'proj-grp-' + p.id); if (c) { state.chatId = c.id; go('#/messenger/' + c.id); } else toast('No chat for this project yet'); } },
       ...Object.entries(STATUS).filter(([k]) => k !== p.status).map(([k, s]) => ({ label: `Mark ${s.label}`, icon: 'check', run: () => { p.status = k; rerender(); toast(`${p.name} → ${s.label}`); } })),
-      { label: 'Delete project', icon: 'trash', danger: true, run: () => { projects.splice(projects.indexOf(p), 1); go('#/projects'); toast('Project deleted'); } },
+      { label: 'Delete project', icon: 'trash', danger: true, run: async () => {
+        const delId = p.id;
+        projects.splice(projects.indexOf(p), 1);
+        await fetchFromAPI(`/projects/${delId}/`, { method: 'DELETE' });
+        const cIdx = chats.findIndex(x => x.project === delId || x.id === 'proj-grp-' + delId);
+        if (cIdx !== -1) chats.splice(cIdx, 1);
+        go('#/projects'); toast('Project deleted');
+      } },
     ]);
     return;
   }
@@ -854,9 +862,42 @@ function handleAction(a, el) {
           method: 'POST',
           body: JSON.stringify(np)
         });
-        go(`#/project/${id}/overview`); toast('Project created');
+        try {
+          const apiChats = await fetchFromAPI('/chats/');
+          if (Array.isArray(apiChats) && apiChats.length) {
+            chats.length = 0;
+            chats.push(...apiChats);
+          } else {
+            const groupChat = {
+              id: `proj-grp-${id}`,
+              name: d.name,
+              kind: 'group',
+              project: id,
+              members: 1,
+              memberList: [lead],
+              starred: false,
+              unread: 0,
+              msgs: [{ from: lead, time: nowTime(), text: `Welcome to the ${d.name} group discussion channel! 🚀` }]
+            };
+            if (!chats.find(c => c.id === groupChat.id)) chats.unshift(groupChat);
+          }
+        } catch (e) {
+          console.warn('Could not sync chats:', e);
+        }
+        go(`#/project/${id}/overview`); toast(`Project "${d.name}" and messenger group created!`);
       }, 'Create Project');
       break;
+    case 'open-project-chat': {
+      const pid = el?.dataset?.id || p?.id;
+      const c = chats.find(x => x.project === pid || x.id === 'proj-grp-' + pid);
+      if (c) {
+        state.chatId = c.id;
+        go('#/messenger/' + c.id);
+      } else {
+        toast('No chat found for this project');
+      }
+      break;
+    }
     case 'project-filter':
       openMenu(el, [['all', 'All projects'], ['progress', 'In Progress'], ['done', 'Completed'], ['hold', 'On Hold']].map(([k, l]) => ({
         label: (state.projectFilter === k ? '✓ ' : '') + l, run: () => { state.projectFilter = k; rerender(); } })));

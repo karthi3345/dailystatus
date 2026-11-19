@@ -140,6 +140,41 @@ class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
 
+    def perform_create(self, serializer):
+        project = serializer.save()
+        group_id = f"proj-grp-{project.id}"
+        group_name = project.name
+        creator = self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin'
+        members = list(project.team or [])
+        if creator not in members:
+            members.append(creator)
+
+        thread, created = ChatThread.objects.get_or_create(
+            id=group_id,
+            defaults={
+                'name': group_name,
+                'kind': 'group',
+                'project': project.id,
+                'members': members,
+                'created_by': creator,
+                'starred': False
+            }
+        )
+        if created:
+            ChatMessage.objects.create(
+                chat_id=group_id,
+                chat_name=group_name,
+                kind='group',
+                from_member=creator,
+                text=f"Welcome to the {project.name} group discussion channel! 🚀"
+            )
+
+    def perform_destroy(self, instance):
+        group_id = f"proj-grp-{instance.id}"
+        ChatThread.objects.filter(id=group_id).delete()
+        ChatMessage.objects.filter(chat_id=group_id).delete()
+        instance.delete()
+
 
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
