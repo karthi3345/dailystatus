@@ -680,7 +680,10 @@ function renderMessenger() {
   return `<section class="view">
     <div class="page-head" style="margin-bottom:16px">
       <div><h1 class="page-title" style="font-size:24px">Messenger</h1><p class="page-sub">Team communication, project discussions and quick support</p></div>
-      <button class="icon-btn" style="color:var(--gold);width:38px;height:38px" data-action="new-chat" title="New message">${icon('edit', 'sm')}</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn primary" data-action="new-group" style="height:36px;padding:0 14px;font-size:13px;display:flex;align-items:center;gap:6px">${icon('users', 'sm')}New Group</button>
+        <button class="icon-btn" style="color:var(--gold);width:38px;height:38px" data-action="new-chat" title="New direct message">${icon('edit', 'sm')}</button>
+      </div>
     </div>
     <div class="card msgr">
       <div class="chat-list">
@@ -696,8 +699,9 @@ function renderMessenger() {
       <div class="chat-win">
         <div class="chat-head">
           ${c.kind === 'dm' ? av(c.person, 's36') : `<span class="group-av">${icon('users', 'sm')}</span>`}
-          <div><div class="t">${esc(c.name)}</div><div class="s">${c.kind === 'dm' ? AVAIL[PEOPLE[c.person].availability].label : `${c.members} Members`}</div></div>
+          <div><div class="t">${esc(c.name)}</div><div class="s">${c.kind === 'dm' ? (AVAIL[PEOPLE[c.person]?.availability]?.label || 'Available') : `${(c.memberList ? c.memberList.length : c.members) || 1} Members`}</div></div>
           <div class="acts">
+            ${c.kind === 'group' ? `<button class="btn flat" data-action="add-group-member" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="Add Employee to this Group">${icon('userPlus', 'xs')}Add Member</button>` : ''}
             <button title="Call" data-action="call">${icon('phone', 'sm')}</button>
             <button title="Video" data-action="call">${icon('video', 'sm')}</button>
             <button title="Info" data-action="chat-info">${icon('info', 'sm')}</button>
@@ -1002,11 +1006,13 @@ function handleAction(a, el) {
     case 'call': toast('Starting call…'); break;
     case 'chat-info': {
       const c = chats.find(x => x.id === state.chatId);
+      if (!c) break;
       if (c.kind === 'dm') openProfile(c.person, el);
-      else if (c.project) go(`#/project/${c.project}/team`);
-      else toast(`${c.members} members in ${c.name}`);
+      else openGroupInfoModal(c);
       break;
     }
+    case 'new-group': openNewGroupModal(); break;
+    case 'add-group-member': openAddMemberModal(state.chatId); break;
     case 'open-login': openLoginModal(); break;
     case 'open-register': openRegisterModal(); break;
     case 'auth-logout': handleLogout(); break;
@@ -1084,6 +1090,218 @@ async function fetchFromAPI(endpoint, options = {}) {
   } catch (err) {
     return null;
   }
+}
+
+function openNewGroupModal() {
+  closeFloating();
+  const allEmployees = Object.keys(PEOPLE);
+  const employeeCheckboxes = allEmployees.map(id => {
+    const p = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member' };
+    const isMe = id === ME;
+    return `
+      <label class="emp-check-item" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;background:var(--panel-2);border:1px solid var(--line-2);margin-bottom:6px">
+        <input type="checkbox" name="groupMembers" value="${id}" ${isMe ? 'checked disabled' : ''} style="width:16px;height:16px;accent-color:var(--gold)">
+        ${av(id, 's26')}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${esc(p.name)} ${isMe ? '<span style="color:var(--text-3);font-size:11px">(You)</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--text-2)">${esc(p.role || TITLES[id] || 'Team Member')}</div>
+        </div>
+      </label>
+    `;
+  }).join('');
+
+  const modalHtml = `
+    <div class="overlay" id="groupModal">
+      <div class="modal" style="width:480px">
+        <h3>Create New Group</h3>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Set up a new team group channel and add employees.</p>
+        <div id="grpErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+        <form id="newGroupForm">
+          <div class="field">
+            <label>Group Name</label>
+            <input type="text" id="grpName" required placeholder="e.g. Design Sync, Backend Team, Alpha Release" autofocus />
+          </div>
+          <div class="field">
+            <label>Add Employees to Group</label>
+            <div style="max-height:190px;overflow-y:auto;padding-right:4px">
+              ${employeeCheckboxes}
+            </div>
+          </div>
+          <div class="field" style="margin-top:8px">
+            <label>Initial Message (optional)</label>
+            <input type="text" id="grpInitMsg" placeholder="e.g. Welcome everyone to the group!" />
+          </div>
+          <div class="modal-actions" style="margin-top:16px">
+            <button type="button" class="btn flat" onclick="document.getElementById('groupModal').remove()">Cancel</button>
+            <button type="submit" class="btn primary">Create Group</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  $('#newGroupForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $('#grpName').value.trim();
+    if (!name) return;
+    const checked = [...document.querySelectorAll('input[name="groupMembers"]:checked')].map(i => i.value);
+    if (!checked.includes(ME)) checked.push(ME);
+    const initial_message = $('#grpInitMsg').value.trim();
+
+    const errBox = $('#grpErr');
+    errBox.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API_BASE}/chats/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(AUTH_TOKEN ? { 'Authorization': `Token ${AUTH_TOKEN}` } : {})
+        },
+        body: JSON.stringify({ name, members: checked, initial_message, created_by: ME })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errBox.textContent = data.error || 'Failed to create group.';
+        errBox.style.display = 'block';
+        return;
+      }
+      $('#groupModal').remove();
+      chats.unshift(data);
+      state.chatId = data.id;
+      go('#/messenger/' + data.id);
+      rerender();
+      toast(`Group "${name}" created!`);
+    } catch (err) {
+      errBox.textContent = 'Network error creating group.';
+      errBox.style.display = 'block';
+    }
+  };
+}
+
+function openAddMemberModal(chatId) {
+  closeFloating();
+  const c = chats.find(x => x.id === chatId) || chats.find(x => x.id === state.chatId);
+  if (!c || c.kind !== 'group') return;
+
+  const currentMembers = c.memberList || [];
+  const availableEmployees = Object.keys(PEOPLE).filter(id => !currentMembers.includes(id));
+
+  if (!availableEmployees.length) {
+    toast('All studio employees are already in this group!');
+    return;
+  }
+
+  const employeeCheckboxes = availableEmployees.map(id => {
+    const p = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member' };
+    return `
+      <label class="emp-check-item" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;background:var(--panel-2);border:1px solid var(--line-2);margin-bottom:6px">
+        <input type="checkbox" name="addEmpMembers" value="${id}" style="width:16px;height:16px;accent-color:var(--gold)">
+        ${av(id, 's26')}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${esc(p.name)}</div>
+          <div style="font-size:11px;color:var(--text-2)">${esc(p.role || TITLES[id] || 'Team Member')}</div>
+        </div>
+      </label>
+    `;
+  }).join('');
+
+  const modalHtml = `
+    <div class="overlay" id="addMemberModal">
+      <div class="modal" style="width:440px">
+        <h3>Add Employees to "${esc(c.name)}"</h3>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Select employees to add to this group.</p>
+        <div id="addErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+        <form id="addMemberForm">
+          <div class="field">
+            <div style="max-height:220px;overflow-y:auto;padding-right:4px">
+              ${employeeCheckboxes}
+            </div>
+          </div>
+          <div class="modal-actions" style="margin-top:16px">
+            <button type="button" class="btn flat" onclick="document.getElementById('addMemberModal').remove()">Cancel</button>
+            <button type="submit" class="btn primary">Add to Group</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  $('#addMemberForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const checked = [...document.querySelectorAll('input[name="addEmpMembers"]:checked')].map(i => i.value);
+    if (!checked.length) {
+      toast('Please select at least one employee');
+      return;
+    }
+
+    const errBox = $('#addErr');
+    errBox.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API_BASE}/chats/${c.id}/add-member/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(AUTH_TOKEN ? { 'Authorization': `Token ${AUTH_TOKEN}` } : {})
+        },
+        body: JSON.stringify({ member_ids: checked })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errBox.textContent = data.error || 'Failed to add members.';
+        errBox.style.display = 'block';
+        return;
+      }
+      $('#addMemberModal').remove();
+      c.memberList = data.memberList;
+      c.members = data.members;
+      c.msgs = data.msgs;
+      rerender();
+      toast(`Added ${checked.length} employee(s) to ${c.name}`);
+    } catch (err) {
+      errBox.textContent = 'Network error adding members.';
+      errBox.style.display = 'block';
+    }
+  };
+}
+
+function openGroupInfoModal(c) {
+  closeFloating();
+  const members = (c.memberList || []).map(id => {
+    const p = PEOPLE[id] || { name: id.charAt(0).toUpperCase() + id.slice(1), role: 'Member' };
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-2)">
+        ${av(id, 's32')}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${esc(p.name)} ${id === ME ? '<span style="color:var(--text-3);font-size:11px">(You)</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--text-2)">${esc(p.role || TITLES[id] || 'Team Member')}</div>
+        </div>
+        ${availBadge(id)}
+      </div>
+    `;
+  }).join('') || '<div style="color:var(--text-3);font-size:12px;padding:8px 0">No members listed</div>';
+
+  const modalHtml = `
+    <div class="overlay" id="grpInfoModal">
+      <div class="modal" style="width:440px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3>${esc(c.name)}</h3>
+          <span style="font-size:12px;color:var(--gold)">${(c.memberList ? c.memberList.length : c.members) || 1} Members</span>
+        </div>
+        <div style="max-height:240px;overflow-y:auto;margin-bottom:16px">
+          ${members}
+        </div>
+        <div class="modal-actions" style="justify-content:space-between">
+          <button type="button" class="btn primary" onclick="document.getElementById('grpInfoModal').remove(); openAddMemberModal('${c.id}')" style="display:flex;align-items:center;gap:6px">${icon('userPlus', 'sm')}Add Employee</button>
+          <button type="button" class="btn flat" onclick="document.getElementById('grpInfoModal').remove()">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 function openLoginModal() {
@@ -1330,8 +1548,13 @@ async function loadInitialData() {
   if (Array.isArray(apiChats) && apiChats.length) {
     apiChats.forEach(c => {
       const existing = chats.find(x => x.id === c.id);
-      if (existing && Array.isArray(c.msgs) && c.msgs.length) {
-        existing.msgs = c.msgs;
+      if (existing) {
+        existing.name = c.name || existing.name;
+        existing.members = c.members || existing.members;
+        existing.memberList = c.memberList || existing.memberList;
+        if (Array.isArray(c.msgs)) existing.msgs = c.msgs;
+      } else {
+        chats.push(c);
       }
     });
     updated = true;

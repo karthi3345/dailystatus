@@ -61,6 +61,21 @@ class DailyWorkLog(models.Model):
         return f"{self.date} - {self.member} ({self.hours})"
 
 
+class ChatThread(models.Model):
+    id = models.CharField(max_length=100, primary_key=True)
+    name = models.CharField(max_length=150)
+    kind = models.CharField(max_length=20, default='group')  # 'group' or 'dm'
+    project = models.CharField(max_length=50, blank=True, null=True)
+    person = models.CharField(max_length=50, blank=True, null=True)  # for dm
+    members = models.JSONField(default=list)  # list of member ids: ['kathir', 'arun', 'divya']
+    created_by = models.CharField(max_length=50, default='kathir')
+    starred = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.kind})"
+
+
 class ChatMessage(models.Model):
     chat_id = models.CharField(max_length=50, db_index=True)
     chat_name = models.CharField(max_length=150, blank=True)

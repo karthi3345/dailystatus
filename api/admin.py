@@ -1,5 +1,10 @@
 from django.contrib import admin
-from .models import Member, Project, Task, DailyWorkLog, ChatMessage
+from .models import Member, Project, Task, DailyWorkLog, ChatMessage, ChatThread
+
+@admin.register(ChatThread)
+class ChatThreadAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'kind', 'created_by', 'created_at')
+    list_filter = ('kind', 'created_by')
 
 @admin.register(Member)
 class MemberAdmin(admin.ModelAdmin):

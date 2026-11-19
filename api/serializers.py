@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Member, Project, Task, DailyWorkLog, ChatMessage
+from .models import Member, Project, Task, DailyWorkLog, ChatMessage, ChatThread
 
 class MemberSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,3 +31,10 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatMessage
         fields = '__all__'
+
+
+class ChatThreadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatThread
+        fields = '__all__'
+

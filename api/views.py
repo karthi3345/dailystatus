@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 
-from .models import Member, Project, Task, DailyWorkLog, ChatMessage
+from .models import Member, Project, Task, DailyWorkLog, ChatMessage, ChatThread
 from .serializers import (
     MemberSerializer, ProjectSerializer, TaskSerializer,
     DailyWorkLogSerializer, ChatMessageSerializer
@@ -181,18 +181,97 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
 
 
 class ChatThreadsView(APIView):
-    """Returns all chat threads grouped with their messages."""
+    """Returns all chat threads grouped with their messages, and allows creating new groups."""
     def get(self, request):
-        threads = [
-            {'id': 'hotel', 'kind': 'group', 'name': 'Project – Hotel SaaS', 'project': 'hotel', 'members': 6, 'starred': True, 'unread': 0},
-            {'id': 'unity', 'kind': 'group', 'name': 'Project – Unity Game', 'project': 'unity', 'members': 4, 'starred': False, 'unread': 1},
-            {'id': 'general', 'kind': 'group', 'name': 'Team – General', 'members': 7, 'starred': False, 'unread': 0},
-            {'id': 'arun', 'kind': 'dm', 'person': 'arun', 'name': 'Arun', 'starred': False, 'unread': 0, 'timeLabel': 'Yesterday'},
-            {'id': 'meena', 'kind': 'dm', 'person': 'meena', 'name': 'Meena', 'starred': False, 'unread': 0, 'timeLabel': 'Yesterday'},
-        ]
+        if not ChatThread.objects.exists():
+            defaults = [
+                {'id': 'hotel', 'kind': 'group', 'name': 'Project – Hotel SaaS', 'project': 'hotel', 'members': ['kathir', 'arun', 'divya', 'karthik', 'meena', 'sathish'], 'starred': True},
+                {'id': 'unity', 'kind': 'group', 'name': 'Project – Unity Game', 'project': 'unity', 'members': ['karthik', 'arun', 'kathir', 'meena'], 'starred': False},
+                {'id': 'general', 'kind': 'group', 'name': 'Team – General', 'members': ['kathir', 'arun', 'divya', 'karthik', 'meena', 'sathish'], 'starred': False},
+                {'id': 'arun', 'kind': 'dm', 'person': 'arun', 'name': 'Arun', 'members': ['kathir', 'arun'], 'starred': False},
+                {'id': 'meena', 'kind': 'dm', 'person': 'meena', 'name': 'Meena', 'members': ['kathir', 'meena'], 'starred': False},
+            ]
+            for d in defaults:
+                ChatThread.objects.get_or_create(id=d['id'], defaults=d)
+
+        threads = ChatThread.objects.all().order_by('created_at')
+        result = []
         for t in threads:
-            msgs = ChatMessage.objects.filter(chat_id=t['id']).order_by('created_at')
-            t['msgs'] = [
+            msgs = ChatMessage.objects.filter(chat_id=t.id).order_by('created_at')
+            result.append({
+                'id': t.id,
+                'kind': t.kind,
+                'name': t.name,
+                'project': t.project,
+                'person': t.person,
+                'members': len(t.members) if t.members else 0,
+                'memberList': t.members or [],
+                'starred': t.starred,
+                'unread': 0,
+                'msgs': [
+                    {
+                        'id': m.id,
+                        'from': m.from_member,
+                        'time': m.time_label or m.created_at.strftime('%I:%M %p').lstrip('0'),
+                        'text': m.text,
+                        'file': m.file_info
+                    }
+                    for m in msgs
+                ]
+            })
+        return Response(result)
+
+    def post(self, request):
+        import re, time
+        data = request.data
+        name = (data.get('name') or '').strip()
+        if not name:
+            return Response({'error': 'Group name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        slug_base = re.sub(r'[^a-zA-Z0-9]+', '-', name).strip('-').lower() or 'group'
+        thread_id = f"grp-{slug_base}-{int(time.time())}"
+
+        members = data.get('members') or []
+        creator = request.user.username.lower() if (request.user and request.user.is_authenticated) else (data.get('created_by') or 'kathir')
+        if creator not in members:
+            members.append(creator)
+
+        thread = ChatThread.objects.create(
+            id=thread_id,
+            name=name,
+            kind='group',
+            members=members,
+            created_by=creator
+        )
+
+        initial_msg = (data.get('initial_message') or '').strip()
+        if initial_msg:
+            ChatMessage.objects.create(
+                chat_id=thread_id,
+                chat_name=name,
+                kind='group',
+                from_member=creator,
+                text=initial_msg
+            )
+        else:
+            ChatMessage.objects.create(
+                chat_id=thread_id,
+                chat_name=name,
+                kind='group',
+                from_member=creator,
+                text=f"Group '{name}' created."
+            )
+
+        msgs = ChatMessage.objects.filter(chat_id=thread.id).order_by('created_at')
+        return Response({
+            'id': thread.id,
+            'kind': thread.kind,
+            'name': thread.name,
+            'members': len(thread.members),
+            'memberList': thread.members,
+            'starred': thread.starred,
+            'unread': 0,
+            'msgs': [
                 {
                     'id': m.id,
                     'from': m.from_member,
@@ -202,7 +281,68 @@ class ChatThreadsView(APIView):
                 }
                 for m in msgs
             ]
-        return Response(threads)
+        }, status=status.HTTP_201_CREATED)
+
+
+class AddChatMemberView(APIView):
+    """Add one or more employees to an existing group chat."""
+    def post(self, request, chat_id):
+        thread = ChatThread.objects.filter(id=chat_id).first()
+        if not thread:
+            return Response({'error': 'Group chat not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data
+        member_id = data.get('member_id')
+        member_ids = data.get('member_ids') or ([member_id] if member_id else [])
+
+        if not member_ids:
+            return Response({'error': 'At least one employee must be selected.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        current_members = list(thread.members or [])
+        added = []
+        for mid in member_ids:
+            mid_clean = str(mid).strip().lower()
+            if mid_clean and mid_clean not in current_members:
+                current_members.append(mid_clean)
+                added.append(mid_clean)
+
+        thread.members = current_members
+        thread.save()
+
+        creator = request.user.username.lower() if (request.user and request.user.is_authenticated) else 'kathir'
+        creator_name = Member.objects.filter(id=creator).first()
+        creator_display = creator_name.name if creator_name else creator.capitalize()
+
+        for mid in added:
+            m_obj = Member.objects.filter(id=mid).first()
+            m_name = m_obj.name if m_obj else mid.capitalize()
+            ChatMessage.objects.create(
+                chat_id=thread.id,
+                chat_name=thread.name,
+                kind=thread.kind,
+                from_member=creator,
+                text=f"📢 {creator_display} added {m_name} to the group."
+            )
+
+        msgs = ChatMessage.objects.filter(chat_id=thread.id).order_by('created_at')
+        return Response({
+            'id': thread.id,
+            'kind': thread.kind,
+            'name': thread.name,
+            'members': len(thread.members),
+            'memberList': thread.members,
+            'starred': thread.starred,
+            'msgs': [
+                {
+                    'id': m.id,
+                    'from': m.from_member,
+                    'time': m.time_label or m.created_at.strftime('%I:%M %p').lstrip('0'),
+                    'text': m.text,
+                    'file': m.file_info
+                }
+                for m in msgs
+            ]
+        }, status=status.HTTP_200_OK)
 
 
 class StatsView(APIView):

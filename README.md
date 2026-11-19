@@ -73,7 +73,8 @@ A lightweight, full-stack workspace, project tracking, daily status, and team me
 | `/api/tasks/` | `GET`, `POST` | List and create tasks (filter by `?project=<id>`) |
 | `/api/tasks/<id>/` | `PATCH`, `DELETE` | Toggle task completion status or update |
 | `/api/worklogs/` | `GET`, `POST` | List and record daily work logs (filter by `?date=` or `?member=`) |
-| `/api/chats/` | `GET` | Get all chat channels with their messages |
+| `/api/chats/` | `GET`, `POST` | List all chat threads or create a new group channel with members |
+| `/api/chats/<id>/add-member/` | `POST` | Add one or more employees to an existing group chat |
 | `/api/messages/` | `POST` | Send a new message to a chat channel |
 | `/api/stats/` | `GET` | Aggregated dashboard metrics across the workspace |
 
