@@ -1101,11 +1101,13 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 
 /* ---------- Jira / Kanban Board ---------- */
 .kanban-board {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(290px, 1fr));
+  display: flex;
   gap: 16px;
-  align-items: start;
+  align-items: flex-start;
   margin-top: 14px;
+  overflow-x: auto;
+  padding-bottom: 18px;
+  width: 100%;
 }
 .kanban-col {
   background: rgba(18, 18, 24, 0.65);
@@ -1118,6 +1120,9 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
   flex-direction: column;
   gap: 12px;
   min-height: 520px;
+  flex: 1 1 310px;
+  min-width: 290px;
+  max-width: 380px;
   transition: border-color .15s ease, background .15s ease;
 }
 .kanban-col.drag-over {
@@ -1130,6 +1135,7 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
   justify-content: space-between;
   padding: 2px 4px 8px;
   border-bottom: 1px solid var(--line);
+  gap: 6px;
 }
 .kanban-col-title {
   font-size: 13px;
@@ -1140,15 +1146,19 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
   align-items: center;
   gap: 8px;
   color: var(--text);
+  min-width: 0;
 }
 .col-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 .col-dot.pending { background: #f5c04d; box-shadow: 0 0 8px rgba(245,192,77,.5); }
 .col-dot.progress { background: #3b82f6; box-shadow: 0 0 8px rgba(59,130,246,.5); }
+.col-dot.review { background: #a855f7; box-shadow: 0 0 8px rgba(168,85,247,.5); }
+.col-dot.hold { background: #f97316; box-shadow: 0 0 8px rgba(249,115,22,.5); }
 .col-dot.done { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
 .kanban-col-count {
   background: rgba(255,255,255,.08);
@@ -1157,6 +1167,40 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
+}
+.btn-rename-col {
+  transition: transform .15s, opacity .15s;
+  cursor: pointer;
+}
+.btn-rename-col:hover {
+  opacity: 1 !important;
+  transform: scale(1.15);
+}
+.kanban-add-col {
+  flex: 0 0 280px;
+  min-width: 260px;
+  padding-top: 2px;
+}
+.btn-add-kanban-col {
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1.5px dashed var(--line-2);
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all .15s ease;
+  width: 100%;
+}
+.btn-add-kanban-col:hover {
+  background: rgba(245, 184, 46, 0.08);
+  border-color: var(--gold);
+  transform: translateY(-1px);
 }
 .btn-col-add {
   display: inline-flex;

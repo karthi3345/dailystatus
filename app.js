@@ -424,6 +424,10 @@ const workLogs = (cachedInitialWorkLogs && cachedInitialWorkLogs.length)
 
 function getTaskEffectiveStatus(t, curDate = state.currentDate || state.logDate || isoDate(new Date())) {
   if (!t) return 'pending';
+  // Respect custom column statuses
+  if (t.status && t.status !== 'pending' && t.status !== 'progress' && t.status !== 'done' && t.status !== 'review') {
+    return t.status;
+  }
   // If task has due date (e.g. 2026-11-20):
   // On Nov 19 (< due): Status is 'progress' (In Progress)
   // On Nov 20 (>= due): Status is 'done' (Completed)
@@ -599,7 +603,16 @@ function ensureAllTeamDMs() {
 }
 const barColor = v => (v >= 75 ? 'red' : v >= 50 && v <= 65 ? '' : 'green');
 const statusBadge = s => (STATUS[s] ? `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>` : `<span class="badge progress">In Progress</span>`);
-const taskBadge = s => s === 'done' ? '<span class="badge done">Completed</span>' : s === 'pending' ? '<span class="badge pending">Pending</span>' : '<span class="badge progress">In Progress</span>';
+const taskBadge = (s, p) => {
+  if (p && typeof getProjectKanbanColumns === 'function') {
+    const col = getProjectKanbanColumns(p).find(c => c.id === s);
+    if (col) {
+      const cls = ['pending', 'progress', 'done'].includes(col.id) ? col.id : 'progress';
+      return `<span class="badge ${cls}">${esc(col.name)}</span>`;
+    }
+  }
+  return s === 'done' ? '<span class="badge done">Completed</span>' : s === 'pending' ? '<span class="badge pending">To Do</span>' : `<span class="badge progress">${esc(s || 'In Progress')}</span>`;
+};
 const availBadge = (id) => {
   const p = PEOPLE[id];
   const a = (p && AVAIL[p.availability]) || AVAIL['available'];
@@ -806,10 +819,33 @@ function tabOverview(p) {
   </div>`;
 }
 
-function renderKanbanCard(t) {
+function getProjectKanbanColumns(p) {
+  if (!p) {
+    return [
+      { id: 'pending', name: 'To Do', color: 'pending' },
+      { id: 'progress', name: 'In Progress', color: 'progress' },
+      { id: 'done', name: 'Completed', color: 'done' }
+    ];
+  }
+  if (!Array.isArray(p.kanbanColumns) || p.kanbanColumns.length === 0) {
+    p.kanbanColumns = [
+      { id: 'pending', name: 'To Do', color: 'pending' },
+      { id: 'progress', name: 'In Progress', color: 'progress' },
+      { id: 'done', name: 'Completed', color: 'done' }
+    ];
+  }
+  return p.kanbanColumns;
+}
+
+function renderKanbanCard(t, p = currentProject()) {
   const curDate = state.currentDate || state.logDate || isoDate(new Date());
   const effStatus = getTaskEffectiveStatus(t, curDate);
-  const isDone = effStatus === 'done';
+  const cols = p ? getProjectKanbanColumns(p) : [
+    { id: 'pending', name: 'To Do' },
+    { id: 'progress', name: 'In Progress' },
+    { id: 'done', name: 'Completed' }
+  ];
+  const isDone = effStatus === 'done' || (cols.length && cols[cols.length - 1].id === effStatus);
   const type = TASK_TYPES[t.task_type] || TASK_TYPES['task'];
   const checklist = Array.isArray(t.checklist) ? t.checklist : [];
   const chkDone = checklist.filter(c => c.done).length;
@@ -820,6 +856,21 @@ function renderKanbanCard(t) {
     `<span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:10px;padding:1px 5px" title="In Progress on Nov 19, Completes on ${fmtShort(t.due)}">⏳ Due ${fmtShort(t.due)}</span>` :
     `<span class="badge done" style="font-size:10px;padding:1px 5px" title="Completed on ${fmtShort(t.due)}">✅ Completed ${fmtShort(t.due)}</span>`
   ) : '';
+
+  const curColIdx = cols.findIndex(c => c.id === effStatus || (effStatus === 'review' && c.id === 'progress'));
+  let moveBtns = '';
+  if (curColIdx > 0) {
+    const prevCol = cols[curColIdx - 1];
+    moveBtns += `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="${prevCol.id}">← ${esc(prevCol.name)}</button>`;
+  }
+  if (curColIdx !== -1 && curColIdx < cols.length - 1) {
+    const nextCol = cols[curColIdx + 1];
+    const isNextDone = (curColIdx + 1 === cols.length - 1);
+    moveBtns += `<button class="k-btn-move ${isNextDone ? 'ok' : ''}" data-move-task="${t.id}" data-target-status="${nextCol.id}">${esc(nextCol.name)} →</button>`;
+  }
+  if (curColIdx === -1 && cols.length) {
+    moveBtns += `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="${cols[0].id}">Move to ${esc(cols[0].name)}</button>`;
+  }
 
   return `
   <div class="k-card ${isDone ? 'done' : ''}" draggable="true" data-k-task="${t.id}">
@@ -844,54 +895,50 @@ function renderKanbanCard(t) {
       ${t.due ? `<span class="k-due" title="Due Date">${icon('calendar', 'xs')}${fmtShort(t.due)}</span>` : '<span class="k-due muted">No due date</span>'}
     </div>
     <div class="k-card-actions">
-      ${effStatus === 'pending' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">In Progress →</button>` : ''}
-      ${effStatus === 'progress' || effStatus === 'review' ? `
-        <button class="k-btn-move" data-move-task="${t.id}" data-target-status="pending">← To Do</button>
-        <button class="k-btn-move ok" data-move-task="${t.id}" data-target-status="done">Completed ✓</button>
-      ` : ''}
-      ${effStatus === 'done' ? `<button class="k-btn-move" data-move-task="${t.id}" data-target-status="progress">↩ Reopen</button>` : ''}
+      ${moveBtns}
     </div>
   </div>`;
 }
 
 function renderKanbanBoard(p, list) {
   const curDate = state.currentDate || state.logDate || isoDate(new Date());
-  const todoList = list.filter(t => getTaskEffectiveStatus(t, curDate) === 'pending');
-  const inProgressList = list.filter(t => {
-    const s = getTaskEffectiveStatus(t, curDate);
-    return s === 'progress' || s === 'review';
-  });
-  const doneList = list.filter(t => getTaskEffectiveStatus(t, curDate) === 'done');
+  const cols = getProjectKanbanColumns(p);
 
   return `
   <div class="kanban-board">
-    <div class="kanban-col" data-col-status="pending">
-      <div class="kanban-col-head">
-        <span class="kanban-col-title"><span class="col-dot pending"></span>To Do <span class="kanban-col-count">${todoList.length}</span></span>
-        <button class="btn-col-add" data-action="add-task" data-default-status="pending" title="Create task in To Do">${icon('plus', 'xs')} Add Task</button>
-      </div>
-      <div class="kanban-cards">
-        ${todoList.length ? todoList.map(t => renderKanbanCard(t)).join('') : '<div class="kanban-empty">No tasks in To Do</div>'}
-      </div>
-    </div>
+    ${cols.map(col => {
+      const colTasks = list.filter(t => {
+        const s = getTaskEffectiveStatus(t, curDate);
+        if (col.id === 'progress') {
+          return s === 'progress' || s === 'review';
+        }
+        return s === col.id;
+      });
 
-    <div class="kanban-col" data-col-status="progress">
-      <div class="kanban-col-head">
-        <span class="kanban-col-title"><span class="col-dot progress"></span>In Progress <span class="kanban-col-count">${inProgressList.length}</span></span>
-        <button class="btn-col-add" data-action="add-task" data-default-status="progress" title="Create task in In Progress">${icon('plus', 'xs')} Add</button>
-      </div>
-      <div class="kanban-cards">
-        ${inProgressList.length ? inProgressList.map(t => renderKanbanCard(t)).join('') : '<div class="kanban-empty">No tasks in progress</div>'}
-      </div>
-    </div>
+      return `
+      <div class="kanban-col" data-col-status="${col.id}">
+        <div class="kanban-col-head">
+          <span class="kanban-col-title">
+            <span class="col-dot ${col.color || col.id}"></span>
+            <span class="kanban-col-name">${esc(col.name)}</span>
+            <span class="kanban-col-count">${colTasks.length}</span>
+            <button class="btn-rename-col" data-action="rename-kanban-col" data-col-id="${col.id}" title="Rename column ${esc(col.name)}" style="background:none;border:none;padding:2px 4px;color:var(--text-3);cursor:pointer;font-size:12px;opacity:0.7">✏️</button>
+            ${!['pending', 'progress', 'done'].includes(col.id) ? `
+              <button class="btn-rename-col" data-action="delete-kanban-col" data-col-id="${col.id}" title="Delete column ${esc(col.name)}" style="background:none;border:none;padding:2px 4px;color:#ef4444;cursor:pointer;font-size:12px;opacity:0.7">🗑️</button>
+            ` : ''}
+          </span>
+          <button class="btn-col-add" data-action="add-task" data-default-status="${col.id}" title="Create task in ${esc(col.name)}">${icon('plus', 'xs')} Add</button>
+        </div>
+        <div class="kanban-cards">
+          ${colTasks.length ? colTasks.map(t => renderKanbanCard(t, p)).join('') : `<div class="kanban-empty">No tasks in ${esc(col.name)}</div>`}
+        </div>
+      </div>`;
+    }).join('')}
 
-    <div class="kanban-col" data-col-status="done">
-      <div class="kanban-col-head">
-        <span class="kanban-col-title"><span class="col-dot done"></span>Completed <span class="kanban-col-count">${doneList.length}</span></span>
-      </div>
-      <div class="kanban-cards">
-        ${doneList.length ? doneList.map(t => renderKanbanCard(t)).join('') : '<div class="kanban-empty">No completed tasks</div>'}
-      </div>
+    <div class="kanban-add-col">
+      <button class="btn-add-kanban-col" data-action="add-kanban-col" title="Add a new column to this board">
+        ${icon('plus', 'sm')} Add Column
+      </button>
     </div>
   </div>`;
 }
@@ -2470,9 +2517,9 @@ function openJiraTaskModal(p, task, isNew = false) {
             <!-- Top action row: Status -->
             <div>
               <select class="jira-status-select ${task.status}" id="jiraStatusSelect" style="width:100%">
-                <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>To Do</option>
-                <option value="progress" ${task.status === 'progress' || task.status === 'review' ? 'selected' : ''}>In Progress</option>
-                <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done</option>
+                ${getProjectKanbanColumns(p).map(c => `
+                  <option value="${c.id}" ${(task.status === c.id || (c.id === 'progress' && task.status === 'review')) ? 'selected' : ''}>${esc(c.name)}</option>
+                `).join('')}
               </select>
             </div>
 
@@ -2837,7 +2884,8 @@ function openJiraTaskModal(p, task, isNew = false) {
       task.status = e.target.value;
       await saveTask();
       renderModal();
-      toast(`Status moved to ${task.status === 'done' ? 'Done' : task.status === 'progress' ? 'In Progress' : 'To Do'}`);
+      const colDef = getProjectKanbanColumns(p).find(c => c.id === task.status);
+      toast(`Status moved to ${colDef ? colDef.name : task.status}`);
       return;
     }
 
@@ -3078,9 +3126,11 @@ document.addEventListener('click', e => {
     const task = p && p.tasks.find(x => x.id == mv.dataset.moveTask);
     if (task) {
       task.status = mv.dataset.targetStatus;
+      saveProjectsToCache();
       rerender();
       apiPatchTask(task.id, { status: task.status });
-      const targetName = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do';
+      const colDef = getProjectKanbanColumns(p).find(c => c.id === task.status);
+      const targetName = colDef ? colDef.name : (task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do');
       toast(`Task moved to ${targetName}`);
     }
     return;
@@ -3361,6 +3411,81 @@ async function handleAction(a, el) {
     case 'add-task': {
       const defaultStatus = el.dataset.defaultStatus || 'pending';
       openNewTaskModal(p, defaultStatus);
+      break;
+    }
+    case 'add-kanban-col': {
+      if (!p) return;
+      const cols = getProjectKanbanColumns(p);
+      openModal('Add New Board Column', [
+        { name: 'name', label: 'Column Name', required: true, placeholder: 'e.g. In Review, QA, Testing, Backlog, Blocked' },
+        { name: 'color', label: 'Color / Dot Style', type: 'select', value: 'progress', options: [
+          ['progress', 'Blue (In Progress)'],
+          ['review', 'Purple (Review / QA)'],
+          ['hold', 'Orange (On Hold / Waiting)'],
+          ['pending', 'Yellow (Pending / Backlog)'],
+          ['done', 'Green (Done / Completed)']
+        ] }
+      ], d => {
+        const colName = (d.name || '').trim();
+        if (!colName) return;
+        const colId = 'col_' + colName.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 20) + '_' + Date.now().toString(36).slice(-4);
+        cols.push({
+          id: colId,
+          name: colName,
+          color: d.color || 'progress'
+        });
+        saveProjectsToCache();
+        rerender();
+        toast(`Column "${colName}" added to board`);
+      }, 'Add Column');
+      break;
+    }
+    case 'rename-kanban-col': {
+      if (!p) return;
+      const colId = el.dataset.colId;
+      const cols = getProjectKanbanColumns(p);
+      const col = cols.find(c => c.id === colId);
+      if (!col) return;
+      openModal(`Rename Column "${col.name}"`, [
+        { name: 'name', label: 'Column Name', value: col.name, required: true, placeholder: 'Enter new column name' }
+      ], d => {
+        const newName = (d.name || '').trim();
+        if (!newName) return;
+        const oldName = col.name;
+        col.name = newName;
+        saveProjectsToCache();
+        rerender();
+        toast(`Renamed "${oldName}" to "${newName}"`);
+      }, 'Update Name');
+      break;
+    }
+    case 'delete-kanban-col': {
+      if (!p) return;
+      const colId = el.dataset.colId;
+      const cols = getProjectKanbanColumns(p);
+      const colIdx = cols.findIndex(c => c.id === colId);
+      if (colIdx === -1) return;
+      const col = cols[colIdx];
+      if (['pending', 'progress', 'done'].includes(col.id)) {
+        toast('Default column cannot be deleted');
+        return;
+      }
+      openModal(`Delete Column "${col.name}"?`, [
+        { name: 'confirm', labelHtml: `<p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Are you sure you want to delete column <strong>${esc(col.name)}</strong>? Any tasks in this column will be moved back to <strong>${esc(cols[0].name)}</strong>.</p>`, type: 'hidden', value: 'yes' }
+      ], () => {
+        if (Array.isArray(p.tasks)) {
+          p.tasks.forEach(t => {
+            if (t.status === colId) {
+              t.status = cols[0].id;
+              apiPatchTask(t.id, { status: t.status });
+            }
+          });
+        }
+        cols.splice(colIdx, 1);
+        saveProjectsToCache();
+        rerender();
+        toast(`Column "${col.name}" deleted`);
+      }, 'Delete Column');
       break;
     }
     case 'check-all': {
@@ -4709,7 +4834,8 @@ document.addEventListener('drop', e => {
         saveProjectsToCache();
         rerender();
         apiPatchTask(task.id, { status: task.status });
-        const targetName = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do';
+        const colDef = getProjectKanbanColumns(p).find(c => c.id === task.status);
+        const targetName = colDef ? colDef.name : (task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In Progress' : 'To Do');
         toast(`Task moved to ${targetName}`);
       }
     }
