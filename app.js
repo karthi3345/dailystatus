@@ -725,8 +725,6 @@ function renderMessenger() {
           <div class="acts">
             ${c.project ? `<button class="btn flat" data-go="#/project/${c.project}/overview" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="View Project in Projects View">${icon('chevLeft', 'xs')}Project View</button>` : ''}
             ${c.kind === 'group' ? `<button class="btn flat" data-action="add-group-member" style="height:32px;padding:0 10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:4px" title="Add Employee to this Group">${icon('userPlus', 'xs')}Add Member</button>` : ''}
-            <button title="Call" data-action="call">${icon('phone', 'sm')}</button>
-            <button title="Video" data-action="call">${icon('video', 'sm')}</button>
             <button title="Info" data-action="chat-info">${icon('info', 'sm')}</button>
           </div>
         </div>
@@ -1337,7 +1335,6 @@ function handleAction(a, el) {
     case 'msg-attach': $('#msgFile').click(); break;
     case 'emoji': { const i = $('#msgInput'); i.value += '🙂'; i.focus(); break; }
     case 'download': toast('Downloading pricing-module-v2.zip'); break;
-    case 'call': toast('Starting call…'); break;
     case 'chat-info': {
       const c = chats.find(x => x.id === state.chatId);
       if (!c) break;
