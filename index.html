@@ -214,7 +214,16 @@
         if (isOther && inp) { setTimeout(function() { inp.focus(); }, 30); }
       }
     };
+    window.handleLogProjectChange = function(val) {
+      var f = document.getElementById('otherProjectField');
+      var inp = document.getElementById('logOtherProjectName');
+      var isOther = (val === '__other__') || (val && val.toLowerCase().indexOf('other') !== -1);
+      if (f) {
+        f.style.display = isOther ? 'block' : 'none';
+        if (isOther && inp) { setTimeout(function() { inp.focus(); }, 30); }
+      }
+    };
   </script>
-  <script src="app.js?v=4.2"></script>
+  <script src="app.js?v=4.3"></script>
 </body>
 </html>

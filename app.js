@@ -398,7 +398,29 @@ const chats = (cachedInitialChats && cachedInitialChats.length)
   ? cachedInitialChats
   : JSON.parse(JSON.stringify(SEED_CHATS));
 
-const workLogs = [];
+function getCachedWorkLogs() {
+  try {
+    const raw = localStorage.getItem('kathir_cached_worklogs');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveWorkLogsToCache() {
+  try {
+    if (Array.isArray(workLogs)) {
+      localStorage.setItem('kathir_cached_worklogs', JSON.stringify(workLogs));
+    }
+  } catch (e) {}
+}
+
+const cachedInitialWorkLogs = getCachedWorkLogs();
+const workLogs = (cachedInitialWorkLogs && cachedInitialWorkLogs.length)
+  ? cachedInitialWorkLogs
+  : [];
 
 function getTaskEffectiveStatus(t, curDate = state.currentDate || state.logDate || isoDate(new Date())) {
   if (!t) return 'pending';
@@ -1099,205 +1121,133 @@ function tabNotes(p) {
 }
 
 /* ---------------- Daily Work Log ---------------- */
+window.handleLogProjectChange = function(val) {
+  var f = document.getElementById('otherProjectField');
+  var inp = document.getElementById('logOtherProjectName');
+  var isOther = (val === '__other__') || (val && val.toLowerCase().indexOf('other') !== -1);
+  if (f) {
+    f.style.display = isOther ? 'block' : 'none';
+    if (isOther && inp) { setTimeout(function() { inp.focus(); }, 30); }
+  }
+};
+
 function renderWorkLog() {
   const d = parseISO(state.logDate);
-  const allLogs = [...workLogs].sort((a, b) => b.date.localeCompare(a.date));
-  const depCount = allLogs.filter(l => l.status === 'dependency' && !l.resolved).length;
-  const pendingApprovalCount = allLogs.filter(l => !l.approval_status || l.approval_status === 'pending').length;
-  const approvedCount = allLogs.filter(l => l.approval_status === 'approved').length;
-
-  const filteredLogs = allLogs.filter(l => {
-    if (state.logFilter === 'progress') return l.status === 'progress';
-    if (state.logFilter === 'done') return l.status === 'done';
-    if (state.logFilter === 'dependency') return l.status === 'dependency';
-    if (state.logFilter === 'pending_approval') return !l.approval_status || l.approval_status === 'pending';
-    if (state.logFilter === 'approved') return l.approval_status === 'approved';
-    return true;
-  });
-
-  const availableLeads = Object.keys(PEOPLE).map(id => `<option value="${id}" ${id === state.logLead ? 'selected' : ''}>${esc(PEOPLE[id].name || id)} (${esc(PEOPLE[id].role || 'Lead')})</option>`).join('');
+  const allLogs = [...workLogs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const availableProjects = projects.filter(p => p && p.name);
+  if (!state.logProject && availableProjects.length) {
+    state.logProject = availableProjects[0].id;
+  }
 
   return `<section class="view" style="max-width:920px">
-    <div class="page-head">
-      <div><h1 class="page-title">Daily Work Log</h1><p class="page-sub">Track daily task progress, log hours, and submit job work for Team Lead approval</p></div>
-      <div class="date-pill">${icon('calendar', 'sm')}<span>${DOW[d.getDay()]}, ${fmtLong(state.logDate)}</span>
-        <button data-logday="-1" title="Previous day">${icon('chevLeft', 'sm')}</button><button data-logday="1" title="Next day">${icon('chevRight', 'sm')}</button></div>
+    <div class="page-head" style="margin-bottom:20px">
+      <div>
+        <h1 class="page-title">Daily Work Log</h1>
+        <p class="page-sub">Log daily work hours, tasks and project progress</p>
+      </div>
+      <div class="date-pill" style="display:flex;align-items:center;gap:8px">
+        ${icon('calendar', 'sm')}
+        <span style="font-weight:600">${DOW[d.getDay()]}, ${fmtLong(state.logDate)}</span>
+        <button data-logday="-1" title="Previous day">${icon('chevLeft', 'sm')}</button>
+        <button data-logday="1" title="Next day">${icon('chevRight', 'sm')}</button>
+      </div>
     </div>
-    <div class="card composer" style="box-shadow:0 4px 20px rgba(0,0,0,0.25)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <div class="log-status-pills" style="display:flex;gap:6px;align-items:center">
-          <span style="font-size:12px;color:var(--text-2);font-weight:600;margin-right:2px">Status:</span>
-          <button type="button" class="btn pill-btn" data-set-log-status="progress" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'progress' ? '#f5b82e' : 'var(--line-2)'};background:${state.logStatus === 'progress' ? 'rgba(245,184,46,.18)' : 'transparent'};color:${state.logStatus === 'progress' ? 'var(--gold)' : 'var(--text-2)'};font-weight:${state.logStatus === 'progress' ? '600' : 'normal'}">⏳ In Progress</button>
-          <button type="button" class="btn pill-btn" data-set-log-status="done" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'done' ? '#5bdc8e' : 'var(--line-2)'};background:${state.logStatus === 'done' ? 'rgba(91,220,142,.18)' : 'transparent'};color:${state.logStatus === 'done' ? '#5bdc8e' : 'var(--text-2)'};font-weight:${state.logStatus === 'done' ? '600' : 'normal'}">✅ Completed</button>
-          <button type="button" class="btn pill-btn" data-set-log-status="dependency" style="padding:4px 12px;font-size:12px;border-radius:16px;border:1px solid ${state.logStatus === 'dependency' ? '#ff6b6b' : 'var(--line-2)'};background:${state.logStatus === 'dependency' ? 'rgba(255,107,107,.18)' : 'transparent'};color:${state.logStatus === 'dependency' ? '#ff6b6b' : 'var(--text-2)'};font-weight:${state.logStatus === 'dependency' ? '600' : 'normal'}">⚠️ Dependency Needed</button>
-        </div>
+
+    <!-- Clean Composer: Date, Project Name (automatic + other), Hours, Description -->
+    <div class="card composer" style="box-shadow:0 4px 20px rgba(0,0,0,0.25);padding:18px;border-radius:12px;margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:13px;color:var(--gold);font-weight:600;display:flex;align-items:center;gap:6px">
+          ${icon('checkSquare', 'sm')} Add Daily Work Log
+        </span>
         <span style="font-size:12px;color:var(--text-2)">Member: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[ME]?.name) || ME || 'User')} ${userModeIcon(ME, 'xs')}</b></span>
       </div>
 
-      <div style="margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">
-          📁 Project Name <span style="font-weight:normal;color:var(--text-3);font-size:11.5px">(Enter the name of the project)</span>
-        </label>
-        <input type="text" id="logProjectName" list="projectSuggestions" placeholder="Enter the name of the project (e.g. E-Commerce Platform, Hotel Booking App)..." value="${esc(state.logProjectName || (projects.find(p => p.id === state.logProject)?.name) || (projects[0]?.name || ''))}" style="width:100%;height:38px;padding:0 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:13px" />
-        <datalist id="projectSuggestions">
-          ${projects.map(p => `<option value="${esc(p.name)}">`).join('')}
-        </datalist>
-      </div>
-
-      <!-- Assign Team Lead Approver -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:8px;padding:8px 12px">
-        <span style="font-size:12px;color:var(--text);font-weight:600;display:flex;align-items:center;gap:6px">
-          👤 Assign Team Lead Approver:
-        </span>
-        <select class="select" id="logLeadApprover" style="height:32px;font-size:12px;flex:1;max-width:280px">
-          <option value="">Select Team Lead to Approve</option>
-          ${availableLeads}
-        </select>
-        <span style="font-size:11px;color:var(--gold);margin-left:auto">🛡️ Team Lead sign-off required</span>
-      </div>
-
-      <!-- Target Completion Date (In Progress on Nov 19 -> Completed on Nov 20) -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:8px;padding:8px 12px">
-        <span style="font-size:12px;color:var(--text);font-weight:600;display:flex;align-items:center;gap:6px">
-          📅 Target Completion Date:
-        </span>
-        <input type="date" id="logTargetDate" value="${state.logTargetDate || '2026-11-20'}" style="height:32px;padding:0 8px;border-radius:6px;font-size:12px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text)" />
-        <span style="font-size:11.5px;color:var(--gold);margin-left:auto">⏳ Nov 19: In Progress → Nov 20: Complete ✅</span>
-      </div>
-
-      <textarea id="logText" placeholder="What did you work on today? Describe tasks, milestones, or deliverables completed..."></textarea>
-
-      ${state.logStatus === 'dependency' ? `
-      <div class="dep-composer-panel" style="margin-top:12px;padding:12px 14px;background:rgba(255,107,107,.07);border:1px solid rgba(255,107,107,.35);border-radius:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <span style="font-weight:600;color:#ff6b6b;font-size:12.5px;display:flex;align-items:center;gap:6px">
-            ⚠️ What is the dependency / blocker needed?
-          </span>
-          <span style="font-size:11px;color:var(--text-2)">Directly sent to Lead for resolution</span>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:12px">
+        <!-- 1. Date -->
+        <div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">
+            📅 Date
+          </label>
+          <input type="date" id="logDateInput" value="${state.logDate}" style="width:100%;height:38px;padding:0 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:13px" />
         </div>
-        <div style="display:grid;grid-template-columns:1fr 220px;gap:10px">
-          <input type="text" id="logDependency" placeholder="Explain the dependency (e.g. Waiting for Stripe API keys / Need design review)" style="height:38px;padding:0 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:12.5px" value="${esc(state.logDependency || '')}" />
-          <select class="select" id="logLead" title="Assign to Team Lead" style="height:38px;border-radius:8px">
-            <option value="">Select Team Lead</option>
-            ${availableLeads}
+
+        <!-- 2. Project Name (Automatic + Other) -->
+        <div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">
+            📁 Project Name
+          </label>
+          <select class="select" id="logProjectSelect" onchange="window.handleLogProjectChange(this.value)" style="width:100%;height:38px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:13px">
+            ${availableProjects.map(p => `<option value="${p.id}" ${p.id === (state.logProject || availableProjects[0]?.id) ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+            <option value="__other__" ${state.logProject === '__other__' ? 'selected' : ''}>Other (Specify project name)</option>
           </select>
         </div>
-      </div>` : ''}
 
-      <div class="composer-bar" style="margin-top:12px">
-        <button class="tool" data-action="log-attach" title="Attach file">${icon('clip')}</button>
-        <button class="tool" data-action="log-bullet" title="Add checklist item">${icon('checkSquare')}</button>
-        <input type="file" id="logFile" hidden />
-        ${state.logAttach ? `<span class="attach-chip">${icon('file', 'xs')}${esc(state.logAttach)}</span>` : ''}
-        <select class="select" id="logProject" title="Project">${projects.filter(p => p.status !== 'done').map(p => `<option value="${p.id}" ${p.id === state.logProject ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
-        <select class="select" id="logHours" title="Time spent">${['1h 00m', '2h 00m', '3h 00m', '4h 00m', '4h 30m', '5h 00m', '5h 30m', '6h 00m', '7h 00m', '8h 00m'].map(h => `<option ${h === state.logHours ? 'selected' : ''}>${h}</option>`).join('')}</select>
-        <span class="spacer"></span>
-        <button class="btn" data-action="log-cancel">Cancel</button>
-        <button class="btn gold" data-action="log-save">${icon('check', 'sm')} Submit for Approval</button>
+        <!-- 3. Hours Worked -->
+        <div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">
+            🕒 Hours Worked
+          </label>
+          <select class="select" id="logHoursSelect" style="width:100%;height:38px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:13px">
+            ${['1h 00m', '2h 00m', '3h 00m', '4h 00m', '4h 30m', '5h 00m', '5h 30m', '6h 00m', '7h 00m', '8h 00m', '9h 00m', '10h 00m'].map(h => `<option value="${h}" ${(state.logHours || '4h 00m') === h ? 'selected' : ''}>${h}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Other Project Name field (shown when Other is selected) -->
+      <div id="otherProjectField" style="display:${state.logProject === '__other__' ? 'block' : 'none'};margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--gold);margin-bottom:6px">
+          ✏️ Specify Project Name
+        </label>
+        <input type="text" id="logOtherProjectName" placeholder="Enter project name (e.g. Mobile App, CRM System)..." value="${esc(state.logOtherProjectName || '')}" style="width:100%;height:38px;padding:0 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--gold);color:var(--text);font-size:13px" />
+      </div>
+
+      <!-- Description / Tasks worked on -->
+      <div style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">
+          📝 What did you work on today?
+        </label>
+        <textarea id="logText" placeholder="Describe the tasks completed or work done today (press Ctrl+Enter to save)..." style="width:100%;min-height:90px;padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);font-size:13px;resize:vertical;line-height:1.5"></textarea>
+      </div>
+
+      <div class="composer-bar" style="display:flex;align-items:center;justify-content:flex-end;gap:10px">
+        <button class="btn" data-action="log-cancel">Clear</button>
+        <button class="btn gold" data-action="log-save">${icon('check', 'sm')} Save Work Log</button>
       </div>
     </div>
 
+    <!-- Work Logs History -->
     <div class="logs-head" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <span class="card-title" style="font-size:16px">Work Logs &amp; Approvals</span>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn flat" data-log-filter="all" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'all' ? 'color:var(--gold);background:rgba(245,184,46,.15);font-weight:600' : 'color:var(--text-2)'}">All (${allLogs.length})</button>
-        <button class="btn flat" data-log-filter="pending_approval" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'pending_approval' ? 'color:var(--gold);background:rgba(245,184,46,.15);font-weight:600' : 'color:var(--text-2)'}">⏳ Pending Approval (${pendingApprovalCount})</button>
-        <button class="btn flat" data-log-filter="approved" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'approved' ? 'color:#5bdc8e;background:rgba(91,220,142,.15);font-weight:600' : 'color:var(--text-2)'}">✅ Approved by Lead (${approvedCount})</button>
-        <button class="btn flat" data-log-filter="dependency" style="height:28px;padding:0 12px;font-size:12px;border-radius:14px;${state.logFilter === 'dependency' ? 'color:#ff6b6b;background:rgba(255,107,107,.18);font-weight:600' : 'color:var(--text-2)'}">⚠️ Dependencies (${depCount})</button>
-      </div>
+      <span class="card-title" style="font-size:16px;font-weight:600">Work Logs History (${allLogs.length})</span>
+      <span style="font-size:12px;color:var(--text-2)">Showing recorded daily logs</span>
     </div>
 
-    <div class="logs">${filteredLogs.length ? filteredLogs.map((l, i) => {
+    <div class="logs">${allLogs.length ? allLogs.map((l, i) => {
       const ld = parseISO(l.date), p = projects.find(x => x.id === l.project) || { id: l.project, name: l.project || 'General' };
-      const isDep = l.status === 'dependency';
-      const hasTarget = l.target_date && /^\d{4}-\d{2}-\d{2}$/.test(l.target_date);
-      const isEffDone = l.status === 'done' || (hasTarget && state.logDate >= l.target_date);
-      const isEffProgress = !isEffDone && (l.status === 'progress' || (hasTarget && state.logDate < l.target_date));
-      const isApproved = l.approval_status === 'approved';
-      const isRejected = l.approval_status === 'rejected';
+      const itemsList = Array.isArray(l.items) ? l.items : (l.items ? [l.items] : []);
 
       return `<div class="log ${l.date === state.logDate ? 'sel' : ''}">
         <div class="log-date"><b>${fmtShort(l.date)}</b><span>${DOW[ld.getDay()]}</span></div>
         <div class="log-rail"><i></i></div>
-        <div class="card log-card" style="${isApproved ? 'border-color:rgba(91,220,142,.35);' : isDep && !l.resolved ? 'border-color:rgba(255,107,107,.45);' : ''}">
-          <span class="log-state ${isApproved || isEffDone ? 'done' : isDep ? 'prog' : 'prog'}" style="${isApproved || isEffDone ? 'background:rgba(91,220,142,.15);color:#5bdc8e;' : isDep ? 'background:rgba(255,107,107,.15);color:#ff6b6b;' : ''}">
-            ${isApproved || isEffDone ? icon('check') : isDep ? '⚠️' : '⏳'}
+        <div class="card log-card" style="padding:14px 16px">
+          <span class="log-state done" style="background:rgba(245,184,46,.15);color:var(--gold);border:1px solid rgba(245,184,46,.3)">
+            ${icon('checkSquare', 'xs')}
           </span>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0;color:var(--gold);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px">📁 Project: ${esc(p.name || l.project || 'General')}</h4>
+          <div style="min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+              <h4 class="clickable" ${p.id ? `data-go="#/project/${p.id}/overview"` : ''} style="margin:0;color:var(--gold);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px">
+                📁 Project: ${esc(p.name || l.project || 'General')}
+              </h4>
               <span style="font-size:12px;color:var(--text-2)">Logged by: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[l.member]?.name) || l.member || 'Member')} ${userModeIcon(l.member, 'xs')}</b></span>
-              ${hasTarget ? (state.logDate < l.target_date ?
-                `<span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:11px;padding:2px 8px">⏳ In Progress (Target: ${fmtShort(l.target_date)})</span>` :
-                `<span class="badge done" style="font-size:11px;padding:2px 8px">✅ Completed (${fmtShort(l.target_date)})</span>`
-              ) : ''}
             </div>
-            <ul style="margin-top:6px">${l.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
-            ${l.attach ? `<div class="attach-chip" style="margin-top:6px">${icon('clip', 'xs')}${esc(l.attach)}</div>` : ''}
-
-            <!-- Team Lead Approval Box -->
-            <div class="log-approval-box" style="margin-top:12px;padding:10px 14px;border-radius:8px;background:${isApproved ? 'rgba(91,220,142,.07)' : isRejected ? 'rgba(239,68,68,.07)' : 'rgba(245,184,46,.07)'};border:1px solid ${isApproved ? 'rgba(91,220,142,.35)' : isRejected ? 'rgba(239,68,68,.35)' : 'rgba(245,184,46,.35)'}">
-              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-                <div style="display:flex;align-items:center;gap:8px">
-                  ${isApproved ? `
-                    <span class="badge done" style="font-size:11.5px;padding:3px 9px">✓ Approved by ${(PEOPLE[l.approved_by] && PEOPLE[l.approved_by].name) || l.approved_by || 'Team Lead'}</span>
-                    <span class="muted" style="font-size:11px">${l.approved_at || ''}</span>
-                  ` : isRejected ? `
-                    <span class="badge" style="background:rgba(239,68,68,.18);color:#ff5c5c;font-size:11.5px;padding:3px 9px">✕ Changes Requested</span>
-                    <span class="muted" style="font-size:11px">Reviewed by ${(PEOPLE[l.approved_by] && PEOPLE[l.approved_by].name) || l.approved_by || 'Team Lead'}</span>
-                  ` : `
-                    <span class="badge" style="background:rgba(245,184,46,.15);color:var(--gold);font-size:11.5px;padding:3px 9px">⏳ Awaiting Team Lead Approval</span>
-                    <span class="muted" style="font-size:11.5px">Assigned Approver: <b style="color:var(--text)">${(PEOPLE[l.lead] && PEOPLE[l.lead].name) || l.lead || 'Team Lead'}</b></span>
-                  `}
-                </div>
-
-                <!-- Lead Action Buttons -->
-                <div style="display:flex;gap:6px">
-                  ${!isApproved ? `
-                    <button type="button" class="btn ok" data-action="lead-approve-log" data-log-idx="${workLogs.indexOf(l)}" style="height:28px;padding:0 12px;font-size:11.5px;display:flex;align-items:center;gap:4px">
-                      ${icon('check', 'xs')} Approve Work
-                    </button>
-                  ` : ''}
-                  ${!isRejected ? `
-                    <button type="button" class="btn" data-action="lead-reject-log" data-log-idx="${workLogs.indexOf(l)}" style="height:28px;padding:0 12px;font-size:11.5px;color:#ff6b6b;border-color:rgba(239,68,68,.3);display:flex;align-items:center;gap:4px">
-                      ${icon('x', 'xs')} Request Changes
-                    </button>
-                  ` : ''}
-                  <button type="button" class="btn" data-action="chat-lead-dep" data-lead="${l.lead || l.member}" data-project="${l.project}" style="height:28px;padding:0 12px;font-size:11.5px;color:var(--gold)">
-                    ${icon('message', 'xs')} Message
-                  </button>
-                </div>
-              </div>
-              ${l.approval_note ? `<div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.4;background:rgba(255,255,255,.03);padding:6px 10px;border-radius:6px"><b>Lead Feedback / Note:</b> ${esc(l.approval_note)}</div>` : ''}
-            </div>
-
-            ${(l.dependency || isDep) ? `
-            <div class="dep-callout" style="margin-top:10px;padding:10px 14px;border-radius:8px;background:${l.resolved ? 'rgba(91,220,142,.08)' : 'rgba(255,107,107,.08)'};border-left:4px solid ${l.resolved ? '#5bdc8e' : '#ff6b6b'}">
-              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
-                <span style="font-size:12px;font-weight:600;color:${l.resolved ? '#5bdc8e' : '#ff6b6b'};display:flex;align-items:center;gap:4px">
-                  ${l.resolved ? '✓ Dependency Resolved by Team Lead' : '⚠️ Blocker / Dependency Needed'}
-                </span>
-                <span style="font-size:11.5px;color:var(--text-2)">Assigned Lead: <b style="color:var(--text);display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[l.lead]?.name) || l.lead || 'Team Lead')} ${userModeIcon(l.lead, 'xs')}</b></span>
-              </div>
-              <div style="font-size:12.5px;color:var(--text);margin-top:5px;line-height:1.4">
-                ${esc(l.dependency || 'Dependency needed to continue task.')}
-              </div>
-              ${l.help_note ? `<div style="font-size:11.5px;color:#5bdc8e;margin-top:6px;background:rgba(91,220,142,.1);padding:6px 10px;border-radius:6px"><b>Lead Resolution / Help:</b> ${esc(l.help_note)} <span style="color:var(--text-2);font-size:10.5px">(${esc(l.resolved_at || '')})</span></div>` : ''}
-              <div style="display:flex;gap:8px;margin-top:10px">
-                ${!l.resolved ? `<button class="btn flat" data-action="lead-resolve-dep" data-log-idx="${workLogs.indexOf(l)}" style="height:28px;padding:0 12px;font-size:11.5px;color:#5bdc8e;border:1px solid rgba(91,220,142,.4);display:flex;align-items:center;gap:4px">${icon('check', 'xs')}Resolve / Provide Help</button>` : ''}
-                <button class="btn flat" data-action="chat-lead-dep" data-lead="${l.lead || ''}" data-project="${l.project}" style="height:28px;padding:0 12px;font-size:11.5px;color:var(--gold);border:1px solid rgba(245,184,46,.4);display:flex;align-items:center;gap:4px">${icon('message', 'xs')}Message in Chat</button>
-              </div>
-            </div>` : ''}
+            ${itemsList.length ? `<ul style="margin-top:6px">${itemsList.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
           </div>
           <div class="log-side">
-            <span class="log-hours">${icon('clock', 'sm')}${l.hours}</span>
-            <button class="badge-btn clickable" data-log-menu="${workLogs.indexOf(l)}" title="Click to change status" style="background:none;border:none;cursor:pointer;padding:0;outline:none">
-              ${isApproved ? '<span class="badge done">Approved ✓</span>' : isDone ? '<span class="badge done">Completed</span>' : isDep ? '<span class="badge" style="background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.4);color:#ff6b6b;font-weight:600">⚠️ Dependency</span>' : '<span class="badge review">In Progress</span>'}
-            </button>
+            <span class="log-hours">${icon('clock', 'xs')}${esc(l.hours || '4h 00m')}</span>
+            <button type="button" class="btn flat" data-action="delete-worklog" data-log-idx="${i}" title="Delete log" style="height:24px;padding:0 8px;font-size:11px;color:var(--text-3);opacity:0.6">✕</button>
           </div>
         </div>
       </div>`;
-    }).join('') : '<div class="card empty" style="padding:36px;text-align:center;color:var(--text-2)"><div style="font-size:32px;margin-bottom:8px">📝</div>No work logs match this filter. Write what you worked on above to add a log!</div>'}</div>
+    }).join('') : '<div class="card empty" style="padding:36px;text-align:center;color:var(--text-2)"><div style="font-size:32px;margin-bottom:8px">📝</div>No work logs found. Write what you worked on above to add a log!</div>'}</div>
   </section>`;
 }
 
@@ -3341,90 +3291,121 @@ async function handleAction(a, el) {
     }
     case 'log-cancel':
       $('#logText').value = '';
-      state.logAttach = null;
-      state.logDependency = '';
-      state.logStatus = 'progress';
+      if ($('#logOtherProjectName')) $('#logOtherProjectName').value = '';
+      state.logProject = projects[0]?.id || '';
       rerender();
       break;
     case 'log-save': {
       const items = $('#logText').value.split('\n').map(s => s.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean);
       if (!items.length) { $('#logText').focus(); toast('Write what you worked on first'); return; }
-      const enteredProject = $('#logProjectName')?.value?.trim() || $('#logProject')?.value || 'General';
-      const matchedProj = projects.find(p => p.name.toLowerCase() === enteredProject.toLowerCase() || p.id.toLowerCase() === enteredProject.toLowerCase());
-      state.logProject = matchedProj ? matchedProj.id : enteredProject;
-      state.logProjectName = matchedProj ? matchedProj.name : enteredProject;
-      state.logHours = $('#logHours')?.value || '4h 00m';
-      const status = state.logStatus || 'progress';
-      const dependency = status === 'dependency' ? ($('#logDependency')?.value?.trim() || '') : '';
-      const leadApprover = $('#logLeadApprover')?.value || $('#logLead')?.value || 'raja';
-      const lead = leadApprover;
-      const targetDate = $('#logTargetDate')?.value || '2026-11-20';
-      state.logTargetDate = targetDate;
 
-      if (status === 'dependency' && !dependency) {
-        $('#logDependency')?.focus();
-        toast('Please mention what the dependency or blocker is');
-        return;
+      const selProj = $('#logProjectSelect')?.value || (projects[0]?.id || 'General');
+      let projectName = '';
+      let projectId = selProj;
+
+      if (selProj === '__other__') {
+        const customName = $('#logOtherProjectName')?.value?.trim();
+        if (!customName) {
+          $('#logOtherProjectName')?.focus();
+          toast('Please specify the project name');
+          return;
+        }
+        projectName = customName;
+        const existingP = projects.find(p => p.name.toLowerCase() === customName.toLowerCase());
+        if (existingP) {
+          projectId = existingP.id;
+          projectName = existingP.name;
+        } else {
+          projectId = customName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `proj-${Date.now()}`;
+          const np = {
+            id: projectId,
+            name: customName,
+            type: 'General',
+            thumb: '📁',
+            status: 'progress',
+            start: state.logDate,
+            end: 'No end date',
+            team: [ME || 'raja'],
+            extra: 0,
+            totals: { total: 0, completed: 0, inProgress: 0 },
+            workload: {},
+            tasks: [],
+            files: [],
+            notes: [],
+            _other: { completed: 0, inProgress: 0, pending: 0 }
+          };
+          projects.unshift(np);
+          saveProjectsToCache();
+          fetchFromAPI('/projects/', { method: 'POST', body: JSON.stringify(np) }).catch(() => {});
+        }
+      } else {
+        const p = projects.find(x => x.id === selProj);
+        projectName = p ? p.name : selProj;
+        projectId = selProj;
       }
 
+      const hours = $('#logHoursSelect')?.value || '4h 00m';
+      const chosenDate = $('#logDateInput')?.value || state.logDate;
+      state.logDate = chosenDate;
+      state.logProject = projectId;
+      state.logHours = hours;
+
       const logPayload = {
-        date: state.logDate,
-        project: state.logProject,
-        member: ME || 'user',
+        date: chosenDate,
+        project: projectId,
+        member: ME || 'raja',
         items,
-        hours: state.logHours,
-        status,
-        dependency,
-        lead,
-        target_date: targetDate,
-        approval_status: 'pending',
-        approved_by: '',
-        approved_at: '',
-        approval_note: '',
-        resolved: false,
-        attach: state.logAttach
+        hours: hours,
+        status: 'progress'
       };
 
-      const existing = workLogs.find(l => l.date === state.logDate && l.project === state.logProject && l.member === (ME || 'user'));
+      const existing = workLogs.find(l => l.date === chosenDate && l.project === projectId && l.member === (ME || 'raja'));
       if (existing) {
         existing.items.push(...items);
-        existing.status = status;
-        if (dependency) existing.dependency = dependency;
-        existing.lead = lead;
-        existing.target_date = targetDate;
-        existing.approval_status = 'pending';
-        if (state.logAttach) existing.attach = state.logAttach;
+        existing.hours = hours;
+        saveWorkLogsToCache();
         if (existing.id) {
           apiPatchWorkLog(existing.id, {
             items: existing.items,
-            status: existing.status,
-            dependency: existing.dependency,
-            lead: existing.lead,
-            target_date: existing.target_date,
-            approval_status: 'pending',
-            attach: existing.attach
+            hours: existing.hours
           });
         } else {
           apiCreateWorkLog(existing).then(saved => {
-            if (saved && saved.id) existing.id = saved.id;
+            if (saved && saved.id) {
+              existing.id = saved.id;
+              saveWorkLogsToCache();
+            }
           });
         }
       } else {
         workLogs.unshift(logPayload);
+        saveWorkLogsToCache();
         apiCreateWorkLog(logPayload).then(saved => {
-          if (saved && saved.id) logPayload.id = saved.id;
+          if (saved && saved.id) {
+            logPayload.id = saved.id;
+            saveWorkLogsToCache();
+          }
         });
       }
 
-      state.logAttach = null;
-      state.logDependency = '';
       $('#logText').value = '';
+      if ($('#logOtherProjectName')) $('#logOtherProjectName').value = '';
+      state.logProject = projectId;
       rerender();
-      if (status === 'dependency') {
-        toast('Work log submitted for Lead approval & blocker flagged! ⚠️');
-      } else {
-        toast('Job work submitted for Team Lead approval! ⏳');
+      toast(`Work log saved for ${projectName}! ✅`);
+      break;
+    }
+    case 'delete-worklog': {
+      const logIdx = +el.dataset.logIdx;
+      const l = workLogs[logIdx];
+      if (!l) return;
+      workLogs.splice(logIdx, 1);
+      saveWorkLogsToCache();
+      if (l.id) {
+        fetchFromAPI(`/worklogs/${l.id}/`, { method: 'DELETE' }).catch(() => {});
       }
+      rerender();
+      toast('Work log deleted');
       break;
     }
     case 'lead-approve-log': {
@@ -3648,8 +3629,9 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.taskfilter) { state[t.dataset.taskfilter] = t.value; rerender(); }
   if (t.hasAttribute('data-filetype')) { state.fileType = t.value; rerender(); }
-  if (t.id === 'logProject') state.logProject = t.value;
-  if (t.id === 'logHours') state.logHours = t.value;
+  if (t.id === 'logDateInput') { state.logDate = t.value; rerender(); }
+  if (t.id === 'logProjectSelect') { state.logProject = t.value; window.handleLogProjectChange(t.value); }
+  if (t.id === 'logHoursSelect') state.logHours = t.value;
   if (t.id === 'fileInput' && t.files.length) {
     const p = currentProject();
     [...t.files].forEach(f => p.files.push({ name: f.name, kind: fileKind(f.name), by: 'karthik', date: isoDate(new Date()), size: (f.size / 1048576).toFixed(1) + ' MB' }));
@@ -4495,6 +4477,7 @@ async function loadInitialData() {
   if (Array.isArray(apiLogs) && apiLogs.length > 0) {
     workLogs.length = 0;
     workLogs.push(...apiLogs);
+    saveWorkLogsToCache();
   }
 
   if (Array.isArray(apiChats) && apiChats.length > 0) {
