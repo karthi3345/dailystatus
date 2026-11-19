@@ -4609,6 +4609,7 @@ function initAuthScreen() {
     registerForm.addEventListener('submit', async e => {
       e.preventDefault();
       const name = $('#regName').value.trim();
+      const username = ($('#regUsername')?.value || '').trim().toLowerCase();
       const role = $('#regRole').value;
       const email = $('#regEmail').value.trim();
       const password = $('#regPass').value;
@@ -4617,8 +4618,11 @@ function initAuthScreen() {
       const btn = $('#regBtn');
 
       if (!name) return fieldErr('regName', 'regNameErr', 'Enter your full name');
-      if (!role) return fieldErr('regRole', 'regRoleErr', 'Please choose a role');
+      if (!username) return fieldErr('regUsername', 'regUsernameErr', 'Choose a username (e.g. karthik_r)');
+      if (username.length < 3) return fieldErr('regUsername', 'regUsernameErr', 'Username must be at least 3 characters');
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) return fieldErr('regUsername', 'regUsernameErr', 'Letters, numbers, and underscores only');
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fieldErr('regEmail', 'regEmailErr', 'Enter a valid email');
+      if (!role) return fieldErr('regRole', 'regRoleErr', 'Please choose a role');
       if (password.length < 6) return fieldErr('regPass', 'regPassErr', 'Password must be at least 6 characters');
       if (password !== confirm_password) return fieldErr('regConfirm', 'regConfirmErr', 'Passwords do not match');
       if (!terms) {
@@ -4634,11 +4638,11 @@ function initAuthScreen() {
         const res = await fetch(`${API_BASE}/auth/register/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, role, email, password, confirm_password })
+          body: JSON.stringify({ name, username, role, email, password, confirm_password })
         });
         const data = await res.json();
         if (!res.ok) {
-          regAlert.textContent = data.error || (data.email ? data.email[0] : 'Registration failed.');
+          regAlert.textContent = data.error || (data.email ? data.email[0] : (data.username ? data.username[0] : 'Registration failed.'));
           regAlert.className = 'lf-alert';
           regAlert.hidden = false;
           shake(registerForm);
@@ -4673,21 +4677,6 @@ function initAuthScreen() {
     });
   }
 
-  // Google SSO Demo
-  if (ssoBtn) {
-    ssoBtn.addEventListener('click', () => {
-      AUTH_TOKEN = 'sso_token_' + Date.now();
-      ME = 'raja';
-      localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
-      localStorage.setItem('kathir_auth_user', ME);
-      loginSection.hidden = true;
-      appSection.hidden = false;
-      refreshSide();
-      toast('Signed in via Google! Welcome to Volgo Updates!');
-      route();
-    });
-  }
-
   function fieldErr(inpId, errId, msg) {
     const errEl = $('#' + errId);
     if (errEl) errEl.textContent = msg || '';
@@ -4697,6 +4686,29 @@ function initAuthScreen() {
       if (msg) inp.focus();
     }
   }
+
+  ['loginEmail', 'loginPass', 'regName', 'regUsername', 'regEmail', 'regPass', 'regConfirm'].forEach(id => {
+    const el = $('#' + id);
+    if (el) {
+      el.addEventListener('input', () => {
+        el.closest('.lf-input')?.classList.remove('invalid');
+        const errMap = {
+          loginEmail: 'emailErr',
+          loginPass: 'passErr',
+          regName: 'regNameErr',
+          regUsername: 'regUsernameErr',
+          regEmail: 'regEmailErr',
+          regPass: 'regPassErr',
+          regConfirm: 'regConfirmErr'
+        };
+        const errId = errMap[id];
+        if (errId) {
+          const errEl = $('#' + errId);
+          if (errEl) errEl.textContent = '';
+        }
+      });
+    }
+  });
 
   function shake(el) {
     el.classList.remove('shake');

@@ -123,15 +123,17 @@ class LoginView(APIView):
         if not identifier or not password:
             return Response({'error': 'Please enter your username/email and password.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if identifier is email or username
+        # Allow seamless login with either email or username
+        user_obj = None
         if '@' in identifier:
             user_obj = User.objects.filter(email__iexact=identifier).first()
-            if not user_obj:
-                return Response({'error': 'No account found with this email address. Please register.'}, status=status.HTTP_400_BAD_REQUEST)
-        else:
+        if not user_obj:
             user_obj = User.objects.filter(username__iexact=identifier).first()
-            if not user_obj:
-                return Response({'error': 'No account found with this username. Please register.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user_obj:
+            user_obj = User.objects.filter(email__iexact=identifier).first()
+
+        if not user_obj:
+            return Response({'error': 'No account found with this email or username. Please check your credentials or register.'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = authenticate(username=user_obj.username, password=password)
         if not user:

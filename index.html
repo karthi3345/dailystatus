@@ -100,25 +100,54 @@
             <small class="lf-err" id="regNameErr"></small>
           </div>
           <div class="lf-field">
-            <label for="regRole">Role</label>
-            <div class="lf-input lf-select"><span data-icon="briefcase"></span>
-              <select id="regRole">
-                <option value="">Select role</option>
-                <option>Team Lead</option>
-                <option>Developer</option>
-                <option>UI/UX Designer</option>
-                <option>QA Engineer</option>
-                <option>Project Manager</option>
-              </select>
-            </div>
-            <small class="lf-err" id="regRoleErr"></small>
+            <label for="regUsername">Username</label>
+            <div class="lf-input"><span data-icon="user"></span><input id="regUsername" autocomplete="username" placeholder="Choose a username" /></div>
+            <small class="lf-err" id="regUsernameErr"></small>
           </div>
         </div>
 
-        <div class="lf-field">
-          <label for="regEmail">Work email</label>
-          <div class="lf-input"><span data-icon="mail"></span><input id="regEmail" type="email" autocomplete="email" placeholder="you@volgoupdates.com" /></div>
-          <small class="lf-err" id="regEmailErr"></small>
+        <div class="lf-grid">
+          <div class="lf-field">
+            <label for="regEmail">Work email</label>
+            <div class="lf-input"><span data-icon="mail"></span><input id="regEmail" type="email" autocomplete="email" placeholder="you@volgoupdates.com" /></div>
+            <small class="lf-err" id="regEmailErr"></small>
+          </div>
+          <div class="lf-field">
+            <label for="regRole">Role</label>
+            <div class="lf-input lf-select"><span data-icon="briefcase"></span>
+              <select id="regRole">
+  <option value="">Select role</option>
+  <option>Team Lead</option>
+  <option>Developer</option>
+  <option>UI/UX Designer</option>
+  <option>QA Engineer</option>
+  <option>Project Manager</option>
+  <option value="Other">Other (Specify your role)</option>
+</select>
+
+
+<input
+  type="text"
+  id="otherRole"
+  placeholder="Specify your role"
+  style="display:none; margin-top:10px;"
+/>
+
+<script>
+function toggleOtherRole() {
+    const role = document.getElementById("regRole").value;
+    const otherRole = document.getElementById("otherRole");
+
+    otherRole.style.display = role === "Other" ? "block" : "none";
+
+    if (role !== "Other") {
+        otherRole.value = "";
+    }
+}
+</script>
+            </div>
+            <small class="lf-err" id="regRoleErr"></small>
+          </div>
         </div>
 
         <div class="lf-field">
@@ -189,6 +218,6 @@
     <main class="main" id="main"></main>
   </div>
 
-  <script src="app.js?v=3.5"></script>
+  <script src="app.js?v=3.6"></script>
 </body>
 </html>
