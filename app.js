@@ -1311,28 +1311,50 @@ function openGroupInfoModal(c) {
   document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
+function togglePwdVis(btn, inputId) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.innerHTML = `<svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+    btn.title = "Hide password";
+  } else {
+    inp.type = 'password';
+    btn.innerHTML = `<svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    btn.title = "Show password";
+  }
+}
+window.togglePwdVis = togglePwdVis;
+
 function openLoginModal() {
   closeFloating();
   $('#authModal')?.remove();
   const modalHtml = `
     <div class="overlay" id="authModal">
-      <div class="modal">
-        <h3>Sign In to Kathir Studios</h3>
-        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Login to sync your daily work log and chat.</p>
-        <div id="authErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+      <div class="modal" style="width:420px">
+        <h3 style="margin-bottom:6px">Sign In to Kathir Studios</h3>
+        <p style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">Login with your username or email address to access your workspace.</p>
+        <div id="authErr" style="color:#f06464;background:rgba(240,100,100,.1);border:1px solid rgba(240,100,100,.25);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none"></div>
         <form id="loginForm">
           <div class="field">
-            <label>Username or Email</label>
-            <input type="text" id="authUsername" required placeholder="e.g. kathir" autofocus />
+            <label>Username or Email Address</label>
+            <input type="text" id="authUsername" required placeholder="e.g. karthik or alex@gmail.com" autofocus autocomplete="username" />
           </div>
-          <div class="field">
+          <div class="field" style="position:relative">
             <label>Password</label>
-            <input type="password" id="authPassword" required placeholder="••••••••" />
+            <div style="position:relative;display:flex;align-items:center">
+              <input type="password" id="authPassword" required placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="current-password" />
+              <button type="button" onclick="togglePwdVis(this, 'authPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
+                <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
-          <div class="modal-actions" style="margin-top:16px">
-            <button type="button" class="btn flat" onclick="document.getElementById('authModal').remove()">Cancel</button>
-            <button type="button" class="btn flat" onclick="openRegisterModal()" style="color:var(--gold)">Register</button>
-            <button type="submit" class="btn primary">Sign In</button>
+          <div class="modal-actions" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">
+            <button type="button" class="btn flat" onclick="openRegisterModal()" style="color:var(--gold);padding-left:0;font-size:13px">Create Account</button>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn flat" onclick="document.getElementById('authModal').remove()">Cancel</button>
+              <button type="submit" id="btnSignIn" class="btn primary">Sign In</button>
+            </div>
           </div>
         </form>
       </div>
@@ -1344,32 +1366,53 @@ function openLoginModal() {
     const username = $('#authUsername').value.trim();
     const password = $('#authPassword').value;
     const errBox = $('#authErr');
+    const submitBtn = $('#btnSignIn');
     errBox.style.display = 'none';
-    const res = await fetch(`${API_BASE}/auth/login/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      errBox.textContent = data.error || 'Login failed. Please check your credentials.';
+
+    if (!username || !password) {
+      errBox.textContent = 'Please enter your username/email and password.';
       errBox.style.display = 'block';
       return;
     }
-    AUTH_TOKEN = data.token;
-    localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
-    ME = data.user.username.toLowerCase();
-    localStorage.setItem('kathir_auth_user', ME);
-    if (!PEOPLE[ME]) {
-      PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: data.user.availability || 'available', mode: data.user.mode || 'office' };
-    } else {
-      PEOPLE[ME].name = data.user.name;
-      PEOPLE[ME].role = data.user.role;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Signing in...';
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/login/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errBox.textContent = data.error || 'Login failed. Please check your credentials.';
+        errBox.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign In';
+        return;
+      }
+      AUTH_TOKEN = data.token;
+      localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+      ME = data.user.username.toLowerCase();
+      localStorage.setItem('kathir_auth_user', ME);
+      if (!PEOPLE[ME]) {
+        PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: data.user.availability || 'available', mode: data.user.mode || 'office' };
+      } else {
+        PEOPLE[ME].name = data.user.name;
+        PEOPLE[ME].role = data.user.role;
+      }
+      TITLES[ME] = data.user.role;
+      $('#authModal')?.remove();
+      toast(`Welcome back, ${data.user.name}!`);
+      refreshSide();
+      rerender();
+    } catch (err) {
+      errBox.textContent = 'Network or server error. Please try again.';
+      errBox.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sign In';
     }
-    $('#authModal').remove();
-    toast(`Welcome, ${data.user.name}!`);
-    refreshSide();
-    rerender();
   };
 }
 
@@ -1378,71 +1421,164 @@ function openRegisterModal() {
   $('#authModal')?.remove();
   const modalHtml = `
     <div class="overlay" id="authModal">
-      <div class="modal">
-        <h3>Create New Account</h3>
-        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Register a new studio member profile.</p>
-        <div id="authErr" style="color:#f06464;font-size:12px;margin-bottom:10px;display:none"></div>
+      <div class="modal" style="width:460px;max-height:92vh;overflow-y:auto">
+        <h3 style="margin-bottom:6px">Create New Account</h3>
+        <p style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">Register as a member. Personal emails (Gmail, Yahoo, Outlook, etc.) are welcome!</p>
+        <div id="authErr" style="color:#f06464;background:rgba(240,100,100,.1);border:1px solid rgba(240,100,100,.25);padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px;display:none"></div>
         <form id="regForm">
           <div class="field">
             <label>Full Name</label>
-            <input type="text" id="regName" required placeholder="e.g. Karthik Raja" />
+            <input type="text" id="regName" required placeholder="e.g. Karthik Raja" autofocus autocomplete="name" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Username</label>
+              <input type="text" id="regUsername" required placeholder="e.g. karthik3345" autocomplete="username" />
+            </div>
+            <div class="field">
+              <label>Role / Title</label>
+              <input type="text" id="regRole" placeholder="e.g. Developer" value="Developer" />
+            </div>
           </div>
           <div class="field">
-            <label>Username</label>
-            <input type="text" id="regUsername" required placeholder="e.g. karthik" />
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="margin:0">Email Address</label>
+              <span style="font-size:11px;color:var(--gold)">Personal emails welcome</span>
+            </div>
+            <input type="email" id="regEmail" required placeholder="e.g. yourname@gmail.com" autocomplete="email" />
           </div>
-          <div class="field">
-            <label>Email</label>
-            <input type="email" id="regEmail" placeholder="name@company.com" />
+          <div class="field" style="position:relative">
+            <label>Password (min 6 characters)</label>
+            <div style="position:relative;display:flex;align-items:center">
+              <input type="password" id="regPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
+              <button type="button" onclick="togglePwdVis(this, 'regPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
+                <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
-          <div class="field">
-            <label>Role / Title</label>
-            <input type="text" id="regRole" placeholder="e.g. Full Stack Developer" value="Developer" />
+          <div class="field" style="position:relative">
+            <label>Confirm Password</label>
+            <div style="position:relative;display:flex;align-items:center">
+              <input type="password" id="regConfirmPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
+              <button type="button" onclick="togglePwdVis(this, 'regConfirmPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
+                <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <div id="pwdMatchNote" style="font-size:11.5px;margin-top:4px;display:none"></div>
           </div>
-          <div class="field">
-            <label>Password (min 6 chars)</label>
-            <input type="password" id="regPassword" required minlength="6" placeholder="••••••••" />
-          </div>
-          <div class="modal-actions" style="margin-top:16px">
-            <button type="button" class="btn flat" onclick="document.getElementById('authModal').remove()">Cancel</button>
-            <button type="button" class="btn flat" onclick="openLoginModal()" style="color:var(--gold)">Sign In</button>
-            <button type="submit" class="btn primary">Register</button>
+          <div class="modal-actions" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">
+            <button type="button" class="btn flat" onclick="openLoginModal()" style="color:var(--gold);padding-left:0;font-size:13px">Already have an account? Sign In</button>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn flat" onclick="document.getElementById('authModal').remove()">Cancel</button>
+              <button type="submit" id="btnRegister" class="btn primary">Register</button>
+            </div>
           </div>
         </form>
       </div>
     </div>
   `;
   document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  // Live password matching indicator
+  const p1 = $('#regPassword');
+  const p2 = $('#regConfirmPassword');
+  const note = $('#pwdMatchNote');
+  const checkMatch = () => {
+    if (!p2.value) {
+      note.style.display = 'none';
+      return;
+    }
+    note.style.display = 'block';
+    if (p1.value === p2.value) {
+      note.style.color = '#5bdc8e';
+      note.textContent = '✓ Passwords match';
+      p2.style.borderColor = 'rgba(91, 220, 142, 0.5)';
+    } else {
+      note.style.color = '#f06464';
+      note.textContent = '✕ Passwords do not match';
+      p2.style.borderColor = 'rgba(240, 100, 100, 0.5)';
+    }
+  };
+  p1.oninput = checkMatch;
+  p2.oninput = checkMatch;
+
   $('#regForm').onsubmit = async (e) => {
     e.preventDefault();
     const name = $('#regName').value.trim();
     const username = $('#regUsername').value.trim().toLowerCase();
-    const email = $('#regEmail').value.trim();
-    const role = $('#regRole').value.trim();
+    const email = $('#regEmail').value.trim().toLowerCase();
+    const role = $('#regRole').value.trim() || 'Developer';
     const password = $('#regPassword').value;
+    const confirmPassword = $('#regConfirmPassword').value;
     const errBox = $('#authErr');
+    const submitBtn = $('#btnRegister');
     errBox.style.display = 'none';
-    const res = await fetch(`${API_BASE}/auth/register/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, username, email, role, password })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      errBox.textContent = data.error || 'Registration failed.';
+
+    // Frontend validations
+    if (!name) {
+      errBox.textContent = 'Please enter your full name.';
       errBox.style.display = 'block';
       return;
     }
-    AUTH_TOKEN = data.token;
-    localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
-    ME = data.user.username.toLowerCase();
-    localStorage.setItem('kathir_auth_user', ME);
-    PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: 'available', mode: 'office' };
-    TITLES[ME] = data.user.role;
-    $('#authModal').remove();
-    toast(`Account created! Welcome, ${data.user.name}!`);
-    refreshSide();
-    rerender();
+    if (!username || username.length < 3) {
+      errBox.textContent = 'Username must be at least 3 characters.';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      errBox.textContent = 'Username can only contain letters, numbers, and underscores.';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errBox.textContent = 'Please enter a valid email address (e.g. alex@gmail.com).';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!password || password.length < 6) {
+      errBox.textContent = 'Password must be at least 6 characters.';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (password !== confirmPassword) {
+      errBox.textContent = 'Passwords do not match. Please verify and re-enter.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Registering...';
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/register/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, username, email, role, password, confirm_password: confirmPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errBox.textContent = data.error || 'Registration failed. Please check your details.';
+        errBox.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Register';
+        return;
+      }
+      AUTH_TOKEN = data.token;
+      localStorage.setItem('kathir_auth_token', AUTH_TOKEN);
+      ME = data.user.username.toLowerCase();
+      localStorage.setItem('kathir_auth_user', ME);
+      PEOPLE[ME] = { name: data.user.name, role: data.user.role, availability: 'available', mode: 'office' };
+      TITLES[ME] = data.user.role;
+      $('#authModal')?.remove();
+      toast(`Account created! Welcome, ${data.user.name}!`);
+      refreshSide();
+      rerender();
+    } catch (err) {
+      errBox.textContent = 'Network or server error. Please try again.';
+      errBox.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Register';
+    }
   };
 }
 
@@ -1455,10 +1591,11 @@ function handleLogout() {
   AUTH_TOKEN = null;
   localStorage.removeItem('kathir_auth_token');
   localStorage.removeItem('kathir_auth_user');
-  ME = 'kathir';
+  ME = null;
   toast('Signed out successfully');
   refreshSide();
   rerender();
+  setTimeout(() => openLoginModal(), 300);
 }
 
 async function apiPatchMember(id, patchData) {
@@ -1540,7 +1677,7 @@ async function loadInitialData() {
         thumb: ap.thumb || 'portfolio',
         status: ap.status || 'progress',
         start: ap.start || isoDate(new Date()),
-        end: ap.end || isoDate(new Date()),
+        end: (ap.end !== undefined && ap.end !== null) ? ap.end : '',
         team: ap.team || [ME].filter(Boolean),
         extra: ap.extra || 0,
         totals: ap.totals || { total: 0, completed: 0, inProgress: 0 },
