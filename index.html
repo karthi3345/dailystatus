@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="styles.css?v=4.1" />
 </head>
 <body>
-  <!-- Login Screen bypassed (no login/register required) -->
-  <section class="login" id="login" hidden>
+  <!-- Fullscreen Login & Register Screen -->
+  <section class="login" id="login">
     <div class="login-card">
       <!-- Brand side -->
       <div class="login-brand">
@@ -84,6 +84,19 @@
 
         <div class="lf-alert" id="loginAlert" hidden></div>
         <button class="btn gold lf-submit" type="submit" id="loginBtn">Sign In <span data-icon="arrowRight"></span></button>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:16px;margin-bottom:10px">
+          <div style="flex:1;height:1px;background:var(--line-2)"></div>
+          <span style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px">Quick Demo Sign In</span>
+          <div style="flex:1;height:1px;background:var(--line-2)"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:12px">
+          <button type="button" class="btn flat" data-quick-user="kumar" style="font-size:11.5px;padding:4px 10px;height:28px;border-radius:14px;border:1px solid var(--line-2)">kumar (Lead)</button>
+          <button type="button" class="btn flat" data-quick-user="raja" style="font-size:11.5px;padding:4px 10px;height:28px;border-radius:14px;border:1px solid var(--line-2)">raja (Developer)</button>
+          <button type="button" class="btn flat" data-quick-user="karthik" style="font-size:11.5px;padding:4px 10px;height:28px;border-radius:14px;border:1px solid var(--line-2)">karthik (HR)</button>
+          <button type="button" class="btn flat" data-quick-user="rahul" style="font-size:11.5px;padding:4px 10px;height:28px;border-radius:14px;border:1px solid var(--line-2)">rahul (PM)</button>
+          <button type="button" class="btn flat" data-quick-user="mr_vandu" style="font-size:11.5px;padding:4px 10px;height:28px;border-radius:14px;border:1px solid var(--line-2)">mr_vandu (Lawyer)</button>
+        </div>
 
         <p class="lf-switch">Don't have an account? <button type="button" class="link" data-auth="register">Create one</button></p>
       </form>
@@ -231,6 +244,6 @@
       }
     };
   </script>
-  <script src="app.js?v=5.5"></script>
+  <script src="app.js?v=5.6"></script>
 </body>
 </html>

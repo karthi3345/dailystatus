@@ -92,8 +92,8 @@ const THUMBS = {
 };
 
 /* ---------------- Dynamic Data store ---------------- */
-let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || 'direct-access-token';
-let ME = localStorage.getItem('kathir_auth_user') || 'kumar';
+let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
+let ME = localStorage.getItem('kathir_auth_user') || null;
 
 const PEOPLE = {};
 const TITLES = {};
@@ -1967,6 +1967,16 @@ function place(el, anchor) {
 }
 function openProfile(id, anchor) {
   closeFloating();
+  if (!ME || !AUTH_TOKEN) {
+    const loginSection = $('#login');
+    const appSection = $('#app');
+    if (loginSection && appSection) {
+      appSection.hidden = true;
+      loginSection.hidden = false;
+      setTimeout(() => $('#loginEmail')?.focus(), 40);
+    }
+    return;
+  }
   if (anchor && anchor.nodeType) {
     currentProfileAnchor = anchor;
   } else if (!currentProfileAnchor || !document.body.contains(currentProfileAnchor)) {
@@ -2020,7 +2030,12 @@ function openProfile(id, anchor) {
             </button>
           `;
         }).join('')}
-      </div>`;
+      </div>
+      <div class="sep"></div>
+      <h5>Account</h5>
+      <button class="opt" data-action="auth-logout" style="color:var(--red);font-weight:600">
+        ${icon('x')} Log Out
+      </button>`;
   } else {
     el.innerHTML = `
       <div class="pop-head">
@@ -4818,20 +4833,22 @@ async function apiSendMessage(chatId, messageData) {
 }
 
 async function loadInitialData() {
-  ME = localStorage.getItem('kathir_auth_user') || 'kumar';
-  AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || 'direct-access-token';
+  AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
+  ME = localStorage.getItem('kathir_auth_user') || null;
   checkInitialAuthView();
 
-  try {
-    const meRes = await fetchFromAPI('/auth/me/');
-    if (meRes && meRes.authenticated && meRes.user) {
-      ME = meRes.user.username.toLowerCase();
-      localStorage.setItem('kathir_auth_user', ME);
-      if (!PEOPLE[ME]) {
-        PEOPLE[ME] = { name: meRes.user.name, role: meRes.user.role, availability: meRes.user.availability, mode: meRes.user.mode };
+  if (AUTH_TOKEN) {
+    try {
+      const meRes = await fetchFromAPI('/auth/me/');
+      if (meRes && meRes.authenticated && meRes.user) {
+        ME = meRes.user.username.toLowerCase();
+        localStorage.setItem('kathir_auth_user', ME);
+        if (!PEOPLE[ME]) {
+          PEOPLE[ME] = { name: meRes.user.name, role: meRes.user.role, availability: meRes.user.availability, mode: meRes.user.mode };
+        }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
   checkInitialAuthView();
 
   const [apiMembers, apiProjects, apiLogs, apiChats] = await Promise.all([
@@ -4963,24 +4980,36 @@ document.addEventListener('drop', e => {
 
 /* ---------------- Boot ---------------- */
 function refreshSide() {
-  if (!ME) {
-    ME = localStorage.getItem('kathir_auth_user') || 'kumar';
+  if (!ME || !AUTH_TOKEN) {
+    $('#sideAvatar').innerHTML = `<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#2d2d33"/><circle cx="20" cy="16" r="7" fill="#888"/><path d="M8 38c2-8 7-10 12-10s10 2 12 10z" fill="#888"/></svg>`;
+    const info = $('#sideUser > div');
+    if (info) {
+      info.innerHTML = `<div class="name" style="color:var(--gold)">Sign In / Register</div><div class="role">Click to Log In</div>`;
+    }
+    return;
   }
-  const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'Kumar', role: TITLES[ME] || 'Team Lead' };
+  const currentPerson = PEOPLE[ME] || { name: ME ? ME.charAt(0).toUpperCase() + ME.slice(1) : 'User', role: TITLES[ME] || 'Team Member' };
   const modeKey = (currentPerson && currentPerson.mode) || 'office';
   const m = MODES[modeKey] || MODES['office'];
   $('#sideAvatar').innerHTML = avatarSVG(ME);
   const info = $('#sideUser > div');
   if (info) {
-    info.innerHTML = `<div class="name" style="display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(currentPerson.name)}</span><span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, 'xs')}</span></div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Lead')}</div>`;
+    info.innerHTML = `<div class="name" style="display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(currentPerson.name)}</span><span class="user-mode-ic" title="${esc(m.long)}">${icon(m.icon, 'xs')}</span></div><div class="role">${esc(currentPerson.role || TITLES[ME] || 'Team Member')}</div>`;
   }
 }
 
 function checkInitialAuthView() {
   const loginSection = $('#login');
   const appSection = $('#app');
-  if (loginSection) loginSection.hidden = true;
-  if (appSection) appSection.hidden = false;
+  if (!loginSection || !appSection) return;
+
+  if (AUTH_TOKEN) {
+    loginSection.hidden = true;
+    appSection.hidden = false;
+  } else {
+    loginSection.hidden = false;
+    appSection.hidden = true;
+  }
 }
 
 function initAuthScreen() {
@@ -4999,6 +5028,18 @@ function initAuthScreen() {
   const regAlert = $('#regAlert');
   const ssoBtn = $('#ssoBtn');
   const forgotBtn = $('#forgotBtn');
+
+  // Quick Demo Account Buttons
+  $$('[data-quick-user]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      const u = btn.dataset.quickUser;
+      if (loginEmail) loginEmail.value = u;
+      if (loginPass) loginPass.value = '123456';
+      const submitBtn = $('#loginBtn');
+      if (submitBtn) submitBtn.click();
+    });
+  });
 
   // Switch between Login and Register
   $$('[data-auth]').forEach(btn => {
@@ -5333,7 +5374,10 @@ initAuthScreen();
 checkInitialAuthView();
 refreshSide();
 window.addEventListener('hashchange', () => {
-  route();
+  if (AUTH_TOKEN) route();
+  else checkInitialAuthView();
 });
-route();
+if (AUTH_TOKEN) {
+  route();
+}
 loadInitialData();
