@@ -30,15 +30,6 @@ class RegisterView(APIView):
         if not name:
             return Response({'error': 'Please enter your full name.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not username:
-            return Response({'error': 'Please enter a username.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if len(username) < 3 or len(username) > 30:
-            return Response({'error': 'Username must be between 3 and 30 characters.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not re.match(r'^[a-zA-Z0-9_]+$', username):
-            return Response({'error': 'Username can only contain letters, numbers, and underscores.'}, status=status.HTTP_400_BAD_REQUEST)
-
         if not email:
             return Response({'error': 'Please enter your email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -46,6 +37,24 @@ class RegisterView(APIView):
         email_regex = r'^[\w\.-]+@[\w\.-]+\.\w{2,}$'
         if not re.match(email_regex, email):
             return Response({'error': 'Please enter a valid email address (e.g. yourname@gmail.com).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not username:
+            base_user = re.sub(r'[^a-zA-Z0-9_]', '', email.split('@')[0])
+            if len(base_user) < 3:
+                base_user = f"user_{base_user}"
+            username = base_user[:25]
+            cand = username
+            counter = 1
+            while User.objects.filter(username__iexact=cand).exists():
+                cand = f"{username[:22]}_{counter}"
+                counter += 1
+            username = cand
+
+        if len(username) < 3 or len(username) > 30:
+            return Response({'error': 'Username must be between 3 and 30 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not re.match(r'^[a-zA-Z0-9_]+$', username):
+            return Response({'error': 'Username can only contain letters, numbers, and underscores.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not password:
             return Response({'error': 'Please enter a password.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -215,7 +224,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         try:
             p1 = Project.objects.create(
                 id='runway-rum-mwn689x2',
-                name='Runway Rum',
+                name='Volgo Updates',
                 type='Web',
                 thumb='portfolio',
                 status='progress',

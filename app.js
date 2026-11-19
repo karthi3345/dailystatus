@@ -151,7 +151,7 @@ const TASK_TYPES = {
 const SEED_PROJECTS = [
   {
     id: 'runway-rum-mwn689x2',
-    name: 'Runway Rum',
+    name: 'Volgo Updates',
     type: 'Web',
     thumb: 'portfolio',
     status: 'progress',
@@ -239,7 +239,7 @@ const SEED_PROJECTS = [
       }
     ],
     files: [
-      { name: 'runway-spec-v1.pdf', kind: 'doc', by: 'karthik', date: '2026-11-19', size: '2.4 MB' }
+      { name: 'volgo-spec-v1.pdf', kind: 'doc', by: 'karthik', date: '2026-11-19', size: '2.4 MB' }
     ],
     notes: [
       { id: 'n1', title: 'Sprint Objectives', text: 'Deliver core brand tag linking by end of sprint.', by: 'raja', date: '2026-11-19' }
@@ -270,14 +270,14 @@ const SEED_PROJECTS = [
 const SEED_CHATS = [
   {
     id: 'proj-grp-runway-rum-mwn689x2',
-    name: 'Runway Rum',
+    name: 'Volgo Updates',
     kind: 'group',
     project: 'runway-rum-mwn689x2',
     members: 3,
     memberList: ['raja', 'karthik', 'samrat'],
     starred: true,
     msgs: [
-      { id: 1, from: 'raja', time: '6:30 AM', text: 'Welcome to the Runway Rum group discussion channel! 🚀', reactions: {} },
+      { id: 1, from: 'raja', time: '6:30 AM', text: 'Welcome to the Volgo Updates group discussion channel! 🚀', reactions: {} },
       { id: 2, from: 'samrat', time: '12:00 PM', text: 'hey guys', reactions: {} }
     ]
   }
@@ -288,7 +288,12 @@ function getCachedProjects() {
     const raw = localStorage.getItem('kathir_cached_projects');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsed.forEach(p => {
+          if (p.name === 'Runway Rum') p.name = 'Volgo Updates';
+        });
+        return parsed;
+      }
     }
   } catch (e) {}
   return null;
@@ -4264,7 +4269,7 @@ async function loadInitialData() {
     apiProjects.forEach(ap => {
       projects.push({
         id: ap.id,
-        name: ap.name,
+        name: ap.name === 'Runway Rum' ? 'Volgo Updates' : ap.name,
         type: ap.type || 'Web',
         thumb: ap.thumb || 'portfolio',
         status: ap.status || 'progress',
@@ -4294,7 +4299,17 @@ async function loadInitialData() {
 
   if (Array.isArray(apiChats) && apiChats.length > 0) {
     chats.length = 0;
-    chats.push(...apiChats);
+    apiChats.forEach(c => {
+      const chatCopy = { ...c };
+      if (chatCopy.name === 'Runway Rum') chatCopy.name = 'Volgo Updates';
+      if (Array.isArray(chatCopy.msgs)) {
+        chatCopy.msgs = chatCopy.msgs.map(m => ({
+          ...m,
+          text: (m.text || '').replace(/Runway Rum/g, 'Volgo Updates')
+        }));
+      }
+      chats.push(chatCopy);
+    });
     if (chats.length && (!state.chatId || !chats.some(c => c.id === state.chatId))) {
       state.chatId = chats[0].id;
     }
