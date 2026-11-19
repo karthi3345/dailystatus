@@ -4487,24 +4487,33 @@ function initAuthScreen() {
   const regRole = $('#regRole');
   const otherRoleField = $('#otherRoleField');
   const regOtherRole = $('#regOtherRole');
-  if (regRole) {
-    const syncRole = () => {
-      regRole.classList.toggle('is-empty', !regRole.value);
-      if (otherRoleField) {
-        const isOther = regRole.value === 'Other';
-        otherRoleField.hidden = !isOther;
-        if (isOther) {
-          setTimeout(() => regOtherRole?.focus(), 30);
-        } else if (regOtherRole) {
+
+  window.handleOtherRole = function(val) {
+    if (!regRole) return;
+    const v = val !== undefined ? val : regRole.value;
+    regRole.classList.toggle('is-empty', !v);
+    const isOther = (v === 'Other') || (typeof v === 'string' && v.toLowerCase().includes('other'));
+    if (otherRoleField) {
+      otherRoleField.style.display = isOther ? 'block' : 'none';
+      if (isOther) {
+        otherRoleField.removeAttribute('hidden');
+        setTimeout(() => regOtherRole?.focus(), 30);
+      } else {
+        otherRoleField.setAttribute('hidden', '');
+        if (regOtherRole) {
           regOtherRole.value = '';
           regOtherRole.closest('.lf-input')?.classList.remove('invalid');
           const errEl = $('#regOtherRoleErr');
           if (errEl) errEl.textContent = '';
         }
       }
-    };
-    syncRole();
-    regRole.addEventListener('change', syncRole);
+    }
+  };
+
+  if (regRole) {
+    window.handleOtherRole();
+    regRole.addEventListener('change', () => window.handleOtherRole());
+    regRole.addEventListener('input', () => window.handleOtherRole());
   }
 
   // Password strength meter
@@ -4639,7 +4648,7 @@ function initAuthScreen() {
       if (!/^[a-zA-Z0-9_]+$/.test(username)) return fieldErr('regUsername', 'regUsernameErr', 'Letters, numbers, and underscores only');
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fieldErr('regEmail', 'regEmailErr', 'Enter a valid email');
       if (!role) return fieldErr('regRole', 'regRoleErr', 'Please choose a role');
-      if (role === 'Other') {
+      if (role === 'Other' || role.toLowerCase().includes('other')) {
         const specRole = ($('#regOtherRole')?.value || '').trim();
         if (!specRole) return fieldErr('regOtherRole', 'regOtherRoleErr', 'Please specify your role');
         role = specRole;

@@ -115,24 +115,23 @@
           <div class="lf-field">
             <label for="regRole">Role</label>
             <div class="lf-input lf-select"><span data-icon="briefcase"></span>
-              <select id="regRole">
+              <select id="regRole" onchange="window.handleOtherRole && window.handleOtherRole(this.value)">
                 <option value="">Select role</option>
                 <option value="Team Lead">Team Lead</option>
                 <option value="Developer">Developer</option>
                 <option value="UI/UX Designer">UI/UX Designer</option>
                 <option value="QA Engineer">QA Engineer</option>
                 <option value="Project Manager">Project Manager</option>
-                <option value="Other">Others</option>
+                <option value="Other">Other (Specify your role)</option>
               </select>
             </div>
             <small class="lf-err" id="regRoleErr"></small>
-          </div>
-        </div>
 
-        <div class="lf-field" id="otherRoleField" hidden>
-          <label for="regOtherRole">Specify Role</label>
-          <div class="lf-input"><span data-icon="briefcase"></span><input id="regOtherRole" placeholder="Specify your role (e.g. DevOps Engineer)" /></div>
-          <small class="lf-err" id="regOtherRoleErr"></small>
+            <div id="otherRoleField" style="display: none; margin-top: 10px;">
+              <div class="lf-input"><span data-icon="briefcase"></span><input id="regOtherRole" placeholder="Specify your role (e.g. DevOps Engineer)" /></div>
+              <small class="lf-err" id="regOtherRoleErr"></small>
+            </div>
+          </div>
         </div>
 
         <div class="lf-field">
@@ -203,6 +202,19 @@
     <main class="main" id="main"></main>
   </div>
 
-  <script src="app.js?v=3.7"></script>
+  <script>
+    window.handleOtherRole = function(val) {
+      var r = document.getElementById('regRole');
+      var f = document.getElementById('otherRoleField');
+      var inp = document.getElementById('regOtherRole');
+      var v = val !== undefined ? val : (r ? r.value : '');
+      var isOther = (v === 'Other') || (v && v.toLowerCase().indexOf('other') !== -1);
+      if (f) {
+        f.style.display = isOther ? 'block' : 'none';
+        if (isOther && inp) { setTimeout(function() { inp.focus(); }, 30); }
+      }
+    };
+  </script>
+  <script src="app.js?v=3.8"></script>
 </body>
 </html>
