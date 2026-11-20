@@ -224,15 +224,29 @@ function canAccessProject(p, userId = ME) {
   return false;
 }
 
+function getCanonicalDmId(u1, u2) {
+  const p1 = String(u1 || '').toLowerCase().trim();
+  const p2 = String(u2 || '').toLowerCase().trim();
+  const sorted = [p1, p2].sort();
+  return `dm-${sorted[0]}-${sorted[1]}`;
+}
+
 function canAccessChat(c, userId = ME) {
   if (!c) return false;
   const uid = (userId || '').toLowerCase().trim();
   if (c.kind === 'dm') {
-    const p = (c.person || '').toLowerCase().trim();
-    if (p === uid) return false;
     const mList = Array.isArray(c.memberList) ? c.memberList.map(x => String(x).toLowerCase().trim()) : [];
-    if (mList.length && !mList.includes(uid) && p !== uid) return false;
-    return true;
+    if (mList.length) {
+      return mList.includes(uid);
+    }
+    if (c.id && c.id.startsWith('dm-')) {
+      const parts = c.id.replace('dm-', '').split('-');
+      if (parts.length >= 2) {
+        return parts.map(p => p.toLowerCase().trim()).includes(uid);
+      }
+    }
+    const p = (c.person || '').toLowerCase().trim();
+    return Boolean(p && p !== uid);
   }
   // Group Channel
   const creator = (c.created_by || '').toLowerCase().trim();
@@ -364,16 +378,29 @@ function deduplicateChats() {
   for (const c of chats) {
     if (!c) continue;
     if (c.kind === 'dm') {
-      const p = (
-        c.person ||
-        (c.id && c.id.startsWith('dm-') ? c.id.replace(/^dm-/, '').split('-')[0] : '') ||
-        (c.name && Object.keys(PEOPLE).includes(c.name.toLowerCase()) ? c.name : '') ||
-        (c.name && MEMBER_ROWS.includes(c.name.toLowerCase()) ? c.name : '') ||
-        c.name ||
-        c.id
-      ).toLowerCase().trim();
-      if (!p) continue;
+      let p = (c.person || '').toLowerCase().trim();
+      if (!p || (ME && p === ME.toLowerCase().trim())) {
+        if (c.id && c.id.startsWith('dm-')) {
+          const parts = c.id.replace(/^dm-/, '').split('-');
+          if (parts.length >= 2) {
+            p = (parts[0].toLowerCase().trim() === (ME || '').toLowerCase().trim()) ? parts[1].toLowerCase().trim() : parts[0].toLowerCase().trim();
+          } else if (parts.length === 1) {
+            p = parts[0].toLowerCase().trim();
+          }
+        } else if (Array.isArray(c.memberList) && c.memberList.length) {
+          const others = c.memberList.map(x => String(x).toLowerCase().trim()).filter(x => x !== (ME || '').toLowerCase().trim());
+          if (others.length) p = others[0];
+        }
+      }
+      if (!p || (ME && p === ME.toLowerCase().trim())) continue;
       c.person = p;
+      if (ME) {
+        c.id = getCanonicalDmId(ME, p);
+      }
+      const pName = (PEOPLE[p]?.name) || (p.charAt(0).toUpperCase() + p.slice(1));
+      if (!c.name || c.name.toLowerCase() === (ME || '').toLowerCase()) c.name = pName;
+      if (!c.memberList || !c.memberList.length) c.memberList = [ME, p].filter(Boolean);
+
       if (seenDMs.has(p)) {
         const existing = seenDMs.get(p);
         if (Array.isArray(c.msgs) && c.msgs.length) {
@@ -410,9 +437,9 @@ function ensureAllTeamDMs() {
     if (!id) return;
     const cleanId = String(id).toLowerCase().trim();
     if (ME && cleanId === ME.toLowerCase().trim()) return;
-    const dmId = `dm-${cleanId}`;
+    const dmId = ME ? getCanonicalDmId(ME, cleanId) : `dm-${cleanId}`;
     const pName = (PEOPLE[cleanId]?.name) || (PEOPLE[id]?.name) || (cleanId.charAt(0).toUpperCase() + cleanId.slice(1));
-    let existing = chats.find(c => c.kind === 'dm' && (c.id === dmId || c.id === cleanId || (c.person && c.person.toLowerCase() === cleanId)));
+    let existing = chats.find(c => c.kind === 'dm' && (c.id === dmId || (c.person && c.person.toLowerCase() === cleanId) || (c.memberList && c.memberList.map(x=>x.toLowerCase()).includes(cleanId))));
     if (!existing) {
       chats.push({
         id: dmId,
@@ -421,15 +448,17 @@ function ensureAllTeamDMs() {
         person: cleanId,
         project: null,
         members: 2,
-        memberList: [ME || 'user', cleanId],
+        memberList: [ME || 'user', cleanId].filter(Boolean),
         starred: false,
         unread: 0,
         msgs: []
       });
     } else {
+      existing.id = dmId;
       existing.kind = 'dm';
       existing.person = cleanId;
       if (!existing.name) existing.name = pName;
+      if (!existing.memberList || !existing.memberList.length) existing.memberList = [ME || 'user', cleanId].filter(Boolean);
     }
   });
   deduplicateChats();
@@ -1940,10 +1969,11 @@ function sendMessage(text, file, voice) {
   const msgContent = text || (voice ? `🎤 Voice message (${voice.duration || '0:05'})` : file ? 'Shared a file' : '');
   const replyTo = state.replyingTo ? { ...state.replyingTo } : null;
   state.replyingTo = null;
+  const currentSender = (ME || 'user').toLowerCase();
 
   const newMsg = {
     id: Date.now(),
-    from: ME || 'kumar',
+    from: currentSender,
     time: nowTime(),
     date: nowISTDate(),
     text: msgContent,
@@ -1953,6 +1983,7 @@ function sendMessage(text, file, voice) {
     reply_to: replyTo,
     reactions: {}
   };
+  c.msgs = c.msgs || [];
   c.msgs.push(newMsg);
   saveChatsToCache();
   rerender();
@@ -1963,7 +1994,7 @@ function sendMessage(text, file, voice) {
       activeChatSocket.send(JSON.stringify({
         type: 'chat_message',
         text: msgContent,
-        sender: ME || 'kumar',
+        sender: currentSender,
         file: file || null,
         voice: voice || null,
         reply_to: replyTo
@@ -1971,7 +2002,7 @@ function sendMessage(text, file, voice) {
     } catch (_) {}
   } else {
     apiSendMessage(c.id, {
-      from_member: ME || 'kumar',
+      from_member: currentSender,
       text: msgContent,
       file_info: voice || file || null,
       time_label: nowTime(),
@@ -4088,6 +4119,12 @@ function handleGlobalRealtimeEvent(event, data) {
       });
       break;
     }
+    case 'new_message': {
+      if (data && data.data) {
+        handleNewSocketMessage(data.data);
+      }
+      break;
+    }
   }
 }
 
@@ -4110,7 +4147,8 @@ function connectChatSocket(chatId) {
 
   currentChatSocketId = chatId;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${location.host}/ws/chat/${chatId}/`;
+  const userParam = ME ? `?user=${encodeURIComponent(ME)}` : '';
+  const wsUrl = `${protocol}//${location.host}/ws/chat/${chatId}/${userParam}`;
 
   try {
     activeChatSocket = new WebSocket(wsUrl);
@@ -4155,8 +4193,22 @@ function connectChatSocket(chatId) {
 }
 
 function handleNewSocketMessage(msg) {
-  const c = chats.find(x => x.id === msg.chat_id) || chats.find(x => x.id === state.chatId);
+  if (!msg) return;
+  const sender = (msg.from || '').toLowerCase().trim();
+  const canonicalId = (msg.chat_id && msg.chat_id.startsWith('dm-'))
+    ? (msg.members && msg.members.length >= 2 ? getCanonicalDmId(msg.members[0], msg.members[1]) : (ME && sender ? getCanonicalDmId(ME, sender) : msg.chat_id))
+    : msg.chat_id;
+
+  let c = chats.find(x => x.id === msg.chat_id || x.id === canonicalId || (x.kind === 'dm' && x.person && x.person.toLowerCase() === sender));
+  if (!c && sender && sender !== (ME || '').toLowerCase().trim()) {
+    ensureAllTeamDMs();
+    c = chats.find(x => x.id === msg.chat_id || x.id === canonicalId || (x.kind === 'dm' && x.person && x.person.toLowerCase() === sender));
+  }
+  if (!c && state.chatId) {
+    c = chats.find(x => x.id === state.chatId);
+  }
   if (!c) return;
+
   c.msgs = c.msgs || [];
   const existingIdx = c.msgs.findIndex(m => m.id === msg.id || (m.from === msg.from && m.text === msg.text && typeof m.id === 'number' && Date.now() - m.id < 15000));
   if (existingIdx >= 0) {
@@ -4167,9 +4219,12 @@ function handleNewSocketMessage(msg) {
   saveChatsToCache();
   if (state.chatId === c.id) {
     rerender();
+    const box = $('#msgs');
+    if (box) setTimeout(() => { box.scrollTop = box.scrollHeight; }, 40);
   } else {
     c.unread = (c.unread || 0) + 1;
     updateMsgDot();
+    rerender();
   }
 }
 

@@ -30,14 +30,29 @@ def broadcast_global_event(event_name, data):
     except Exception:
         pass
 
+def get_canonical_dm_id(u1, u2):
+    p1 = str(u1 or '').lower().strip()
+    p2 = str(u2 or '').lower().strip()
+    sorted_users = sorted([p1, p2])
+    return f"dm-{sorted_users[0]}-{sorted_users[1]}"
+
 def broadcast_chat_event(chat_id, event_dict):
     try:
         channel_layer = get_channel_layer()
         if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f"chat_{chat_id}",
-                event_dict
-            )
+            groups = [f"chat_{chat_id}"]
+            if chat_id.startswith('dm-'):
+                parts = chat_id.replace('dm-', '').split('-')
+                if len(parts) >= 2:
+                    canon = get_canonical_dm_id(parts[0], parts[1])
+                    groups.extend([f"chat_{canon}", f"chat_dm-{parts[0].lower()}", f"chat_dm-{parts[1].lower()}"])
+                elif len(parts) == 1:
+                    groups.append(f"chat_dm-{parts[0].lower()}")
+            for grp in set(groups):
+                async_to_sync(channel_layer.group_send)(
+                    grp,
+                    event_dict
+                )
     except Exception:
         pass
 
@@ -549,11 +564,31 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 msg.save(update_fields=['time_label'])
             except Exception:
                 pass
-        broadcast_chat_event(msg.chat_id, {
+        creator = msg.from_member or (self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin')
+        target_person = None
+
+        if msg.chat_id.startswith('dm-'):
+            parts = msg.chat_id.replace('dm-', '').split('-')
+            if len(parts) >= 2:
+                u1, u2 = parts[0].lower().strip(), parts[1].lower().strip()
+                canonical_id = get_canonical_dm_id(u1, u2)
+                target_person = u2 if creator == u1 else u1
+            elif len(parts) == 1:
+                target_person = parts[0].lower().strip()
+                canonical_id = get_canonical_dm_id(creator, target_person)
+            else:
+                canonical_id = msg.chat_id
+            if msg.chat_id != canonical_id:
+                msg.chat_id = canonical_id
+                msg.save(update_fields=['chat_id'])
+
+        chat_id = msg.chat_id
+
+        broadcast_chat_event(chat_id, {
             'type': 'chat_message_broadcast',
             'message': {
                 'id': msg.id,
-                'chat_id': msg.chat_id,
+                'chat_id': chat_id,
                 'from': msg.from_member,
                 'text': msg.text,
                 'time': msg.time_label,
@@ -561,17 +596,22 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 'file': msg.file,
                 'voice': msg.voice,
                 'reply_to': msg.reply_to or {},
-                'reactions': msg.reactions or {}
+                'reactions': msg.reactions or {},
+                'person': target_person,
+                'members': [creator, target_person] if target_person else []
             }
         })
         broadcast_global_event('new_message', {
-            'chat_id': msg.chat_id,
+            'id': msg.id,
+            'chat_id': chat_id,
             'from': msg.from_member,
-            'text': msg.text
+            'text': msg.text,
+            'time': msg.time_label,
+            'person': target_person,
+            'members': [creator, target_person] if target_person else []
         })
-        chat_id = msg.chat_id
+
         if not ChatThread.objects.filter(id=chat_id).exists():
-            creator = msg.from_member or (self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin')
             if chat_id.startswith('proj-grp-'):
                 proj_id = chat_id.replace('proj-grp-', '')
                 proj = Project.objects.filter(id=proj_id).first()
@@ -587,23 +627,16 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                     members=members,
                     created_by=creator
                 )
-            elif Member.objects.filter(id=chat_id).exists() or chat_id.startswith('dm-'):
-                clean_person = chat_id.replace('dm-', '').split('-')[-1].lower()
-                existing_thread = ChatThread.objects.filter(kind='dm', person=clean_person).first()
-                if existing_thread:
-                    if msg.chat_id != existing_thread.id:
-                        msg.chat_id = existing_thread.id
-                        msg.save(update_fields=['chat_id'])
-                else:
-                    mem = Member.objects.filter(id=clean_person).first()
-                    ChatThread.objects.create(
-                        id=chat_id,
-                        name=mem.name if mem else clean_person.capitalize(),
-                        kind='dm',
-                        person=clean_person,
-                        members=[creator, clean_person],
-                        created_by=creator
-                    )
+            elif chat_id.startswith('dm-') and target_person:
+                mem = Member.objects.filter(id=target_person).first()
+                ChatThread.objects.create(
+                    id=chat_id,
+                    name=mem.name if mem else target_person.capitalize(),
+                    kind='dm',
+                    person=target_person,
+                    members=[creator, target_person],
+                    created_by=creator
+                )
             else:
                 ChatThread.objects.create(
                     id=chat_id,
@@ -623,28 +656,64 @@ class ChatThreadsView(APIView):
 
         threads = ChatThread.objects.all().order_by('created_at')
         result = []
-        seen_dm_persons = {}
+        seen_dm_keys = {}
 
         for t in threads:
-            if user_id:
-                if t.kind == 'dm':
-                    t_members = [str(x).lower().strip() for x in (t.members or [])]
+            other_person = None
+            canonical_id = t.id
+
+            if t.kind == 'dm':
+                t_members = [str(x).lower().strip() for x in (t.members or [])]
+                if t.id.startswith('dm-'):
+                    parts = t.id.replace('dm-', '').split('-')
+                    if len(parts) >= 2:
+                        canonical_id = get_canonical_dm_id(parts[0], parts[1])
+                        for p in parts:
+                            if p and p not in t_members:
+                                t_members.append(p)
+
+                if user_id:
+                    # User must be part of this DM
                     if t_members and user_id not in t_members and (t.person or '').lower().strip() != user_id:
                         continue
-                elif t.kind == 'group':
-                    creator = (t.created_by or '').lower().strip()
-                    m_lower = [str(x).lower().strip() for x in (t.members or [])]
-                    has_proj_access = False
-                    if t.project:
-                        proj = Project.objects.filter(id=t.project).first()
-                        if proj:
-                            p_owner = (proj.owner or proj.created_by or '').lower().strip()
-                            p_team = [str(x).lower().strip() for x in (proj.team or [])]
-                            if not p_owner or p_owner == user_id or user_id in p_team:
-                                has_proj_access = True
-                    if creator and creator != user_id and user_id not in m_lower and not has_proj_access:
-                        continue
-            msgs = ChatMessage.objects.filter(chat_id=t.id).order_by('created_at')
+                    if len(t_members) >= 2:
+                        other_person = t_members[0] if t_members[1] == user_id else t_members[1]
+                    elif t.person:
+                        if t.person.lower() == user_id:
+                            other_person = (t.created_by or '').lower() or (t_members[0] if t_members else None)
+                        else:
+                            other_person = t.person.lower()
+                else:
+                    other_person = t.person.lower() if t.person else (t_members[0] if t_members else None)
+
+                if other_person and user_id:
+                    canonical_id = get_canonical_dm_id(user_id, other_person)
+
+            elif user_id and t.kind == 'group':
+                creator = (t.created_by or '').lower().strip()
+                m_lower = [str(x).lower().strip() for x in (t.members or [])]
+                has_proj_access = False
+                if t.project:
+                    proj = Project.objects.filter(id=t.project).first()
+                    if proj:
+                        p_owner = (proj.owner or proj.created_by or '').lower().strip()
+                        p_team = [str(x).lower().strip() for x in (proj.team or [])]
+                        if not p_owner or p_owner == user_id or user_id in p_team:
+                            has_proj_access = True
+                if creator and creator != user_id and user_id not in m_lower and not has_proj_access:
+                    continue
+
+            # Fetch messages
+            if t.kind == 'dm':
+                q_chats = [t.id, canonical_id]
+                if other_person:
+                    q_chats.append(f"dm-{other_person}")
+                if user_id:
+                    q_chats.append(f"dm-{user_id}")
+                msgs = ChatMessage.objects.filter(chat_id__in=list(set(q_chats))).order_by('created_at')
+            else:
+                msgs = ChatMessage.objects.filter(chat_id=t.id).order_by('created_at')
+
             m_list = []
             for m in msgs:
                 try:
@@ -669,27 +738,38 @@ class ChatThreadsView(APIView):
                     'reactions': m.reactions or {}
                 })
 
+            if t.kind == 'dm':
+                if other_person:
+                    other_mem = Member.objects.filter(id=other_person).first()
+                    display_name = other_mem.name if other_mem else other_person.capitalize()
+                else:
+                    display_name = t.name
+            else:
+                display_name = t.name
+
             thread_data = {
-                'id': t.id,
+                'id': canonical_id if t.kind == 'dm' else t.id,
                 'kind': t.kind,
-                'name': t.name,
+                'name': display_name,
                 'project': t.project,
-                'person': t.person,
-                'members': len(t.members) if t.members else 0,
-                'memberList': t.members or [],
+                'person': other_person or t.person,
+                'members': len(t.members) if t.members else 2,
+                'memberList': t.members or ([user_id, other_person] if other_person else []),
                 'starred': t.starred,
                 'unread': 0,
                 'msgs': m_list
             }
 
-            if t.kind == 'dm' and t.person:
-                p_key = t.person.lower().strip()
-                if p_key in seen_dm_persons:
-                    # Merge messages into the existing canonical thread
-                    existing = seen_dm_persons[p_key]
-                    existing['msgs'].extend(m_list)
+            if t.kind == 'dm':
+                dm_key = thread_data['id']
+                if dm_key in seen_dm_keys:
+                    existing = seen_dm_keys[dm_key]
+                    existing_ids = {m['id'] for m in existing['msgs']}
+                    for nm in m_list:
+                        if nm['id'] not in existing_ids:
+                            existing['msgs'].append(nm)
                     continue
-                seen_dm_persons[p_key] = thread_data
+                seen_dm_keys[dm_key] = thread_data
 
             result.append(thread_data)
         return Response(result)
@@ -707,13 +787,14 @@ class ChatThreadsView(APIView):
 
             target_mem = Member.objects.filter(id=person).first()
             target_name = target_mem.name if target_mem else person.capitalize()
-            thread_id = data.get('id') or f"dm-{person}"
+            canonical_id = get_canonical_dm_id(creator, person)
+            thread_id = canonical_id
             members = list(set([creator, person]))
 
-            # Check if a DM thread already exists for this person
-            thread = ChatThread.objects.filter(kind='dm', person=person).first()
+            # Check if a DM thread already exists
+            thread = ChatThread.objects.filter(id=canonical_id).first()
             if not thread:
-                thread = ChatThread.objects.filter(id=thread_id).first()
+                thread = ChatThread.objects.filter(kind='dm', person=person, created_by=creator).first()
             if not thread:
                 thread = ChatThread.objects.create(
                     id=thread_id,
@@ -726,10 +807,10 @@ class ChatThreadsView(APIView):
                 )
             else:
                 thread.kind = 'dm'
+                thread.id = canonical_id
                 thread.person = person
-                if not thread.members:
-                    thread.members = members
-                    thread.save()
+                thread.members = members
+                thread.save()
 
             initial_msg = (data.get('initial_message') or data.get('text') or '').strip()
             if initial_msg:
