@@ -4040,7 +4040,7 @@ function startRealtimePolling() {
     try {
       const freshChats = await fetchFromAPI('/chats/');
       if (Array.isArray(freshChats) && freshChats.length) {
-        let hasChanges = false;
+        let hasNewMessages = false;
         freshChats.forEach(fc => {
           let localChat = chats.find(x => x.id === fc.id);
           if (!localChat && fc.kind === 'dm') {
@@ -4050,35 +4050,33 @@ function startRealtimePolling() {
           if (localChat) {
             const localMsgs = localChat.msgs || [];
             const freshMsgs = fc.msgs || [];
-            if (freshMsgs.length > localMsgs.length || (freshMsgs.length > 0 && localMsgs.length === 0)) {
+            if (freshMsgs.length > localMsgs.length) {
               localChat.msgs = freshMsgs;
-              hasChanges = true;
+              hasNewMessages = true;
             } else if (freshMsgs.length === localMsgs.length && freshMsgs.length > 0) {
               const lastFresh = freshMsgs[freshMsgs.length - 1];
               const lastLocal = localMsgs[localMsgs.length - 1];
-              if (lastFresh && lastLocal && (lastFresh.id !== lastLocal.id || lastFresh.text !== lastLocal.text)) {
-                localChat.msgs = freshMsgs;
-                hasChanges = true;
+              if (lastFresh && lastLocal && lastLocal.id !== lastFresh.id && lastLocal.text === lastFresh.text) {
+                lastLocal.id = lastFresh.id;
               }
             }
-          } else {
-            chats.push(fc);
-            hasChanges = true;
           }
         });
-        if (hasChanges) {
+        if (hasNewMessages) {
           saveChatsToCache();
           if (location.hash.startsWith('#/messenger')) {
-            rerender();
-            const box = $('#msgs');
-            if (box) setTimeout(() => { box.scrollTop = box.scrollHeight; }, 30);
+            const main = $('#main');
+            if (main) {
+              main.innerHTML = renderMessenger();
+              afterMessenger();
+            }
           } else {
             updateMsgDot();
           }
         }
       }
     } catch (_) {}
-  }, 800);
+  }, 1800);
 }
 
 function broadcastGlobalEventSocket(event, data) {
@@ -5311,7 +5309,7 @@ async function loadInitialData() {
   ensureAllTeamDMs();
   deduplicateChats();
   refreshSide();
-  rerender();
+  route();
   initGlobalEventSocket();
   startRealtimePolling();
 }
