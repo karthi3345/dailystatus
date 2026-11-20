@@ -11,4 +11,7 @@ urlpatterns = [
     path('', never_cache(TemplateView.as_view(template_name='index.html')), name='home'),
     path('styles.css', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'styles.css'}),
     path('app.js', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'app.js'}),
+    path('volgo-logo.png', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'volgo-logo.png'}),
+    path('volgo-icon.png', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'volgo-icon.png'}),
+    path('favicon.ico', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'favicon.ico'}),
 ]

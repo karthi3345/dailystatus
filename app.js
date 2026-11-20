@@ -1937,7 +1937,11 @@ function renderChatMessageHtml(m, idx, lastDateLabel = null) {
               const fileItem = (!isVoice && m.file && m.file.name) ? m.file : (!isVoice && m.file_info && m.file_info.name ? m.file_info : null);
               if (!fileItem || !fileItem.name) return '';
 
-              const isImg = fileItem.url && (fileItem.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileItem.name));
+              const isImg = Boolean(
+                fileItem.url &&
+                (fileItem.url.startsWith('data:image/') || fileItem.url.startsWith('http://') || fileItem.url.startsWith('https://')) &&
+                (fileItem.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileItem.name))
+              );
               const isPdf = fileItem.type?.includes('pdf') || /\.pdf$/i.test(fileItem.name);
               const ext = fileItem.name.includes('.') ? fileItem.name.split('.').pop().toUpperCase() : 'DOC';
 
@@ -1945,7 +1949,7 @@ function renderChatMessageHtml(m, idx, lastDateLabel = null) {
                 <div class="attach-container" style="margin-top:6px">
                   ${isImg ? `
                     <div class="attach-preview-img-wrap" onclick="window.previewImageModal('${esc(fileItem.url)}', '${esc(fileItem.name)}')">
-                      <img src="${fileItem.url}" alt="${esc(fileItem.name)}" class="attach-img-preview" />
+                      <img src="${fileItem.url}" alt="${esc(fileItem.name)}" class="attach-img-preview" onerror="this.closest('.attach-preview-img-wrap').style.display='none'" />
                     </div>
                   ` : ''}
                   <div class="attach-row">
