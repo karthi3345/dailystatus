@@ -92,6 +92,19 @@ const THUMBS = {
 };
 
 /* ---------------- Dynamic Data store ---------------- */
+const BUILD_VERSION = 'v6.3_clean';
+if (localStorage.getItem('kathir_build_version') !== BUILD_VERSION) {
+  try {
+    localStorage.removeItem('kathir_auth_token');
+    localStorage.removeItem('kathir_auth_user');
+    localStorage.removeItem('kathir_cached_projects');
+    localStorage.removeItem('kathir_cached_chats');
+    localStorage.removeItem('kathir_cached_worklogs');
+    localStorage.removeItem('kathir_projects_saved');
+    localStorage.removeItem('kathir_chats_saved');
+    localStorage.setItem('kathir_build_version', BUILD_VERSION);
+  } catch (e) {}
+}
 let AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
 let ME = localStorage.getItem('kathir_auth_user') || null;
 
@@ -788,7 +801,7 @@ function renderKanbanCard(t, p = currentProject()) {
       <span class="k-type-badge ${t.task_type || 'task'}" title="Type: ${type.label}">${icon(type.icon, 'xs')}<span>${type.label}</span></span>
       ${t.category ? `<span class="k-cat-pill">${esc(t.category)}</span>` : ''}
       ${schedBadge}
-      ${t.approval_status === 'approved' ? `<span class="badge done" style="font-size:10px;padding:1px 5px" title="Approved by Team Lead">✓ Approved</span>` : t.approval_status === 'rejected' ? `<span class="badge" style="background:rgba(239,68,68,.18);color:#ff5c5c;font-size:10px;padding:1px 5px" title="Changes Requested by Lead">✕ Changes Req</span>` : ''}
+      ${t.approval_status === 'approved' ? `<span class="badge done" style="font-size:10px;padding:1px 5px" title="Approved">✓ Approved</span>` : t.approval_status === 'rejected' ? `<span class="badge" style="background:rgba(239,68,68,.18);color:#ff5c5c;font-size:10px;padding:1px 5px" title="Changes Requested">✕ Changes Req</span>` : ''}
       <button class="kebab" data-tmenu="${t.id}" style="margin-left:auto">${icon('more', 'sm')}</button>
     </div>
     <div class="k-card-title clickable" data-open-task-modal="${t.id}">${esc(t.title)}</div>
@@ -888,7 +901,7 @@ function renderTaskListView(p, list) {
               ${(t.desc || chk.length) ? `<button class="exp ${open ? 'open' : ''}" data-expand="${t.id}">${icon('chevDown', 'xs')}</button>` : ''}
             </div>
           </td>
-          <td>${t.category ? `<span class="k-cat-pill">${esc(t.category)}</span>` : '<span class="muted">-</span>'}${t.approval_status === 'approved' ? `<span class="badge done" style="font-size:10px;padding:1px 5px;margin-left:4px" title="Approved by Team Lead">✓</span>` : ''}</td>
+          <td>${t.category ? `<span class="k-cat-pill">${esc(t.category)}</span>` : '<span class="muted">-</span>'}${t.approval_status === 'approved' ? `<span class="badge done" style="font-size:10px;padding:1px 5px;margin-left:4px" title="Approved">✓</span>` : ''}</td>
           <td><span class="cell-user">${av(t.assignee)}<span style="display:inline-flex;align-items:center;gap:4px">${esc((PEOPLE[t.assignee] && PEOPLE[t.assignee].name) || t.assignee || 'Member')} ${userModeIcon(t.assignee, 'xs')}</span></span></td>
           <td>${chk.length ? `<span class="badge" style="background:rgba(255,255,255,.05);font-size:11px">${chkDone}/${chk.length}</span>` : '<span class="muted">-</span>'}</td>
           <td><span class="badge ${t.priority ? t.priority.toLowerCase() : 'medium'}">${t.priority || 'Medium'}</span></td>
@@ -2474,7 +2487,7 @@ function openJiraTaskModal(p, task, isNew = false) {
                   ${task.approval_status === 'approved' ? `
                     <div style="font-size:12px;color:#5bdc8e;display:flex;gap:8px">
                       <span>✓</span>
-                      <span>Approved by Team Lead <b>${(PEOPLE[task.approved_by] && PEOPLE[task.approved_by].name) || task.approved_by || 'Lead'}</b> at ${task.approved_at || 'Verified'}</span>
+                      <span>Approved by <b>${(PEOPLE[task.approved_by] && PEOPLE[task.approved_by].name) || task.approved_by || 'Reviewer'}</b> at ${task.approved_at || 'Verified'}</span>
                     </div>
                   ` : ''}
                 </div>
@@ -3218,7 +3231,7 @@ document.addEventListener('click', e => {
         { label: 'Report Dependency Needed', icon: 'alert', run: () => {
           openModal('Report Dependency / Blocker', [
             { name: 'dependency', label: 'Dependency / Blocker description', required: true, type: 'textarea', placeholder: 'Explain what dependency or blocker is needed...' },
-            { name: 'lead', label: 'Assign to Team Lead', type: 'select', value: l.lead || '', options: Object.keys(PEOPLE).map(id => [id, `${PEOPLE[id].name || id} (${PEOPLE[id].role || 'Lead'})`]) }
+            { name: 'lead', label: 'Assign to Reviewer / Member', type: 'select', value: l.lead || '', options: Object.keys(PEOPLE).map(id => [id, `${PEOPLE[id].name || id} (${PEOPLE[id].role || 'Member'})`]) }
           ], async d => {
             l.status = 'dependency';
             l.dependency = d.dependency;
@@ -3612,11 +3625,11 @@ async function handleAction(a, el) {
       const logIdx = +el.dataset.logIdx;
       const l = workLogs[logIdx];
       if (!l) return;
-      const approverName = (PEOPLE[ME]?.name) || ME || 'Team Lead';
+      const approverName = (PEOPLE[ME]?.name) || ME || 'Project Owner';
       l.approval_status = 'approved';
       l.approved_by = approverName;
       l.approved_at = `${nowTime()}, ${nowISTDate()}`;
-      l.approval_note = l.approval_note || 'Work verified and approved by Team Lead.';
+      l.approval_note = l.approval_note || 'Work verified and approved.';
       saveWorkLogsToCache();
       if (l.id) {
         apiPatchWorkLog(l.id, {
@@ -3687,7 +3700,7 @@ async function handleAction(a, el) {
       const l = workLogs[logIdx];
       if (!l) return;
       openModal('Request Changes / Feedback on Job Work', [
-        { name: 'note', label: 'Reason / Changes required by Team Lead', type: 'textarea', required: true, placeholder: 'Explain what needs to be changed, tested, or improved before approval...' }
+        { name: 'note', label: 'Reason / Changes requested', type: 'textarea', required: true, placeholder: 'Explain what needs to be changed, tested, or improved before approval...' }
       ], async d => {
         l.approval_status = 'rejected';
         l.approved_by = ME || 'raja';
@@ -3863,21 +3876,6 @@ async function handleAction(a, el) {
       const pid = el.dataset.pid || currentProject()?.id;
       const uid = el.dataset.uid;
       if (pid && uid) removeProjectMember(pid, uid);
-      break;
-    }
-    case 'switch-user': {
-      const uid = (el.dataset.uid || '').toLowerCase();
-      if (uid) {
-        ME = uid;
-        localStorage.setItem('kathir_auth_user', ME);
-        ensureAllTeamDMs();
-        deduplicateChats();
-        refreshSide();
-        rerender();
-        closeFloating();
-        toast(`Active user switched to ${(PEOPLE[ME] && PEOPLE[ME].name) || ME}! 🚀`);
-        broadcastGlobalEventSocket('member_updated', { id: ME, name: (PEOPLE[ME] && PEOPLE[ME].name) || ME });
-      }
       break;
     }
     case 'open-login': openLoginModal(); break;
@@ -5154,8 +5152,21 @@ async function loadInitialData() {
         if (!PEOPLE[ME]) {
           PEOPLE[ME] = { name: meRes.user.name, role: meRes.user.role, availability: meRes.user.availability, mode: meRes.user.mode };
         }
+      } else {
+        AUTH_TOKEN = null;
+        ME = null;
+        localStorage.removeItem('kathir_auth_token');
+        localStorage.removeItem('kathir_auth_user');
       }
-    } catch (_) {}
+    } catch (_) {
+      AUTH_TOKEN = null;
+      ME = null;
+      localStorage.removeItem('kathir_auth_token');
+      localStorage.removeItem('kathir_auth_user');
+    }
+  } else {
+    ME = null;
+    localStorage.removeItem('kathir_auth_user');
   }
   checkInitialAuthView();
 
@@ -5168,68 +5179,71 @@ async function loadInitialData() {
 
   let updated = false;
 
-  if (Array.isArray(apiMembers) && apiMembers.length) {
-    apiMembers.forEach(m => {
-      if (PEOPLE[m.id]) {
-        PEOPLE[m.id].name = m.name || PEOPLE[m.id].name;
-        PEOPLE[m.id].role = m.role || PEOPLE[m.id].role;
-        PEOPLE[m.id].availability = m.availability || PEOPLE[m.id].availability;
-        PEOPLE[m.id].mode = m.mode || PEOPLE[m.id].mode;
-        if (m.today) PEOPLE[m.id].today = m.today;
-      } else {
+  if (Array.isArray(apiMembers)) {
+    Object.keys(PEOPLE).forEach(k => delete PEOPLE[k]);
+    Object.keys(TITLES).forEach(k => delete TITLES[k]);
+    MEMBER_ROWS.length = 0;
+    if (apiMembers.length) {
+      apiMembers.forEach(m => {
         PEOPLE[m.id] = { name: m.name, role: m.role, availability: m.availability, mode: m.mode };
         TITLES[m.id] = m.role;
-      }
-    });
-    MEMBER_ROWS = Object.keys(PEOPLE);
+      });
+      MEMBER_ROWS = Object.keys(PEOPLE);
+    }
     updated = true;
   }
 
   if (Array.isArray(apiProjects)) {
     projects.length = 0;
-    apiProjects.forEach(ap => {
-      projects.push({
-        id: ap.id,
-        name: ap.name === 'Runway Rum' ? 'Volgo Updates' : ap.name,
-        type: ap.type || 'Web',
-        thumb: ap.thumb || 'portfolio',
-        status: ap.status || 'progress',
-        owner: ap.owner || ap.created_by || '',
-        created_by: ap.created_by || ap.owner || '',
-        start: ap.start || isoDate(new Date()),
-        end: (ap.end !== undefined && ap.end !== null) ? ap.end : '',
-        team: ap.team || (ap.owner ? [ap.owner] : [ME].filter(Boolean)),
-        extra: ap.extra || 0,
-        totals: ap.totals || { total: 0, completed: 0, inProgress: 0 },
-        workload: ap.workload || {},
-        tasks: ap.tasks || [],
-        files: ap.files || [],
-        notes: ap.notes || [],
-        analytics: ap.analytics || {},
-        _other: { completed: 0, inProgress: 0, pending: 0 }
+    if (apiProjects.length) {
+      apiProjects.forEach(ap => {
+        projects.push({
+          id: ap.id,
+          name: ap.name === 'Runway Rum' ? 'Volgo Updates' : ap.name,
+          type: ap.type || 'Web',
+          thumb: ap.thumb || 'portfolio',
+          status: ap.status || 'progress',
+          owner: ap.owner || ap.created_by || '',
+          created_by: ap.created_by || ap.owner || '',
+          start: ap.start || isoDate(new Date()),
+          end: (ap.end !== undefined && ap.end !== null) ? ap.end : '',
+          team: ap.team || (ap.owner ? [ap.owner] : [ME].filter(Boolean)),
+          extra: ap.extra || 0,
+          totals: ap.totals || { total: 0, completed: 0, inProgress: 0 },
+          workload: ap.workload || {},
+          tasks: ap.tasks || [],
+          files: ap.files || [],
+          notes: ap.notes || [],
+          analytics: ap.analytics || {},
+          _other: { completed: 0, inProgress: 0, pending: 0 }
+        });
       });
-    });
+    }
     saveProjectsToCache();
   }
 
-  if (Array.isArray(apiLogs) && apiLogs.length > 0) {
+  if (Array.isArray(apiLogs)) {
     workLogs.length = 0;
-    workLogs.push(...apiLogs);
+    if (apiLogs.length) {
+      workLogs.push(...apiLogs);
+    }
     saveWorkLogsToCache();
   }
 
   if (Array.isArray(apiChats)) {
     chats.length = 0;
-    apiChats.forEach(c => {
-      const chatCopy = { ...c };
-      chats.push(chatCopy);
-    });
-    saveChatsToCache();
-    if (chats.length && (!state.chatId || !chats.some(c => c.id === state.chatId))) {
-      state.chatId = chats[0].id;
-    } else if (!chats.length) {
+    if (apiChats.length) {
+      apiChats.forEach(c => {
+        const chatCopy = { ...c };
+        chats.push(chatCopy);
+      });
+      if (!state.chatId || !chats.some(c => c.id === state.chatId)) {
+        state.chatId = chats[0].id;
+      }
+    } else {
       state.chatId = null;
     }
+    saveChatsToCache();
   }
 
   ensureAllTeamDMs();
