@@ -3252,8 +3252,7 @@ async function handleAction(a, el) {
     case 'new-project':
       openModal('New Project', [
         { name: 'name', label: 'Project name', required: true, placeholder: 'e.g. Restaurant POS' },
-        { name: 'type', label: 'Type', type: 'select', half: true, value: 'Web', options: [['Web', 'Web'], ['SaaS', 'SaaS'], ['Mobile', 'Mobile'], ['Game', 'Game']] },
-        { name: 'lead', label: 'Lead name (Team Lead)', type: 'text', half: true, placeholder: 'Enter lead name manually (e.g. Karthik, Ram)...', required: true },
+        { name: 'type', label: 'Project Type', type: 'select', value: 'Web', options: [['Web', 'Web'], ['SaaS', 'SaaS'], ['Mobile', 'Mobile'], ['Game', 'Game']] },
         {
           name: 'start',
           half: true,
@@ -3279,16 +3278,8 @@ async function handleAction(a, el) {
       ], async d => {
         const id = d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
         const thumb = { Web: 'portfolio', SaaS: 'crm', Mobile: 'cafe', Game: 'game' }[d.type] || 'portfolio';
-        const rawLead = (d.lead || '').trim();
-        const existingLeadId = Object.keys(PEOPLE).find(k => k.toLowerCase() === rawLead.toLowerCase() || (PEOPLE[k]?.name || '').toLowerCase() === rawLead.toLowerCase());
-        const lead = existingLeadId || (rawLead ? rawLead.toLowerCase().replace(/[^a-z0-9_]+/g, '_') : (ME || 'admin'));
-        if (!PEOPLE[lead] && rawLead) {
-          PEOPLE[lead] = { name: rawLead, role: 'Team Lead', availability: 'available', mode: 'office' };
-          TITLES[lead] = 'Team Lead';
-          MEMBER_ROWS = Object.keys(PEOPLE);
-        }
-        const ownerId = (ME || 'kumar').toLowerCase();
-        const teamMembers = Array.from(new Set([ownerId, lead].filter(Boolean)));
+        const ownerId = (ME || 'user').toLowerCase();
+        const teamMembers = [ownerId];
         const noEnd = d.noEndDate === 'on' || d.noEndDate === true || !d.end;
         const endDate = noEnd ? '' : d.end;
         const np = { id, name: d.name, type: d.type, thumb, status: 'progress', owner: ownerId, created_by: ownerId, start: d.start, end: endDate, team: teamMembers, extra: 0,
@@ -3311,10 +3302,10 @@ async function handleAction(a, el) {
               kind: 'group',
               project: id,
               members: 1,
-              memberList: [lead],
+              memberList: [ownerId],
               starred: false,
               unread: 0,
-              msgs: [{ from: lead, time: nowTime(), text: `Welcome to the ${d.name} group discussion channel! 🚀` }]
+              msgs: [{ from: ownerId, time: nowTime(), text: `Welcome to the ${d.name} group discussion channel! 🚀` }]
             };
             if (!chats.find(c => c.id === groupChat.id)) chats.unshift(groupChat);
           }
@@ -3322,7 +3313,8 @@ async function handleAction(a, el) {
         } catch (e) {
           console.warn('Could not sync chats:', e);
         }
-        go(`#/project/${id}/overview`); toast(`Project "${d.name}" and messenger group created!`);
+        broadcastGlobalEventSocket('project_created', np);
+        go(`#/project/${id}/overview`); toast(`Project "${d.name}" and discussion channel created!`);
       }, 'Create Project', ov => {
         const chk = ov.querySelector('#noEndTick');
         const endFld = ov.querySelector('#fieldEndDate');
