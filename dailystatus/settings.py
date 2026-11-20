@@ -80,72 +80,68 @@ else:
         },
     }
 
-# Database Configuration: Dedicated local PostgreSQL database and Vercel PostgreSQL database
+# Database Configuration: Neon PostgreSQL databases with automatic failover
 IS_VERCEL = bool(os.getenv('VERCEL') or os.getenv('VERCEL_ENV'))
 
-# Vercel Production Database
-VERCEL_DEFAULT_DB_URL = "postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require"
+# Neon Database URLs: Primary and Backup / Overflow
+NEON_PRIMARY_DB_URL = "postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require"
+NEON_BACKUP_DB_URL = "postgresql://neondb_owner:npg_o2jdx3LXGtyC@ep-lucky-paper-bdf9lwbr-pooler.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
-# Local Separate PostgreSQL Database
-LOCAL_DEFAULT_DB_URL = "postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/dailystatus_local?sslmode=require"
-
-if IS_VERCEL:
-    # On Vercel: read Vercel environment variables first, falling back to production neondb
-    DATABASE_URL = (
+def resolve_working_db_url():
+    """
+    Selects a functional PostgreSQL database among configured candidate URLs.
+    If the primary database is filled/quota-exceeded, it seamlessly fails over
+    to the secondary Neon database.
+    """
+    env_url = (
         os.getenv('VERCEL_DATABASE_URL') or
         os.getenv('POSTGRES_URL') or
         os.getenv('POSTGRES_PRISMA_URL') or
-        (os.getenv('DATABASE_URL') if (os.getenv('DATABASE_URL') and 'dailystatus_local' not in os.getenv('DATABASE_URL')) else None) or
-        VERCEL_DEFAULT_DB_URL
-    )
-    try:
-        DATABASES = {
-            'default': dj_database_url.config(
-                default=DATABASE_URL,
-                conn_max_age=0,
-                conn_health_checks=False,
-                ssl_require=True if any(h in DATABASE_URL for h in ['neon', 'aws', 'pooler', 'supabase']) else False
-            )
-        }
-    except Exception:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-else:
-    # On Local: use local distinct database
-    DATABASE_URL = (
         os.getenv('LOCAL_DATABASE_URL') or
-        os.getenv('DATABASE_URL') or
-        LOCAL_DEFAULT_DB_URL
+        os.getenv('DATABASE_URL')
     )
-    db_config = None
-    if DATABASE_URL and not DATABASE_URL.startswith('sqlite'):
+
+    candidates = [env_url, NEON_BACKUP_DB_URL, NEON_PRIMARY_DB_URL]
+    seen = set()
+
+    for url in candidates:
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        if url.startswith('sqlite'):
+            return url
         try:
             import psycopg2
-            test_conn = psycopg2.connect(DATABASE_URL, connect_timeout=2)
-            test_conn.close()
-            db_config = dj_database_url.config(
-                default=DATABASE_URL,
-                conn_max_age=0,
-                conn_health_checks=False,
-                ssl_require=True if any(h in DATABASE_URL for h in ['neon', 'aws', 'pooler', 'supabase']) else False
-            )
+            c = psycopg2.connect(url, connect_timeout=2)
+            c.close()
+            return url
         except Exception as e:
-            print(f"[WARN] Configured DATABASE_URL is unreachable or quota exceeded ({e}). Falling back to local db.sqlite3.")
-            db_config = None
+            err = str(e)
+            if 'quota' in err.lower() or 'exceeded' in err.lower():
+                print(f"[DB FAILOVER] Database quota exceeded for {url[:45]}... Failing over to next database.")
+            else:
+                print(f"[DB FAILOVER] Connection failed for {url[:45]}... ({err[:60]}). Failing over.")
+            continue
+    return None
 
-    if db_config:
-        DATABASES = {'default': db_config}
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
+ACTIVE_DATABASE_URL = resolve_working_db_url()
+
+if ACTIVE_DATABASE_URL and not ACTIVE_DATABASE_URL.startswith('sqlite'):
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=ACTIVE_DATABASE_URL,
+            conn_max_age=0,
+            conn_health_checks=False,
+            ssl_require=True if any(h in ACTIVE_DATABASE_URL for h in ['neon', 'aws', 'pooler', 'supabase']) else False
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
