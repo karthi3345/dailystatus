@@ -556,7 +556,7 @@ class DailyWorkLogViewSet(viewsets.ModelViewSet):
         now_ist = datetime.datetime.now(ist_tz)
         log.approval_status = 'approved'
         log.approved_by = approver
-        log.approved_at = now_ist.strftime('%d %b %Y, %I:%M %p').lstrip('0') + ' IST'
+        log.approved_at = now_ist.strftime('%d %b %Y, %I:%M %p').lstrip('0')
         log.save()
         broadcast_global_event('worklog_updated', {
             'id': log.id,
@@ -614,7 +614,7 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 import zoneinfo, datetime
                 ist_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
                 now_ist = datetime.datetime.now(ist_tz)
-                msg.time_label = now_ist.strftime('%I:%M %p').lstrip('0') + ' IST'
+                msg.time_label = now_ist.strftime('%I:%M %p').lstrip('0')
                 msg.save(update_fields=['time_label'])
             except Exception:
                 pass
@@ -834,13 +834,11 @@ class ChatThreadsView(APIView):
                     import zoneinfo
                     ist_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
                     ist_dt = m.created_at.astimezone(ist_tz)
-                    t_label = m.time_label or ist_dt.strftime('%I:%M %p').lstrip('0')
-                    d_label = ist_dt.strftime('%d %b %Y')
+                    t_label = (m.time_label or ist_dt.strftime('%I:%M %p').lstrip('0')).replace('IST', '').strip()
+                    d_label = ist_dt.strftime('%b %d, %Y')
                 except Exception:
-                    t_label = m.time_label or '12:00 PM'
-                    d_label = '19 Nov 2026'
-                if 'IST' not in t_label:
-                    t_label = f"{t_label} IST"
+                    t_label = (m.time_label or '12:00 PM').replace('IST', '').strip()
+                    d_label = 'Nov 20, 2026'
                 m_list.append({
                     'id': m.id,
                     'from': m.from_member,

@@ -340,13 +340,12 @@ function fmtShort(s) { if (!s || s === 'none' || s === 'ongoing') return 'Ongoin
 function fmtLong(s) { if (!s || s === 'none' || s === 'ongoing') return 'Ongoing'; const d = parseISO(s); return (d && !isNaN(d.getTime())) ? `${MON[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` : 'Ongoing'; }
 function nowTime() {
   const d = new Date();
-  const timeStr = d.toLocaleTimeString('en-US', {
+  return d.toLocaleTimeString('en-US', {
     timeZone: 'Asia/Kolkata',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true
   });
-  return `${timeStr} IST`;
 }
 function nowISTDate() {
   const d = new Date();
@@ -359,27 +358,28 @@ function nowISTDate() {
 }
 function formatMsgTime(t) {
   if (!t) return '';
-  let str = String(t).trim();
-  if (!str.includes('IST')) str = `${str} IST`;
-  return str;
+  return String(t).replace(/\s*IST\s*/gi, '').trim();
 }
 function getMsgDateLabel(m) {
   if (!m) return `Today, ${nowISTDate()}`;
-  let dateStr = m.date;
-  if (!dateStr && m.created_at) {
-    try {
-      const d = new Date(m.created_at);
-      dateStr = d.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
-    } catch (e) {}
+  let dObj = null;
+  if (m.created_at) {
+    try { const parsed = new Date(m.created_at); if (!isNaN(parsed.getTime())) dObj = parsed; } catch (e) {}
   }
-  if (!dateStr) {
-    dateStr = nowISTDate();
+  if (!dObj && m.date) {
+    try { const parsed = new Date(m.date); if (!isNaN(parsed.getTime())) dObj = parsed; } catch (e) {}
   }
-  const todayStr = nowISTDate();
-  if (dateStr === todayStr) {
-    return `Today, ${dateStr}`;
+  if (!dObj) {
+    dObj = new Date();
   }
-  return dateStr;
+
+  const dCal = dObj.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+  const todayCal = new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+
+  if (dCal === todayCal) {
+    return `Today, ${todayCal}`;
+  }
+  return dCal;
 }
 function deduplicateChats() {
   const seenDMs = new Map();
@@ -4042,13 +4042,24 @@ function startRealtimePolling() {
       if (Array.isArray(freshChats) && freshChats.length) {
         let hasChanges = false;
         freshChats.forEach(fc => {
-          const localChat = chats.find(x => x.id === fc.id);
+          let localChat = chats.find(x => x.id === fc.id);
+          if (!localChat && fc.kind === 'dm') {
+            const p = (fc.person || '').toLowerCase().trim();
+            localChat = chats.find(x => x.kind === 'dm' && ((x.person && x.person.toLowerCase().trim() === p) || (x.memberList && x.memberList.map(m=>String(m).toLowerCase().trim()).includes(p))));
+          }
           if (localChat) {
             const localMsgs = localChat.msgs || [];
             const freshMsgs = fc.msgs || [];
-            if (freshMsgs.length > localMsgs.length || freshMsgs.length !== localMsgs.length) {
+            if (freshMsgs.length > localMsgs.length || (freshMsgs.length > 0 && localMsgs.length === 0)) {
               localChat.msgs = freshMsgs;
               hasChanges = true;
+            } else if (freshMsgs.length === localMsgs.length && freshMsgs.length > 0) {
+              const lastFresh = freshMsgs[freshMsgs.length - 1];
+              const lastLocal = localMsgs[localMsgs.length - 1];
+              if (lastFresh && lastLocal && (lastFresh.id !== lastLocal.id || lastFresh.text !== lastLocal.text)) {
+                localChat.msgs = freshMsgs;
+                hasChanges = true;
+              }
             }
           } else {
             chats.push(fc);
@@ -4067,7 +4078,7 @@ function startRealtimePolling() {
         }
       }
     } catch (_) {}
-  }, 2500);
+  }, 800);
 }
 
 function broadcastGlobalEventSocket(event, data) {
