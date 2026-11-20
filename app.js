@@ -5001,6 +5001,17 @@ function handleLogout() {
   AUTH_TOKEN = null;
   localStorage.removeItem('kathir_auth_token');
   localStorage.removeItem('kathir_auth_user');
+  localStorage.removeItem('kathir_cached_projects');
+  localStorage.removeItem('kathir_cached_chats');
+  localStorage.removeItem('kathir_cached_worklogs');
+  localStorage.removeItem('kathir_projects_saved');
+  localStorage.removeItem('kathir_chats_saved');
+  projects.length = 0;
+  chats.length = 0;
+  workLogs.length = 0;
+  Object.keys(PEOPLE).forEach(k => delete PEOPLE[k]);
+  Object.keys(TITLES).forEach(k => delete TITLES[k]);
+  MEMBER_ROWS.length = 0;
   ME = null;
   toast('Signed out successfully.');
 
@@ -5281,17 +5292,7 @@ function initAuthScreen() {
   const ssoBtn = $('#ssoBtn');
   const forgotBtn = $('#forgotBtn');
 
-  // Quick Demo Account Buttons
-  $$('[data-quick-user]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.preventDefault();
-      const u = btn.dataset.quickUser;
-      if (loginEmail) loginEmail.value = u;
-      if (loginPass) loginPass.value = '123456';
-      const submitBtn = $('#loginBtn');
-      if (submitBtn) submitBtn.click();
-    });
-  });
+
 
   // Switch between Login and Register
   $$('[data-auth]').forEach(btn => {
