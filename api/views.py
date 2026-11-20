@@ -61,213 +61,241 @@ class RegisterView(APIView):
 
     def post(self, request):
         import re
-        data = request.data
-        name = (data.get('name') or '').strip()
-        username = (data.get('username') or '').strip().lower()
-        email = (data.get('email') or '').strip().lower()
-        password = data.get('password') or ''
-        confirm_password = data.get('confirm_password') or data.get('confirmPassword') or ''
-        role = (data.get('role') or 'Developer').strip()
-
-        # Validations
-        if not name:
-            return Response({'error': 'Please enter your full name.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not email:
-            return Response({'error': 'Please enter your email address.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Allow any personal or company email format (e.g. gmail, yahoo, outlook, icloud)
-        email_regex = r'^[\w\.-]+@[\w\.-]+\.\w{2,}$'
-        if not re.match(email_regex, email):
-            return Response({'error': 'Please enter a valid email address (e.g. yourname@gmail.com).'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not username:
-            return Response({'error': 'Please choose a username.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if len(username) < 3 or len(username) > 30:
-            return Response({'error': 'Username must be between 3 and 30 characters.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not re.match(r'^[a-zA-Z0-9_]+$', username):
-            return Response({'error': 'Username can only contain letters, numbers, and underscores.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Unique checks: Username and Email CANNOT be duplicates
-        if User.objects.filter(username__iexact=username).exists() or Member.objects.filter(id__iexact=username).exists():
-            return Response({'error': 'Username already exists. Please choose a different username.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if User.objects.filter(email__iexact=email).exists():
-            return Response({'error': 'Email address already exists. Please use a different email or sign in.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Password and Confirm Password validations
-        if not password:
-            return Response({'error': 'Please enter a password.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if len(password) < 8:
-            return Response({'error': 'Password must be at least 8 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not re.search(r'[A-Z]', password):
-            return Response({'error': 'Password must contain at least one uppercase letter (A-Z).'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not re.search(r'[a-z]', password):
-            return Response({'error': 'Password must contain at least one letter (a-z).'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not re.search(r'[@$!%*?&#^()_\-+=\[\]{}|\\:;"\'<>,./`~]', password):
-            return Response({'error': 'Password must contain at least one special symbol (e.g. !@#$%^&*).'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not confirm_password:
-            return Response({'error': 'Please confirm your password.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if password != confirm_password:
-            return Response({'error': 'Passwords do not match. Please verify and re-enter.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Create user
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=name
-        )
-
-        member, _ = Member.objects.update_or_create(
-            id=username,
-            defaults={
-                'name': name or username.capitalize(),
-                'role': role or 'Developer',
-                'title': role or 'Developer',
-                'availability': 'available',
-                'mode': 'office'
-            }
-        )
-
-        token, _ = Token.objects.get_or_create(user=user)
-
-        # Create DM threads with all other members
         try:
-            other_members = Member.objects.exclude(id=username)
-            for om in other_members:
-                dm_cid = get_canonical_dm_id(username, om.id)
-                ChatThread.objects.get_or_create(
-                    id=dm_cid,
-                    defaults={
-                        'name': om.name or om.id.capitalize(),
-                        'kind': 'dm',
-                        'person': om.id,
-                        'members': [username, om.id],
-                        'created_by': username,
-                        'starred': False
-                    }
-                )
-        except Exception:
-            pass
+            data = request.data
+            name = (data.get('name') or '').strip()
+            username = (data.get('username') or '').strip().lower()
+            email = (data.get('email') or '').strip().lower()
+            password = data.get('password') or ''
+            confirm_password = data.get('confirm_password') or data.get('confirmPassword') or ''
+            role = (data.get('role') or 'Developer').strip()
 
-        broadcast_global_event('member_updated', {
-            'id': member.id,
-            'name': member.name,
-            'availability': member.availability,
-            'mode': member.mode,
-            'today': member.today
-        })
+            # Validations
+            if not name:
+                return Response({'error': 'Please enter your full name.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response({
-            'success': True,
-            'message': 'Account registered successfully!',
-            'token': token.key,
-            'user': {
-                'id': user.id,
-                'username': user.username,
+            if not email:
+                return Response({'error': 'Please enter your email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Allow any personal or company email format (e.g. gmail, yahoo, outlook, icloud)
+            email_regex = r'^[\w\.-]+@[\w\.-]+\.\w{2,}$'
+            if not re.match(email_regex, email):
+                return Response({'error': 'Please enter a valid email address (e.g. yourname@gmail.com).'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not username:
+                return Response({'error': 'Please choose a username.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if len(username) < 3 or len(username) > 30:
+                return Response({'error': 'Username must be between 3 and 30 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not re.match(r'^[a-zA-Z0-9_]+$', username):
+                return Response({'error': 'Username can only contain letters, numbers, and underscores.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Unique checks: Username and Email CANNOT be duplicates
+            if User.objects.filter(username__iexact=username).exists() or Member.objects.filter(id__iexact=username).exists():
+                return Response({'error': 'Username already exists. Please choose a different username.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if User.objects.filter(email__iexact=email).exists():
+                return Response({'error': 'Email address already exists. Please use a different email or sign in.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Password and Confirm Password validations
+            if not password:
+                return Response({'error': 'Please enter a password.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if len(password) < 8:
+                return Response({'error': 'Password must be at least 8 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not re.search(r'[A-Z]', password):
+                return Response({'error': 'Password must contain at least one uppercase letter (A-Z).'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not re.search(r'[a-z]', password):
+                return Response({'error': 'Password must contain at least one letter (a-z).'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not re.search(r'[@$!%*?&#^()_\-+=\[\]{}|\\:;"\'<>,./`~]', password):
+                return Response({'error': 'Password must contain at least one special symbol (e.g. !@#$%^&*).'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not confirm_password:
+                return Response({'error': 'Please confirm your password.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if password != confirm_password:
+                return Response({'error': 'Passwords do not match. Please verify and re-enter.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=name
+            )
+
+            member, _ = Member.objects.update_or_create(
+                id=username,
+                defaults={
+                    'name': name or username.capitalize(),
+                    'role': role or 'Developer',
+                    'title': role or 'Developer',
+                    'availability': 'available',
+                    'mode': 'office'
+                }
+            )
+
+            token, _ = Token.objects.get_or_create(user=user)
+
+            # Create DM threads with all other members
+            try:
+                other_members = Member.objects.exclude(id=username)
+                for om in other_members:
+                    dm_cid = get_canonical_dm_id(username, om.id)
+                    ChatThread.objects.get_or_create(
+                        id=dm_cid,
+                        defaults={
+                            'name': om.name or om.id.capitalize(),
+                            'kind': 'dm',
+                            'person': om.id,
+                            'members': [username, om.id],
+                            'created_by': username,
+                            'starred': False
+                        }
+                    )
+            except Exception:
+                pass
+
+            broadcast_global_event('member_updated', {
+                'id': member.id,
                 'name': member.name,
-                'role': member.role,
-                'email': user.email,
                 'availability': member.availability,
                 'mode': member.mode,
-            }
-        }, status=status.HTTP_201_CREATED)
+                'today': member.today
+            })
+
+            return Response({
+                'success': True,
+                'message': 'Account registered successfully!',
+                'token': token.key,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'name': member.name,
+                    'role': member.role,
+                    'email': user.email,
+                    'availability': member.availability,
+                    'mode': member.mode,
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            err_str = str(e)
+            if 'quota' in err_str.lower() or 'exceeded' in err_str.lower():
+                return Response({
+                    'error': 'Neon database quota exceeded. Please upgrade your Neon plan or verify your DATABASE_URL.'
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            if 'connection to server' in err_str.lower() or 'operationalerror' in err_str.lower():
+                return Response({
+                    'error': 'Database connection failed. Please check your database connection string.'
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({'error': f'Registration failed: {err_str}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        data = request.data
-        identifier = (data.get('username') or data.get('identifier') or data.get('email') or '').strip()
-        password = data.get('password') or ''
-
-        if not identifier or not password:
-            return Response({'error': 'Please enter your username/email and password.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Allow seamless login with either email or username
-        user_obj = None
-        if '@' in identifier:
-            user_obj = User.objects.filter(email__iexact=identifier).first()
-        if not user_obj:
-            user_obj = User.objects.filter(username__iexact=identifier).first()
-        if not user_obj:
-            user_obj = User.objects.filter(email__iexact=identifier).first()
-
-        if not user_obj:
-            return Response({'error': 'No account found with this email or username. Please check your credentials or register.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = authenticate(username=user_obj.username, password=password)
-        if not user:
-            if password in ['123456', 'admin123', 'admin', 'password', f"{user_obj.username}123"]:
-                user = user_obj
-            else:
-                return Response({'error': 'Incorrect password. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not user.is_active:
-            return Response({'error': 'This account has been disabled. Please contact support.'}, status=status.HTTP_403_FORBIDDEN)
-
-        token, _ = Token.objects.get_or_create(user=user)
-
-        # Create DM threads with all other members
         try:
-            other_members = Member.objects.exclude(id=username)
-            for om in other_members:
-                dm_cid = get_canonical_dm_id(username, om.id)
-                ChatThread.objects.get_or_create(
-                    id=dm_cid,
-                    defaults={
-                        'name': om.name or om.id.capitalize(),
-                        'kind': 'dm',
-                        'person': om.id,
-                        'members': [username, om.id],
-                        'created_by': username,
-                        'starred': False
-                    }
+            data = request.data
+            identifier = (data.get('username') or data.get('identifier') or data.get('email') or '').strip()
+            password = data.get('password') or ''
+
+            if not identifier or not password:
+                return Response({'error': 'Please enter your username/email and password.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Allow seamless login with either email or username
+            user_obj = None
+            if '@' in identifier:
+                user_obj = User.objects.filter(email__iexact=identifier).first()
+            if not user_obj:
+                user_obj = User.objects.filter(username__iexact=identifier).first()
+            if not user_obj:
+                user_obj = User.objects.filter(email__iexact=identifier).first()
+
+            if not user_obj:
+                return Response({'error': 'No account found with this email or username. Please check your credentials or register.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = authenticate(username=user_obj.username, password=password)
+            if not user:
+                if password in ['123456', 'admin123', 'admin', 'password', f"{user_obj.username}123"]:
+                    user = user_obj
+                else:
+                    return Response({'error': 'Incorrect password. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not user.is_active:
+                return Response({'error': 'This account has been disabled. Please contact support.'}, status=status.HTTP_403_FORBIDDEN)
+
+            token, _ = Token.objects.get_or_create(user=user)
+
+            username_clean = user.username.lower()
+            member = Member.objects.filter(id=username_clean).first()
+            if not member:
+                member = Member.objects.create(
+                    id=username_clean,
+                    name=user.first_name or user.username.capitalize(),
+                    role='Developer',
+                    title='Developer',
+                    availability='available',
+                    mode='office'
                 )
-        except Exception:
-            pass
 
-        broadcast_global_event('member_updated', {
-            'id': member.id,
-            'name': member.name,
-            'availability': member.availability,
-            'mode': member.mode,
-            'today': member.today
-        })
-        member = Member.objects.filter(id=user.username.lower()).first()
-        if not member:
-            member = Member.objects.create(
-                id=user.username.lower(),
-                name=user.first_name or user.username.capitalize(),
-                role='Developer',
-                title='Developer',
-                availability='available',
-                mode='office'
-            )
+            # Create DM threads with all other members
+            try:
+                other_members = Member.objects.exclude(id=username_clean)
+                for om in other_members:
+                    dm_cid = get_canonical_dm_id(username_clean, om.id)
+                    ChatThread.objects.get_or_create(
+                        id=dm_cid,
+                        defaults={
+                            'name': om.name or om.id.capitalize(),
+                            'kind': 'dm',
+                            'person': om.id,
+                            'members': [username_clean, om.id],
+                            'created_by': username_clean,
+                            'starred': False
+                        }
+                    )
+            except Exception:
+                pass
 
-        return Response({
-            'success': True,
-            'token': token.key,
-            'user': {
-                'id': user.id,
-                'username': user.username,
+            broadcast_global_event('member_updated', {
+                'id': member.id,
                 'name': member.name,
-                'role': member.role,
-                'email': user.email,
                 'availability': member.availability,
                 'mode': member.mode,
-            }
-        }, status=status.HTTP_200_OK)
+                'today': member.today
+            })
+
+            return Response({
+                'success': True,
+                'token': token.key,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'name': member.name,
+                    'role': member.role,
+                    'email': user.email,
+                    'availability': member.availability,
+                    'mode': member.mode,
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            err_str = str(e)
+            if 'quota' in err_str.lower() or 'exceeded' in err_str.lower():
+                return Response({
+                    'error': 'Neon database quota exceeded. Please upgrade your Neon plan or verify your DATABASE_URL.'
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            if 'connection to server' in err_str.lower() or 'operationalerror' in err_str.lower():
+                return Response({
+                    'error': 'Database connection failed. Please check your database connection string.'
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({'error': f'Login failed: {err_str}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class MeView(APIView):

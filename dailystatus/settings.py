@@ -98,15 +98,6 @@ if IS_VERCEL:
         (os.getenv('DATABASE_URL') if (os.getenv('DATABASE_URL') and 'dailystatus_local' not in os.getenv('DATABASE_URL')) else None) or
         VERCEL_DEFAULT_DB_URL
     )
-else:
-    # On Local: use local distinct database
-    DATABASE_URL = (
-        os.getenv('LOCAL_DATABASE_URL') or
-        os.getenv('DATABASE_URL') or
-        LOCAL_DEFAULT_DB_URL
-    )
-
-if DATABASE_URL:
     try:
         DATABASES = {
             'default': dj_database_url.config(
@@ -124,12 +115,37 @@ if DATABASE_URL:
             }
         }
 else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+    # On Local: use local distinct database
+    DATABASE_URL = (
+        os.getenv('LOCAL_DATABASE_URL') or
+        os.getenv('DATABASE_URL') or
+        LOCAL_DEFAULT_DB_URL
+    )
+    db_config = None
+    if DATABASE_URL and not DATABASE_URL.startswith('sqlite'):
+        try:
+            import psycopg2
+            test_conn = psycopg2.connect(DATABASE_URL, connect_timeout=2)
+            test_conn.close()
+            db_config = dj_database_url.config(
+                default=DATABASE_URL,
+                conn_max_age=0,
+                conn_health_checks=False,
+                ssl_require=True if any(h in DATABASE_URL for h in ['neon', 'aws', 'pooler', 'supabase']) else False
+            )
+        except Exception as e:
+            print(f"[WARN] Configured DATABASE_URL is unreachable or quota exceeded ({e}). Falling back to local db.sqlite3.")
+            db_config = None
+
+    if db_config:
+        DATABASES = {'default': db_config}
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
         }
-    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

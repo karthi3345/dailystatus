@@ -5686,7 +5686,12 @@ function openRegisterModal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, username, email, role, password, confirm_password: confirmPassword })
       });
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {
+        data = { error: 'Server returned an invalid response. Please try again.' };
+      }
       if (!res.ok) {
         errBox.textContent = data.error || 'Registration failed. Please check your details.';
         errBox.style.display = 'block';
@@ -6292,7 +6297,12 @@ function initAuthScreen() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, username, role, email, password, confirm_password })
         });
-        const data = await res.json();
+        let data = {};
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          data = { error: 'Server returned an unreadable response. Please check database connectivity.' };
+        }
         if (!res.ok) {
           regAlert.textContent = data.error || (data.email ? data.email[0] : (data.username ? data.username[0] : 'Registration failed.'));
           regAlert.className = 'lf-alert';
@@ -6319,7 +6329,7 @@ function initAuthScreen() {
         await loadInitialData();
         go('#/projects');
       } catch (err) {
-        regAlert.textContent = 'Server error during registration. Please try again.';
+        regAlert.textContent = (err && err.message) ? err.message : 'Server error during registration. Please try again.';
         regAlert.className = 'lf-alert';
         regAlert.hidden = false;
         shake(registerForm);
