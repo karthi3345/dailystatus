@@ -80,18 +80,31 @@ else:
         },
     }
 
-# Database Configuration: Neon PostgreSQL with SQLite fallback
-DEFAULT_NEON_URL = "postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-DATABASE_URL = os.getenv('DATABASE_URL')
-if not DATABASE_URL and os.getenv('POSTGRES_DB') and os.getenv('POSTGRES_PASSWORD'):
-    pg_user = os.getenv('POSTGRES_USER', 'postgres')
-    pg_pass = os.getenv('POSTGRES_PASSWORD', '')
-    pg_host = os.getenv('POSTGRES_HOST', 'localhost')
-    pg_port = os.getenv('POSTGRES_PORT', '5432')
-    pg_db = os.getenv('POSTGRES_DB', 'dailystatus_db')
-    DATABASE_URL = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
-if not DATABASE_URL:
-    DATABASE_URL = DEFAULT_NEON_URL
+# Database Configuration: Dedicated local PostgreSQL database and Vercel PostgreSQL database
+IS_VERCEL = bool(os.getenv('VERCEL') or os.getenv('VERCEL_ENV'))
+
+# Vercel Production Database
+VERCEL_DEFAULT_DB_URL = "postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require"
+
+# Local Separate PostgreSQL Database
+LOCAL_DEFAULT_DB_URL = "postgresql://neondb_owner:npg_irp5gCjXRP2S@ep-small-sky-betsxfzh-pooler.c-9.us-east-2.aws.neon.tech/dailystatus_local?sslmode=require"
+
+if IS_VERCEL:
+    # On Vercel: read Vercel environment variables first, falling back to production neondb
+    DATABASE_URL = (
+        os.getenv('VERCEL_DATABASE_URL') or
+        os.getenv('POSTGRES_URL') or
+        os.getenv('POSTGRES_PRISMA_URL') or
+        (os.getenv('DATABASE_URL') if (os.getenv('DATABASE_URL') and 'dailystatus_local' not in os.getenv('DATABASE_URL')) else None) or
+        VERCEL_DEFAULT_DB_URL
+    )
+else:
+    # On Local: use local distinct database
+    DATABASE_URL = (
+        os.getenv('LOCAL_DATABASE_URL') or
+        os.getenv('DATABASE_URL') or
+        LOCAL_DEFAULT_DB_URL
+    )
 
 if DATABASE_URL:
     try:
@@ -99,7 +112,7 @@ if DATABASE_URL:
             'default': dj_database_url.config(
                 default=DATABASE_URL,
                 conn_max_age=0,
-                conn_health_checks=True,
+                conn_health_checks=False,
                 ssl_require=True if any(h in DATABASE_URL for h in ['neon', 'aws', 'pooler', 'supabase']) else False
             )
         }
