@@ -206,16 +206,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
         chat_name = thread.name if thread else chat_id
         kind = thread.kind if thread else ('dm' if chat_id.startswith('dm-') else 'group')
 
+        media_info = voice_data if voice_data else file_data
+        default_text = 'Voice message' if voice_data else (file_data.get('name') if (isinstance(file_data, dict) and file_data.get('name')) else 'Shared media')
         msg = ChatMessage.objects.create(
             chat_id=chat_id,
             chat_name=chat_name,
             kind=kind,
             from_member=sender,
-            text=text or ('Shared a file' if file_data else 'Voice message'),
+            text=text or default_text,
             time_label=t_label,
             reply_to=reply_to or {},
-            file=file_data,
-            voice=voice_data,
+            file_info=media_info,
             reactions={}
         )
 
@@ -227,8 +228,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'time': t_label,
             'date': d_label,
             'created_at': msg.created_at.isoformat() if msg.created_at else None,
-            'file': msg.file,
-            'voice': msg.voice,
+            'file_info': media_info,
+            'file': file_data,
+            'voice': voice_data,
             'reply_to': msg.reply_to,
             'reactions': msg.reactions or {},
             'members': members,

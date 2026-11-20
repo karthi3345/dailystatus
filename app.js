@@ -1580,7 +1580,8 @@ function toggleVoicePlayback(msgIdx) {
   const c = chats.find(x => x.id === state.chatId);
   if (!c || !c.msgs[msgIdx]) return;
   const m = c.msgs[msgIdx];
-  const v = m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : null);
+  const isVoice = Boolean(m.voice || (m.file_info && m.file_info.type === 'voice') || (m.file && m.file.type === 'voice'));
+  const v = isVoice ? (m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : m.file)) : null;
   if (!v) return;
 
   const updatePlayBtnUI = (playing) => {
@@ -1619,10 +1620,11 @@ function toggleVoicePlayback(msgIdx) {
   updatePlayBtnUI(true);
 
   const speedVal = v.speed === '2x' ? 2 : v.speed === '1.5x' ? 1.5 : 1;
-  const isDataOrHttp = v.audioUrl && (v.audioUrl.startsWith('data:') || v.audioUrl.startsWith('http://') || v.audioUrl.startsWith('https://'));
+  const audioSrc = v.audioUrl || v.url;
+  const isDataOrHttp = audioSrc && (audioSrc.startsWith('data:') || audioSrc.startsWith('http://') || audioSrc.startsWith('https://'));
 
   if (isDataOrHttp) {
-    voicePlaybackAudio = new Audio(v.audioUrl);
+    voicePlaybackAudio = new Audio(audioSrc);
     voicePlaybackAudio.playbackRate = speedVal;
 
     voicePlaybackAudio.onerror = (err) => {
@@ -1731,7 +1733,8 @@ function toggleVoiceSpeed(msgIdx) {
   const c = chats.find(x => x.id === state.chatId);
   if (!c || !c.msgs[msgIdx]) return;
   const m = c.msgs[msgIdx];
-  const v = m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : null);
+  const isVoice = Boolean(m.voice || (m.file_info && m.file_info.type === 'voice') || (m.file && m.file.type === 'voice'));
+  const v = isVoice ? (m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : m.file)) : null;
   if (!v) return;
 
   const current = v.speed || '1x';
@@ -1771,10 +1774,11 @@ function getFileIcon(name) {
   if (['pdf'].includes(ext)) return '📕';
   if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '📦';
   if (['xls', 'xlsx', 'csv'].includes(ext)) return '📊';
-  if (['doc', 'docx', 'txt'].includes(ext)) return '📝';
-  if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return '🎵';
+  if (['doc', 'docx', 'txt', 'rtf', 'odt'].includes(ext)) return '📝';
+  if (['ppt', 'pptx'].includes(ext)) return '📑';
+  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'opus'].includes(ext)) return '🎵';
   if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return '🎬';
-  return '📁';
+  return '📄';
 }
 
 window.previewImageModal = function(url, name) {
@@ -1815,15 +1819,21 @@ function downloadAttachment(msgIdx) {
   const c = chats.find(x => x.id === state.chatId);
   if (!c || !c.msgs[msgIdx]) return;
   const m = c.msgs[msgIdx];
-  const f = m.file || (m.file_info && m.file_info.type !== 'voice' ? m.file_info : null);
-  if (!f) {
-    toast('No downloadable file attached');
+  const isVoice = Boolean(m.voice || (m.file_info && m.file_info.type === 'voice') || (m.file && m.file.type === 'voice'));
+  if (isVoice) {
+    // Voice messages are played directly in the chat window, no file download needed
+    toggleVoicePlayback(msgIdx);
     return;
   }
-  const fileUrl = f.url || (f.audioUrl ? f.audioUrl : null);
-  const fileName = f.name || 'attachment';
+  const f = (!isVoice && m.file && m.file.name) ? m.file : (!isVoice && m.file_info && m.file_info.name ? m.file_info : null);
+  if (!f) {
+    toast('No downloadable document attached');
+    return;
+  }
+  const fileUrl = f.url;
+  const fileName = f.name;
   if (!fileUrl) {
-    toast(`File data for "${fileName}" was uploaded before download support was enabled`);
+    toast(`Document "${fileName}" is not available for direct download`);
     return;
   }
   const a = document.createElement('a');
@@ -1902,14 +1912,35 @@ function renderChatMessageHtml(m, idx, lastDateLabel = null) {
             ` : ''}
 
             <!-- Voice Note Player (WhatsApp style) or Text Message -->
-            ${(m.voice || (m.file_info && m.file_info.type === 'voice')) ? renderVoicePlayer(m.voice || m.file_info, idx, isMe) : `
-              <div class="msg-text">${esc(m.text || '').replace(/\n/g, '<br>')}</div>
-            `}
-
             ${(() => {
-              const fileItem = m.file || (m.file_info && m.file_info.type !== 'voice' ? m.file_info : null);
-              if (!fileItem) return '';
+              const isVoice = Boolean(
+                m.voice ||
+                (m.file_info && m.file_info.type === 'voice') ||
+                (m.file && m.file.type === 'voice')
+              );
+              if (isVoice) {
+                const voiceObj = m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : m.file);
+                return renderVoicePlayer(voiceObj, idx, isMe);
+              }
+              return (m.text ? `<div class="msg-text">${esc(m.text).replace(/\n/g, '<br>')}</div>` : '');
+            })()}
+
+            <!-- Document / Media Attachment (PDF, Images, Docs - Never convert to zip) -->
+            ${(() => {
+              const isVoice = Boolean(
+                m.voice ||
+                (m.file_info && m.file_info.type === 'voice') ||
+                (m.file && m.file.type === 'voice')
+              );
+              if (isVoice) return '';
+
+              const fileItem = (!isVoice && m.file && m.file.name) ? m.file : (!isVoice && m.file_info && m.file_info.name ? m.file_info : null);
+              if (!fileItem || !fileItem.name) return '';
+
               const isImg = fileItem.url && (fileItem.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileItem.name));
+              const isPdf = fileItem.type?.includes('pdf') || /\.pdf$/i.test(fileItem.name);
+              const ext = fileItem.name.includes('.') ? fileItem.name.split('.').pop().toUpperCase() : 'DOC';
+
               return `
                 <div class="attach-container" style="margin-top:6px">
                   ${isImg ? `
@@ -1918,11 +1949,16 @@ function renderChatMessageHtml(m, idx, lastDateLabel = null) {
                     </div>
                   ` : ''}
                   <div class="attach-row">
-                    <span style="font-size:18px">${getFileIcon(fileItem.name)}</span>
+                    <span style="font-size:22px;flex-shrink:0">${getFileIcon(fileItem.name)}</span>
                     <div style="min-width:0;flex:1">
-                      <div class="n" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:12.5px">${esc(fileItem.name)}</div>
-                      <div class="z" style="font-size:11px;color:var(--text-3)">${esc(fileItem.size || '')}</div>
+                      <div class="n" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:12.5px" title="${esc(fileItem.name)}">${esc(fileItem.name)}</div>
+                      <div class="z" style="font-size:11px;color:var(--text-3)">${esc(fileItem.size || '')}${ext ? ` • ${ext}` : ''}</div>
                     </div>
+                    ${fileItem.url && isPdf ? `
+                      <button type="button" class="file-view-btn" onclick="window.open('${esc(fileItem.url)}', '_blank')" title="View ${esc(fileItem.name)}" style="background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--text);margin-right:6px;cursor:pointer">
+                        View
+                      </button>
+                    ` : ''}
                     <button type="button" class="file-dl-btn" data-action="download-attachment" data-msg-idx="${idx}" title="Download ${esc(fileItem.name)}">
                       ${icon('download', 'sm')}
                     </button>

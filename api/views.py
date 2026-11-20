@@ -678,6 +678,11 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                     created_by=creator
                 )
 
+        media_info = msg.file_info or {}
+        is_voice = isinstance(media_info, dict) and media_info.get('type') == 'voice'
+        voice_data = media_info if is_voice else None
+        file_data = media_info if (media_info and not is_voice) else None
+
         broadcast_chat_event(chat_id, {
             'type': 'chat_message_broadcast',
             'message': {
@@ -688,8 +693,9 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 'time': (msg.time_label or '').replace('IST', '').strip(),
                 'date': msg.created_at.strftime('%b %d, %Y') if msg.created_at else '',
                 'created_at': msg.created_at.isoformat() if msg.created_at else None,
-                'file': msg.file,
-                'voice': msg.voice,
+                'file_info': msg.file_info,
+                'file': file_data,
+                'voice': voice_data,
                 'reply_to': msg.reply_to or {},
                 'reactions': msg.reactions or {},
                 'person': target_person,
@@ -701,7 +707,10 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
             'chat_id': chat_id,
             'from': msg.from_member,
             'text': msg.text,
-            'time': msg.time_label,
+            'time': (msg.time_label or '').replace('IST', '').strip(),
+            'file_info': msg.file_info,
+            'file': file_data,
+            'voice': voice_data,
             'person': target_person,
             'members': [creator, target_person] if target_person else []
         })
@@ -844,6 +853,11 @@ class ChatThreadsView(APIView):
                 except Exception:
                     t_label = (m.time_label or '12:00 PM').replace('IST', '').strip()
                     d_label = 'Nov 20, 2026'
+                m_info = m.file_info or {}
+                m_is_voice = isinstance(m_info, dict) and m_info.get('type') == 'voice'
+                m_voice = m_info if m_is_voice else None
+                m_file = m_info if (m_info and not m_is_voice) else None
+
                 m_list.append({
                     'id': m.id,
                     'from': m.from_member,
@@ -851,7 +865,9 @@ class ChatThreadsView(APIView):
                     'date': d_label,
                     'created_at': m.created_at.isoformat() if m.created_at else None,
                     'text': m.text,
-                    'file': m.file_info,
+                    'file_info': m.file_info,
+                    'file': m_file,
+                    'voice': m_voice,
                     'reply_to': m.reply_to,
                     'reactions': m.reactions or {}
                 })
