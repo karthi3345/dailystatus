@@ -150,10 +150,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
             import zoneinfo
             ist_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
             now_ist = timezone.now().astimezone(ist_tz)
-            t_label = now_ist.strftime('%I:%M %p').lstrip('0')
+            t_label = now_ist.strftime('%I:%M %p').lstrip('0').replace('IST', '').strip()
             d_label = now_ist.strftime('%b %d, %Y')
         except Exception:
-            t_label = timezone.now().strftime('%I:%M %p')
+            t_label = timezone.now().strftime('%I:%M %p').lstrip('0').replace('IST', '').strip()
             d_label = timezone.now().strftime('%b %d, %Y')
 
         chat_id = self.chat_id
@@ -226,6 +226,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'text': msg.text,
             'time': t_label,
             'date': d_label,
+            'created_at': msg.created_at.isoformat() if msg.created_at else None,
             'file': msg.file,
             'voice': msg.voice,
             'reply_to': msg.reply_to,

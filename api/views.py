@@ -615,10 +615,13 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 import zoneinfo, datetime
                 ist_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
                 now_ist = datetime.datetime.now(ist_tz)
-                msg.time_label = now_ist.strftime('%I:%M %p').lstrip('0')
+                msg.time_label = now_ist.strftime('%I:%M %p').lstrip('0').replace('IST', '').strip()
                 msg.save(update_fields=['time_label'])
             except Exception:
                 pass
+        elif 'IST' in msg.time_label:
+            msg.time_label = msg.time_label.replace('IST', '').strip()
+            msg.save(update_fields=['time_label'])
         creator = msg.from_member or (self.request.user.username.lower() if (self.request.user and self.request.user.is_authenticated) else 'admin')
         target_person = None
 
@@ -682,8 +685,9 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 'chat_id': chat_id,
                 'from': msg.from_member,
                 'text': msg.text,
-                'time': msg.time_label,
-                'date': msg.created_at.strftime('%d %b %Y') if msg.created_at else '',
+                'time': (msg.time_label or '').replace('IST', '').strip(),
+                'date': msg.created_at.strftime('%b %d, %Y') if msg.created_at else '',
+                'created_at': msg.created_at.isoformat() if msg.created_at else None,
                 'file': msg.file,
                 'voice': msg.voice,
                 'reply_to': msg.reply_to or {},
@@ -845,6 +849,7 @@ class ChatThreadsView(APIView):
                     'from': m.from_member,
                     'time': t_label,
                     'date': d_label,
+                    'created_at': m.created_at.isoformat() if m.created_at else None,
                     'text': m.text,
                     'file': m.file_info,
                     'reply_to': m.reply_to,

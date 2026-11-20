@@ -380,7 +380,13 @@ function getMsgDateLabel(m) {
   const dCal = dObj.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
   const todayCal = new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
 
-  if (dCal === todayCal) {
+  const dYear = dObj.getFullYear();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const stdDate = `${months[dObj.getMonth()]} ${dObj.getDate()}, ${dYear}`;
+  const now = new Date();
+  const stdToday = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+
+  if (dCal === todayCal || stdDate === stdToday) {
     return `Today, ${todayCal}`;
   }
   return dCal;
@@ -542,6 +548,9 @@ function route() {
     } else if (!state.chatId || !chats.some(c => c.id === state.chatId)) {
       const visible = chats.filter(ch => canAccessChat(ch, ME));
       if (visible.length) state.chatId = visible[0].id;
+    }
+    if (state.chatId) {
+      markChatAsSeen(state.chatId);
     }
     main.innerHTML = renderMessenger();
     afterMessenger();
@@ -1995,9 +2004,41 @@ function updateChatListPreview(chatId, msg) {
   if (pEl) {
     pEl.textContent = (msg.text || '').split('\n')[0];
   }
-  const rightSpan = chatItem.querySelector('.right > span');
-  if (rightSpan && msg.time) {
-    rightSpan.textContent = formatMsgTime(msg.time);
+  const rightDiv = chatItem.querySelector('.right');
+  if (rightDiv) {
+    let rightSpan = rightDiv.querySelector('span:first-child');
+    if (!rightSpan) {
+      rightSpan = document.createElement('span');
+      rightDiv.prepend(rightSpan);
+    }
+    if (msg.time) {
+      rightSpan.textContent = formatMsgTime(msg.time);
+    }
+
+    const c = chats.find(x => x.id === chatId);
+    const unreadCount = (c && Number(c.unread)) || 0;
+    let unreadBadge = rightDiv.querySelector('.unread');
+
+    if (unreadCount > 0) {
+      if (!unreadBadge) {
+        const starBtn = rightDiv.querySelector('.star');
+        if (starBtn) starBtn.remove();
+        unreadBadge = document.createElement('span');
+        unreadBadge.className = 'unread';
+        rightDiv.appendChild(unreadBadge);
+      }
+      unreadBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+    } else {
+      if (unreadBadge) unreadBadge.remove();
+      if (!rightDiv.querySelector('.star')) {
+        const starBtn = document.createElement('button');
+        starBtn.className = `star ${c && c.starred ? 'on' : ''}`;
+        starBtn.setAttribute('data-star-chat', chatId);
+        starBtn.title = 'Star';
+        starBtn.innerHTML = icon('star', 'xs');
+        rightDiv.appendChild(starBtn);
+      }
+    }
   }
 }
 
@@ -2058,7 +2099,7 @@ function renderMessenger() {
     c = visibleChats[0];
     state.chatId = c.id;
   }
-  if (c) c.unread = 0;
+  if (c) markChatAsSeen(c.id);
   const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person]?.availability === 'available' ? '<i class="online"></i>' : (PEOPLE[ch.person]?.availability === 'absent' ? '<i class="absent-dot"></i>' : '')) : `<span class="group-av">${icon('users', 'sm')}</span>`;
   const preview = ch => {
     const m = lastMsg(ch);
@@ -2070,6 +2111,7 @@ function renderMessenger() {
   const renderChatItem = ch => {
     const lm = lastMsg(ch);
     const timeDisplay = lm.time ? formatMsgTime(ch.timeLabel && lm.time === ch.timeLabel ? ch.timeLabel : lm.time) : '';
+    const unreadCount = Number(ch.unread) || 0;
     return `
       <div class="chat-item ${c && ch.id === c.id ? 'active' : ''}" data-chat="${ch.id}">
         ${chatAv(ch)}
@@ -2082,7 +2124,7 @@ function renderMessenger() {
         </div>
         <div class="right">
           <span>${timeDisplay}</span>
-          ${ch.unread ? `<span class="unread">${ch.unread}</span>` : `<button class="star ${ch.starred ? 'on' : ''}" data-star-chat="${ch.id}" title="Star">${icon('star', 'xs')}</button>`}
+          ${unreadCount > 0 ? `<span class="unread">${unreadCount > 99 ? '99+' : unreadCount}</span>` : `<button class="star ${ch.starred ? 'on' : ''}" data-star-chat="${ch.id}" title="Star">${icon('star', 'xs')}</button>`}
         </div>
       </div>
     `;
@@ -2233,6 +2275,7 @@ function renderMessenger() {
 function afterMessenger() {
   const c = chats.find(x => x.id === state.chatId) || chats[0];
   if (c && c.id) {
+    markChatAsSeen(c.id);
     connectChatSocket(c.id);
   }
 
@@ -2300,9 +2343,126 @@ function afterMessenger() {
     });
   }
 }
+function getLastSeenMap() {
+  try {
+    const raw = localStorage.getItem(`kathir_last_seen_${(ME || '').toLowerCase().trim()}`);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveLastSeenMap(map) {
+  try {
+    localStorage.setItem(`kathir_last_seen_${(ME || '').toLowerCase().trim()}`, JSON.stringify(map));
+  } catch (_) {}
+}
+
+function calculateUnreadCounts() {
+  if (!ME) return;
+  const seenMap = getLastSeenMap();
+  const myId = (ME || '').toLowerCase().trim();
+  const isInMsgr = location.hash.startsWith('#/messenger');
+
+  chats.forEach(c => {
+    if (!c || !canAccessChat(c, ME)) {
+      if (c) c.unread = 0;
+      return;
+    }
+    if (isInMsgr && state.chatId === c.id) {
+      c.unread = 0;
+      if (c.msgs && c.msgs.length) {
+        const lm = c.msgs[c.msgs.length - 1];
+        if (lm && lm.id) seenMap[c.id] = lm.id;
+      }
+      return;
+    }
+
+    const lastSeenId = seenMap[c.id];
+    if (!c.msgs || !c.msgs.length) {
+      c.unread = 0;
+      return;
+    }
+
+    if (lastSeenId === undefined) {
+      const fromOthers = c.msgs.filter(m => {
+        const f = (m.from || '').toLowerCase().trim();
+        return f && f !== myId;
+      }).length;
+      c.unread = c.unread !== undefined ? c.unread : fromOthers;
+    } else {
+      let count = 0;
+      let found = false;
+      for (let i = c.msgs.length - 1; i >= 0; i--) {
+        const m = c.msgs[i];
+        if (String(m.id) === String(lastSeenId)) {
+          found = true;
+          break;
+        }
+        const f = (m.from || '').toLowerCase().trim();
+        if (f && f !== myId) count++;
+      }
+      c.unread = found ? count : (c.unread || 0);
+    }
+  });
+
+  saveLastSeenMap(seenMap);
+  updateMsgDot();
+}
+
+function markChatAsSeen(chatId) {
+  if (!chatId) return;
+  const c = chats.find(x => x.id === chatId);
+  if (c) {
+    c.unread = 0;
+    if (Array.isArray(c.msgs) && c.msgs.length) {
+      const lastM = c.msgs[c.msgs.length - 1];
+      if (lastM && lastM.id) {
+        const seenMap = getLastSeenMap();
+        seenMap[chatId] = lastM.id;
+        saveLastSeenMap(seenMap);
+      }
+    }
+    saveChatsToCache();
+  }
+  const chatItem = $(`.chat-item[data-chat="${chatId}"]`);
+  if (chatItem) {
+    const unreadEl = chatItem.querySelector('.right .unread');
+    if (unreadEl) unreadEl.remove();
+    const rightDiv = chatItem.querySelector('.right');
+    if (rightDiv && !rightDiv.querySelector('.star')) {
+      const starBtn = document.createElement('button');
+      starBtn.className = `star ${c && c.starred ? 'on' : ''}`;
+      starBtn.setAttribute('data-star-chat', chatId);
+      starBtn.title = 'Star';
+      starBtn.innerHTML = icon('star', 'xs');
+      rightDiv.appendChild(starBtn);
+    }
+  }
+  updateMsgDot();
+}
+
 function updateMsgDot() {
-  $('#msgDot').classList.toggle('hide', !chats.some(c => c.unread));
-  if (!location.hash.startsWith('#/messenger')) $('#main').style.overflow = '';
+  const dot = $('#msgDot');
+  if (!dot) return;
+  const totalUnread = chats.reduce((sum, c) => {
+    if (!c || !canAccessChat(c, ME)) return sum;
+    return sum + (Number(c.unread) || 0);
+  }, 0);
+
+  if (totalUnread > 0) {
+    dot.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
+    dot.classList.remove('hide');
+    dot.title = `${totalUnread} unseen message${totalUnread > 1 ? 's' : ''}`;
+  } else {
+    dot.textContent = '';
+    dot.classList.add('hide');
+    dot.removeAttribute('title');
+  }
+  if (!location.hash.startsWith('#/messenger')) {
+    const m = $('#main');
+    if (m) m.style.overflow = '';
+  }
 }
 function sendMessage(text, file, voice) {
   let c = chats.find(x => x.id === state.chatId);
@@ -3632,7 +3792,12 @@ document.addEventListener('click', e => {
   const sc = t.closest('[data-star-chat]');
   if (sc) { const c = chats.find(x => x.id === sc.dataset.starChat); c.starred = !c.starred; rerender(); return; }
   const ch = t.closest('[data-chat]');
-  if (ch) { state.chatId = ch.dataset.chat; go('#/messenger/' + ch.dataset.chat); return; }
+  if (ch) {
+    state.chatId = ch.dataset.chat;
+    markChatAsSeen(ch.dataset.chat);
+    go('#/messenger/' + ch.dataset.chat);
+    return;
+  }
 
   const act = t.closest('[data-action]');
   if (act) handleAction(act.dataset.action, act);
@@ -4421,8 +4586,18 @@ function startRealtimePolling() {
             const localMsgs = localChat.msgs || [];
             const freshMsgs = fc.msgs || [];
             if (freshMsgs.length > localMsgs.length) {
+              const newItems = freshMsgs.slice(localMsgs.length);
               localChat.msgs = freshMsgs;
               hasNewMessages = true;
+              const isCurrentOpen = location.hash.startsWith('#/messenger') && state.chatId === localChat.id;
+              if (!isCurrentOpen) {
+                const myId = (ME || '').toLowerCase().trim();
+                const unreadFromOthers = newItems.filter(m => (m.from || '').toLowerCase().trim() !== myId).length;
+                if (unreadFromOthers > 0) {
+                  localChat.unread = (localChat.unread || 0) + unreadFromOthers;
+                  updateChatListPreview(localChat.id, freshMsgs[freshMsgs.length - 1]);
+                }
+              }
             } else if (freshMsgs.length === localMsgs.length && freshMsgs.length > 0) {
               const lastFresh = freshMsgs[freshMsgs.length - 1];
               const lastLocal = localMsgs[localMsgs.length - 1];
@@ -4434,6 +4609,7 @@ function startRealtimePolling() {
         });
         if (hasNewMessages) {
           saveChatsToCache();
+          updateMsgDot();
           if (location.hash.startsWith('#/messenger')) {
             const curChat = chats.find(x => x.id === state.chatId);
             const box = $('#msgs');
@@ -4445,12 +4621,11 @@ function startRealtimePolling() {
                 }
                 const lastM = curChat.msgs[curChat.msgs.length - 1];
                 if (lastM) updateChatListPreview(curChat.id, lastM);
+                markChatAsSeen(curChat.id);
               }
             } else {
               rerender();
             }
-          } else {
-            updateMsgDot();
           }
         }
       }
@@ -4657,13 +4832,19 @@ function handleNewSocketMessage(msg) {
   c.msgs.push(msg);
   saveChatsToCache();
 
-  if (state.chatId === c.id && location.hash.startsWith('#/messenger')) {
+  const isMe = sender && (ME || '').toLowerCase().trim() === sender;
+  const isCurrentChatOpen = state.chatId === c.id && location.hash.startsWith('#/messenger');
+
+  if (isCurrentChatOpen) {
     appendSingleMsgToBox(msg, newIdx);
     updateChatListPreview(c.id, msg);
+    markChatAsSeen(c.id);
   } else {
-    c.unread = (c.unread || 0) + 1;
-    updateMsgDot();
+    if (!isMe) {
+      c.unread = (c.unread || 0) + 1;
+    }
     updateChatListPreview(c.id, msg);
+    updateMsgDot();
   }
 }
 
@@ -5707,6 +5888,7 @@ async function loadInitialData() {
 
   ensureAllTeamDMs();
   deduplicateChats();
+  calculateUnreadCounts();
   refreshSide();
   route();
   initGlobalEventSocket();

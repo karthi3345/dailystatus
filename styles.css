@@ -111,8 +111,33 @@ svg { display: block; }
   box-shadow: inset 3px 0 0 var(--gold), 0 0 20px rgba(245, 184, 46, 0.1);
 }
 .nav-item.active .ic { color: var(--gold-2); filter: drop-shadow(0 0 8px rgba(245, 184, 46, 0.4)); }
+.nav-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  box-shadow: 0 2px 10px rgba(239, 68, 68, 0.55);
+  line-height: 1;
+  letter-spacing: -0.2px;
+  animation: pulseBadge 2.2s infinite;
+}
+.nav-badge.hide {
+  display: none !important;
+}
+@keyframes pulseBadge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
 .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff7a29; margin-left: auto; box-shadow: 0 0 8px #ff7a29; }
-.nav-dot.hide { display: none; }
+.nav-dot.hide { display: none !important; }
 .side-user {
   margin-top: auto; display: flex; align-items: center; gap: 11px;
   padding: 10px 10px; border-radius: 12px; text-align: left; width: 100%;
