@@ -1523,14 +1523,31 @@ async function finishVoiceRecording() {
 
   let audioUrl = '';
   if (voiceMediaRecorder && voiceMediaRecorder.state !== 'inactive') {
-    try {
-      voiceMediaRecorder.stop();
-      if (voiceAudioChunks.length) {
-        const blob = new Blob(voiceAudioChunks, { type: 'audio/webm;codecs=opus' });
-        audioUrl = URL.createObjectURL(blob);
-      }
-    } catch (e) {}
+    audioUrl = await new Promise((resolve) => {
+      voiceMediaRecorder.onstop = () => {
+        if (voiceAudioChunks.length) {
+          const mimeType = voiceMediaRecorder.mimeType || 'audio/webm';
+          const blob = new Blob(voiceAudioChunks, { type: mimeType });
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result || '');
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(blob);
+        } else {
+          resolve('');
+        }
+      };
+      try { voiceMediaRecorder.stop(); } catch (e) { resolve(''); }
+    });
+  } else if (voiceAudioChunks.length) {
+    audioUrl = await new Promise((resolve) => {
+      const blob = new Blob(voiceAudioChunks, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result || '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    });
   }
+
   if (state.voiceAudioStream) {
     try { state.voiceAudioStream.getTracks().forEach(t => t.stop()); } catch (e) {}
     state.voiceAudioStream = null;
@@ -1557,41 +1574,75 @@ function toggleVoicePlayback(msgIdx) {
   const v = m.voice || (m.file_info && m.file_info.type === 'voice' ? m.file_info : null);
   if (!v) return;
 
+  const updatePlayBtnUI = (playing) => {
+    const btn = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-play-btn`);
+    if (btn) {
+      btn.innerHTML = playing ? icon('pause', 'sm') : icon('play', 'sm');
+      btn.title = playing ? 'Pause' : 'Play voice message';
+    }
+  };
+
   if (activeAudioMsgId === msgIdx && voicePlaybackAudio) {
     if (voicePlaybackAudio.paused) {
-      voicePlaybackAudio.play();
+      voicePlaybackAudio.play().catch(() => {});
+      updatePlayBtnUI(true);
     } else {
       voicePlaybackAudio.pause();
+      updatePlayBtnUI(false);
     }
-    rerender();
     return;
   }
 
   if (voicePlaybackAudio) {
-    voicePlaybackAudio.pause();
+    try { voicePlaybackAudio.pause(); } catch (_) {}
     voicePlaybackAudio = null;
+  }
+  if (activeAudioMsgId !== null) {
+    const prevBtn = document.querySelector(`[data-msg-idx="${activeAudioMsgId}"] .voice-play-btn`);
+    if (prevBtn) {
+      prevBtn.innerHTML = icon('play', 'sm');
+      prevBtn.title = 'Play voice message';
+    }
   }
   clearInterval(voiceAudioInterval);
 
-  if (v.audioUrl) {
-    voicePlaybackAudio = new Audio(v.audioUrl);
-  } else {
-    playSynthesizedVoiceTone(v.seconds || 5);
-  }
-
   activeAudioMsgId = msgIdx;
-  const speedVal = v.speed === '2x' ? 2 : v.speed === '1.5x' ? 1.5 : 1;
+  updatePlayBtnUI(true);
 
-  if (voicePlaybackAudio) {
+  const speedVal = v.speed === '2x' ? 2 : v.speed === '1.5x' ? 1.5 : 1;
+  const isDataOrHttp = v.audioUrl && (v.audioUrl.startsWith('data:') || v.audioUrl.startsWith('http://') || v.audioUrl.startsWith('https://'));
+
+  if (isDataOrHttp) {
+    voicePlaybackAudio = new Audio(v.audioUrl);
     voicePlaybackAudio.playbackRate = speedVal;
-    voicePlaybackAudio.play().catch(e => console.log('Audio play note:', e));
+
+    voicePlaybackAudio.onerror = (err) => {
+      console.warn('Audio decoding failed, falling back to tone:', err);
+      if (voicePlaybackAudio) {
+        try { voicePlaybackAudio.pause(); } catch (_) {}
+        voicePlaybackAudio = null;
+      }
+      playSynthesizedVoiceTone(v.seconds || 5);
+      runSyntheticPlayback(v, msgIdx, speedVal);
+    };
+
+    voicePlaybackAudio.play().catch((err) => {
+      console.warn('Audio play restricted or failed, falling back to tone:', err);
+      playSynthesizedVoiceTone(v.seconds || 5);
+      runSyntheticPlayback(v, msgIdx, speedVal);
+    });
 
     voiceAudioInterval = setInterval(() => {
       if (!voicePlaybackAudio || voicePlaybackAudio.paused || voicePlaybackAudio.ended) {
         if (voicePlaybackAudio && voicePlaybackAudio.ended) {
           activeAudioMsgId = null;
           clearInterval(voiceAudioInterval);
-          rerender();
+          updatePlayBtnUI(false);
+          v.progressPct = 0;
+          const barsEl = document.querySelectorAll(`[data-msg-idx="${msgIdx}"] .wave-bar`);
+          barsEl.forEach(bar => bar.classList.remove('active'));
+          const metaSpan = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
+          if (metaSpan) metaSpan.textContent = v.duration || '0:05';
         }
         return;
       }
@@ -1601,50 +1652,70 @@ function toggleVoicePlayback(msgIdx) {
       const sec = String(Math.floor(cur % 60)).padStart(2, '0');
       v.currentTime = `${min}:${sec}`;
       v.progressPct = Math.min(100, (cur / dur) * 100);
-      const playerEl = $(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
+      const playerEl = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
       if (playerEl) playerEl.textContent = v.currentTime;
-      const barsEl = $$(`[data-msg-idx="${msgIdx}"] .wave-bar`);
+      const barsEl = document.querySelectorAll(`[data-msg-idx="${msgIdx}"] .wave-bar`);
       const totalBars = barsEl.length;
       barsEl.forEach((bar, bIdx) => {
         const barPct = (bIdx / totalBars) * 100;
         bar.classList.toggle('active', barPct <= v.progressPct);
       });
-    }, 150);
+    }, 120);
 
     voicePlaybackAudio.onended = () => {
       activeAudioMsgId = null;
       clearInterval(voiceAudioInterval);
       v.progressPct = 0;
-      rerender();
+      updatePlayBtnUI(false);
+      const barsEl = document.querySelectorAll(`[data-msg-idx="${msgIdx}"] .wave-bar`);
+      barsEl.forEach(bar => bar.classList.remove('active'));
+      const metaSpan = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
+      if (metaSpan) metaSpan.textContent = v.duration || '0:05';
     };
   } else {
-    let elapsed = 0;
-    const dur = v.seconds || 5;
-    voiceAudioInterval = setInterval(() => {
-      elapsed += 0.2 * speedVal;
-      if (elapsed >= dur) {
-        activeAudioMsgId = null;
-        clearInterval(voiceAudioInterval);
-        v.progressPct = 0;
-        rerender();
-        return;
-      }
-      const min = Math.floor(elapsed / 60);
-      const sec = String(Math.floor(elapsed % 60)).padStart(2, '0');
-      v.currentTime = `${min}:${sec}`;
-      v.progressPct = Math.min(100, (elapsed / dur) * 100);
-      const playerEl = $(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
-      if (playerEl) playerEl.textContent = v.currentTime;
-      const barsEl = $$(`[data-msg-idx="${msgIdx}"] .wave-bar`);
-      const totalBars = barsEl.length;
-      barsEl.forEach((bar, bIdx) => {
-        const barPct = (bIdx / totalBars) * 100;
-        bar.classList.toggle('active', barPct <= v.progressPct);
-      });
-    }, 200);
+    // If blob expired from previous session or tone only, play synthetic tone with visual bars
+    playSynthesizedVoiceTone(v.seconds || 5);
+    runSyntheticPlayback(v, msgIdx, speedVal);
   }
+}
 
-  rerender();
+function runSyntheticPlayback(v, msgIdx, speedVal) {
+  let elapsed = 0;
+  const dur = v.seconds || 5;
+  const updatePlayBtnUI = (playing) => {
+    const btn = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-play-btn`);
+    if (btn) {
+      btn.innerHTML = playing ? icon('pause', 'sm') : icon('play', 'sm');
+      btn.title = playing ? 'Pause' : 'Play voice message';
+    }
+  };
+  clearInterval(voiceAudioInterval);
+  voiceAudioInterval = setInterval(() => {
+    elapsed += 0.15 * speedVal;
+    if (elapsed >= dur) {
+      activeAudioMsgId = null;
+      clearInterval(voiceAudioInterval);
+      v.progressPct = 0;
+      updatePlayBtnUI(false);
+      const barsEl = document.querySelectorAll(`[data-msg-idx="${msgIdx}"] .wave-bar`);
+      barsEl.forEach(bar => bar.classList.remove('active'));
+      const metaSpan = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
+      if (metaSpan) metaSpan.textContent = v.duration || '0:05';
+      return;
+    }
+    const min = Math.floor(elapsed / 60);
+    const sec = String(Math.floor(elapsed % 60)).padStart(2, '0');
+    v.currentTime = `${min}:${sec}`;
+    v.progressPct = Math.min(100, (elapsed / dur) * 100);
+    const playerEl = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-meta span`);
+    if (playerEl) playerEl.textContent = v.currentTime;
+    const barsEl = document.querySelectorAll(`[data-msg-idx="${msgIdx}"] .wave-bar`);
+    const totalBars = barsEl.length;
+    barsEl.forEach((bar, bIdx) => {
+      const barPct = (bIdx / totalBars) * 100;
+      bar.classList.toggle('active', barPct <= v.progressPct);
+    });
+  }, 150);
 }
 
 function toggleVoiceSpeed(msgIdx) {
@@ -1659,7 +1730,8 @@ function toggleVoiceSpeed(msgIdx) {
   if (voicePlaybackAudio) {
     voicePlaybackAudio.playbackRate = v.speed === '2x' ? 2 : v.speed === '1.5x' ? 1.5 : 1;
   }
-  rerender();
+  const speedBtn = document.querySelector(`[data-msg-idx="${msgIdx}"] .voice-speed-pill`);
+  if (speedBtn) speedBtn.textContent = v.speed;
 }
 
 function playSynthesizedVoiceTone(durationSecs) {
@@ -1683,6 +1755,100 @@ function playSynthesizedVoiceTone(durationSecs) {
 }
 
 /* ---------------- Chat Message DOM Helpers ---------------- */
+function getFileIcon(name) {
+  if (!name) return '📄';
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return '🖼️';
+  if (['pdf'].includes(ext)) return '📕';
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '📦';
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return '📊';
+  if (['doc', 'docx', 'txt'].includes(ext)) return '📝';
+  if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return '🎵';
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return '🎬';
+  return '📁';
+}
+
+window.previewImageModal = function(url, name) {
+  if (!url) return;
+  const oldModal = document.querySelector('.image-lightbox-modal');
+  if (oldModal) oldModal.remove();
+
+  const modal = document.createElement('div');
+  modal.className = 'image-lightbox-modal';
+  modal.innerHTML = `
+    <img src="${url}" alt="${esc(name || 'Image Preview')}" class="image-lightbox-content" />
+    <div class="image-lightbox-bar">
+      <span style="color:var(--text);font-weight:600;font-size:13px">${esc(name || 'Image')}</span>
+      <button type="button" class="btn gold" id="lightboxDlBtn" style="padding:6px 14px;font-size:12px;display:flex;align-items:center;gap:6px">
+        ${icon('download', 'xs')} Download
+      </button>
+      <button type="button" class="btn" id="lightboxCloseBtn" style="padding:6px 12px;font-size:12px">Close (Esc)</button>
+    </div>
+  `;
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal || e.target.id === 'lightboxCloseBtn') modal.remove();
+  });
+  const dlBtn = modal.querySelector('#lightboxDlBtn');
+  if (dlBtn) {
+    dlBtn.onclick = () => {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name || 'image.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+  }
+  document.body.appendChild(modal);
+};
+
+function downloadAttachment(msgIdx) {
+  const c = chats.find(x => x.id === state.chatId);
+  if (!c || !c.msgs[msgIdx]) return;
+  const m = c.msgs[msgIdx];
+  const f = m.file || (m.file_info && m.file_info.type !== 'voice' ? m.file_info : null);
+  if (!f) {
+    toast('No downloadable file attached');
+    return;
+  }
+  const fileUrl = f.url || (f.audioUrl ? f.audioUrl : null);
+  const fileName = f.name || 'attachment';
+  if (!fileUrl) {
+    toast(`File data for "${fileName}" was uploaded before download support was enabled`);
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = fileUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast(`Downloading ${fileName}...`);
+}
+
+function handleChatFileDrop(files) {
+  if (!files || !files.length) return;
+  Array.from(files).forEach(f => {
+    if (f.size > 15 * 1024 * 1024) {
+      toast(`File "${f.name}" exceeds 15MB limit`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const sizeStr = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB';
+      sendMessage('', {
+        name: f.name,
+        size: sizeStr,
+        type: f.type || 'application/octet-stream',
+        url: dataUrl
+      });
+      toast(`Sent "${f.name}"`);
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
 function renderChatMessageHtml(m, idx, lastDateLabel = null) {
   const isMe = (m.from && ME) ? (m.from.toLowerCase() === ME.toLowerCase()) : false;
   const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'You');
@@ -1731,12 +1897,30 @@ function renderChatMessageHtml(m, idx, lastDateLabel = null) {
               <div class="msg-text">${esc(m.text || '').replace(/\n/g, '<br>')}</div>
             `}
 
-            ${m.file ? `
-              <div class="attach">
-                <span style="color:var(--text-2)">${icon('file')}</span>
-                <div><div class="n">${esc(m.file.name)}</div><div class="z">${m.file.size}</div></div>
-                <button type="button" data-action="download" title="Download">${icon('download', 'sm')}</button>
-              </div>` : ''}
+            ${(() => {
+              const fileItem = m.file || (m.file_info && m.file_info.type !== 'voice' ? m.file_info : null);
+              if (!fileItem) return '';
+              const isImg = fileItem.url && (fileItem.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileItem.name));
+              return `
+                <div class="attach-container" style="margin-top:6px">
+                  ${isImg ? `
+                    <div class="attach-preview-img-wrap" onclick="window.previewImageModal('${esc(fileItem.url)}', '${esc(fileItem.name)}')">
+                      <img src="${fileItem.url}" alt="${esc(fileItem.name)}" class="attach-img-preview" />
+                    </div>
+                  ` : ''}
+                  <div class="attach-row">
+                    <span style="font-size:18px">${getFileIcon(fileItem.name)}</span>
+                    <div style="min-width:0;flex:1">
+                      <div class="n" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:12.5px">${esc(fileItem.name)}</div>
+                      <div class="z" style="font-size:11px;color:var(--text-3)">${esc(fileItem.size || '')}</div>
+                    </div>
+                    <button type="button" class="file-dl-btn" data-action="download-attachment" data-msg-idx="${idx}" title="Download ${esc(fileItem.name)}">
+                      ${icon('download', 'sm')}
+                    </button>
+                  </div>
+                </div>
+              `;
+            })()}
           </div>
 
           <!-- WhatsApp Style Message Actions (Hover / Tap) -->
@@ -1932,6 +2116,13 @@ function renderMessenger() {
       </div>
       ${c ? `
       <div class="chat-win">
+        <div id="chatDropOverlay" class="chat-drop-overlay" style="display:none">
+          <div class="chat-drop-box">
+            <div style="font-size:42px;margin-bottom:8px">📁</div>
+            <div style="font-size:16px;font-weight:600;color:var(--gold);margin-bottom:4px">Drop media files here to send</div>
+            <div style="font-size:12px;color:var(--text-2)">Images, audio, videos, documents up to 15MB</div>
+          </div>
+        </div>
         <div class="chat-head">
           ${c.kind === 'dm' ? av(c.person, 's40') : `<span class="group-av">${icon(c.project ? 'portfolio' : 'users', 'sm')}</span>`}
           <div>
@@ -2043,6 +2234,38 @@ function afterMessenger() {
   const c = chats.find(x => x.id === state.chatId) || chats[0];
   if (c && c.id) {
     connectChatSocket(c.id);
+  }
+
+  const chatWin = $('.chat-win');
+  const dropOverlay = $('#chatDropOverlay');
+  if (chatWin && dropOverlay) {
+    let dragCounter = 0;
+    chatWin.ondragenter = (e) => {
+      e.preventDefault();
+      dragCounter++;
+      dropOverlay.style.display = 'flex';
+    };
+    chatWin.ondragover = (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      dropOverlay.style.display = 'flex';
+    };
+    chatWin.ondragleave = (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        dropOverlay.style.display = 'none';
+      }
+    };
+    chatWin.ondrop = (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.style.display = 'none';
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        handleChatFileDrop(e.dataTransfer.files);
+      }
+    };
   }
 
   const box = $('#msgs');
@@ -4013,7 +4236,16 @@ async function handleAction(a, el) {
       }
       break;
     }
-    case 'download': toast('Downloading pricing-module-v2.zip'); break;
+    case 'download':
+    case 'download-attachment': {
+      const idx = el.dataset.msgIdx !== undefined ? +el.dataset.msgIdx : null;
+      if (idx !== null) {
+        downloadAttachment(idx);
+      } else {
+        toast('No file attached to download');
+      }
+      break;
+    }
     case 'chat-info': {
       const c = chats.find(x => x.id === state.chatId);
       if (!c) break;
@@ -4073,7 +4305,7 @@ document.addEventListener('change', e => {
     rerender(); toast(`${t.files.length} file(s) uploaded`);
   }
   if (t.id === 'logFile' && t.files.length) { const keepText = $('#logText').value; state.logAttach = t.files[0].name; rerender(); $('#logText').value = keepText; }
-  if (t.id === 'msgFile' && t.files.length) { const f = t.files[0]; sendMessage('', { name: f.name, size: (f.size / 1048576).toFixed(1) + ' MB' }); }
+  if (t.id === 'msgFile' && t.files.length) { handleChatFileDrop(t.files); t.value = ''; }
 });
 document.addEventListener('submit', e => {
   if (e.target.id === 'msgForm') {
