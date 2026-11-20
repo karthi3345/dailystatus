@@ -77,7 +77,50 @@ svg { display: block; }
   border-right: 1px solid var(--line);
   padding: 24px 16px 20px;
 }
-.brand { display: flex; align-items: center; gap: 12px; padding: 0 6px 28px; cursor: pointer; }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 28px;
+  cursor: pointer;
+}
+.brand-logo-img {
+  height: 36px;
+  width: auto;
+  max-width: 130px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.22));
+  transition: transform .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.brand:hover .brand-logo-img {
+  transform: scale(1.04);
+}
+.brand-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: rgba(245, 184, 46, 0.12);
+  border: 1px solid rgba(245, 184, 46, 0.3);
+  padding: 2px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.brand-icon-mobile {
+  display: none;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.25));
+}
+.login-brand-img {
+  height: 48px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.3));
+}
 .brand svg {
   width: 44px; height: 40px;
   filter: drop-shadow(0 0 16px rgba(245, 184, 46, 0.35));
@@ -2007,7 +2050,8 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 
 @media (max-width: 1100px) {
   .app { grid-template-columns: 76px 1fr; }
-  .brand-name, .nav-item span, .side-user > div, .side-user > .ic { display: none; }
+  .brand-logo-img, .brand-tag, .brand-name, .nav-item span, .side-user > div, .side-user > .ic { display: none !important; }
+  .brand-icon-mobile { display: block !important; margin: 0 auto; }
   .nav-item { justify-content: center; }
   .nav-dot { position: absolute; top: 8px; right: 10px; }
   .ov-top, .an-grid { grid-template-columns: 1fr; }
