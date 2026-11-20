@@ -367,7 +367,11 @@ function getMsgDateLabel(m) {
     try { const parsed = new Date(m.created_at); if (!isNaN(parsed.getTime())) dObj = parsed; } catch (e) {}
   }
   if (!dObj && m.date) {
-    try { const parsed = new Date(m.date); if (!isNaN(parsed.getTime())) dObj = parsed; } catch (e) {}
+    try {
+      const cleanDate = String(m.date).replace(/Today,?\s*/i, '').trim();
+      const parsed = new Date(cleanDate);
+      if (!isNaN(parsed.getTime())) dObj = parsed;
+    } catch (e) {}
   }
   if (!dObj) {
     dObj = new Date();
@@ -1678,6 +1682,186 @@ function playSynthesizedVoiceTone(durationSecs) {
   } catch (e) {}
 }
 
+/* ---------------- Chat Message DOM Helpers ---------------- */
+function renderChatMessageHtml(m, idx, lastDateLabel = null) {
+  const isMe = (m.from && ME) ? (m.from.toLowerCase() === ME.toLowerCase()) : false;
+  const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'You');
+  const senderId = m.from || (isMe ? ME : 'member');
+  const senderName = isMe ? `${myName} (You)` : ((PEOPLE[m.from]?.name) || m.from || 'Member');
+  const reactions = m.reactions || {};
+  const rxEntries = Object.entries(reactions);
+
+  const curDateLabel = getMsgDateLabel(m);
+  let dateDividerHtml = '';
+  if (curDateLabel && curDateLabel !== lastDateLabel) {
+    dateDividerHtml = `
+      <div class="chat-date-divider">
+        <span class="chat-date-pill">📅 ${esc(curDateLabel)}</span>
+      </div>
+    `;
+  }
+
+  const msgTime = formatMsgTime(m.time);
+
+  const html = `
+    ${dateDividerHtml}
+    <div class="msg ${isMe ? 'me' : ''}" id="msg-item-${idx}" data-msg-idx="${idx}" data-msg-id="${m.id || ''}">
+      ${av(senderId, 's36')}
+      <div class="msg-content-wrap">
+        <div class="who">
+          <span style="font-weight:600;color:${isMe ? 'var(--gold)' : '#60a5fa'}">${esc(senderName)}</span>
+          ${userModeIcon(senderId, 'xs')}
+          <span class="time-tag" style="${isMe ? 'margin-right:4px' : 'margin-left:auto'}">${msgTime}</span>
+        </div>
+
+        <div class="bubble-container">
+          <div class="bubble">
+            ${isMe ? `<div class="meta">${msgTime} ${icon('checks', 'xs')}</div>` : ''}
+
+            <!-- Quoted Message (WhatsApp Style Reply Preview) -->
+            ${m.reply_to ? `
+              <div class="msg-quote-card" data-action="jump-quoted-msg" data-quoted-text="${esc(m.reply_to.text || '')}" title="Click to view quoted message">
+                <div class="msg-quote-name">${esc(m.reply_to.from_name || (PEOPLE[m.reply_to.from]?.name) || m.reply_to.from || 'Member')}</div>
+                <div class="msg-quote-snippet">${esc(m.reply_to.text || '')}</div>
+              </div>
+            ` : ''}
+
+            <!-- Voice Note Player (WhatsApp style) or Text Message -->
+            ${(m.voice || (m.file_info && m.file_info.type === 'voice')) ? renderVoicePlayer(m.voice || m.file_info, idx, isMe) : `
+              <div class="msg-text">${esc(m.text || '').replace(/\n/g, '<br>')}</div>
+            `}
+
+            ${m.file ? `
+              <div class="attach">
+                <span style="color:var(--text-2)">${icon('file')}</span>
+                <div><div class="n">${esc(m.file.name)}</div><div class="z">${m.file.size}</div></div>
+                <button type="button" data-action="download" title="Download">${icon('download', 'sm')}</button>
+              </div>` : ''}
+          </div>
+
+          <!-- WhatsApp Style Message Actions (Hover / Tap) -->
+          <div class="msg-actions-pill">
+            <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="👍" data-msg-idx="${idx}" title="Thumbs Up">👍</button>
+            <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="❤️" data-msg-idx="${idx}" title="Heart">❤️</button>
+            <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="😂" data-msg-idx="${idx}" title="Laugh">😂</button>
+            <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="😮" data-msg-idx="${idx}" title="Surprised">😮</button>
+            <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="🙏" data-msg-idx="${idx}" title="Thanks">🙏</button>
+            <button type="button" class="msg-act-btn" data-action="open-more-emojis" data-msg-idx="${idx}" title="More emojis">➕</button>
+            <button type="button" class="msg-act-btn reply-act" data-action="reply-to-msg" data-msg-idx="${idx}" title="Reply to this message">
+              ${icon('reply', 'xs')} <span>Reply</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Emoji Reactions Display Under Bubble -->
+        ${rxEntries.length ? `
+          <div class="msg-rx-row">
+            ${rxEntries.map(([emoji, users]) => {
+              const userList = Array.isArray(users) ? users : [];
+              const hasReacted = userList.includes(ME || 'raja');
+              const names = userList.map(u => (PEOPLE[u]?.name) || u).join(', ');
+              return `
+                <button type="button" class="msg-rx-pill ${hasReacted ? 'active' : ''}" data-action="quick-react" data-emoji="${emoji}" data-msg-idx="${idx}" title="${esc(names)}">
+                  <span>${emoji}</span>
+                  <span class="rx-cnt">${userList.length}</span>
+                </button>
+              `;
+            }).join('')}
+            <button type="button" class="msg-rx-add" data-action="open-more-emojis" data-msg-idx="${idx}" title="Add reaction">+</button>
+          </div>
+        ` : ''}
+      </div>
+    </div>`;
+  return { html, dateLabel: curDateLabel };
+}
+
+function appendSingleMsgToBox(m, idx) {
+  const box = $('#msgs');
+  if (!box) return;
+
+  const emptyPlaceholder = box.querySelector('div[style*="text-align:center"]');
+  if (emptyPlaceholder) {
+    box.innerHTML = '';
+  }
+
+  const datePills = box.querySelectorAll('.chat-date-pill');
+  let lastDateLabel = null;
+  if (datePills.length > 0) {
+    const lastPill = datePills[datePills.length - 1];
+    lastDateLabel = lastPill.textContent.replace('📅', '').trim();
+  }
+
+  const res = renderChatMessageHtml(m, idx, lastDateLabel);
+  const container = document.createElement('div');
+  container.innerHTML = res.html.trim();
+
+  while (container.firstChild) {
+    box.appendChild(container.firstChild);
+  }
+
+  box.scrollTop = box.scrollHeight;
+  setTimeout(() => { if (box) box.scrollTop = box.scrollHeight; }, 30);
+}
+
+function updateChatListPreview(chatId, msg) {
+  if (!chatId || !msg) return;
+  const chatItem = $(`.chat-item[data-chat="${chatId}"]`);
+  if (!chatItem) return;
+  const pEl = chatItem.querySelector('.p');
+  if (pEl) {
+    pEl.textContent = (msg.text || '').split('\n')[0];
+  }
+  const rightSpan = chatItem.querySelector('.right > span');
+  if (rightSpan && msg.time) {
+    rightSpan.textContent = formatMsgTime(msg.time);
+  }
+}
+
+function updateReactionPillsDOM(msgId, reactions) {
+  const msgEl = document.querySelector(`[data-msg-id="${msgId}"]`);
+  if (!msgEl) {
+    rerender();
+    return;
+  }
+  const idx = msgEl.getAttribute('data-msg-idx');
+  const rxWrap = msgEl.querySelector('.msg-content-wrap');
+  if (!rxWrap) {
+    rerender();
+    return;
+  }
+
+  let rxRow = msgEl.querySelector('.msg-rx-row');
+  const rxEntries = Object.entries(reactions || {});
+
+  if (!rxEntries.length) {
+    if (rxRow) rxRow.remove();
+    return;
+  }
+
+  const rowHtml = `
+    <div class="msg-rx-row">
+      ${rxEntries.map(([emoji, users]) => {
+        const userList = Array.isArray(users) ? users : [];
+        const hasReacted = userList.includes(ME || 'raja');
+        const names = userList.map(u => (PEOPLE[u]?.name) || u).join(', ');
+        return `
+          <button type="button" class="msg-rx-pill ${hasReacted ? 'active' : ''}" data-action="quick-react" data-emoji="${emoji}" data-msg-idx="${idx}" title="${esc(names)}">
+            <span>${emoji}</span>
+            <span class="rx-cnt">${userList.length}</span>
+          </button>
+        `;
+      }).join('')}
+      <button type="button" class="msg-rx-add" data-action="open-more-emojis" data-msg-idx="${idx}" title="Add reaction">+</button>
+    </div>
+  `;
+
+  if (rxRow) {
+    rxRow.outerHTML = rowHtml;
+  } else {
+    rxWrap.insertAdjacentHTML('beforeend', rowHtml);
+  }
+}
+
 /* ---------------- Messenger ---------------- */
 function lastMsg(c) { return (c && c.msgs && c.msgs.length) ? c.msgs[c.msgs.length - 1] : { time: '', text: '' }; }
 function renderMessenger() {
@@ -1777,103 +1961,17 @@ function renderMessenger() {
                 <div style="text-align:center;padding:50px 18px;color:var(--text-3);margin:auto">
                   <div style="margin-bottom:12px;display:flex;justify-content:center">${c.kind === 'dm' ? av(c.person, 's64') : `<span class="group-av" style="width:64px;height:64px">${icon(c.project ? 'portfolio' : 'users')}</span>`}</div>
                   <div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:4px">${c.kind === 'dm' ? `Direct chat with ${esc(c.name)}` : `Welcome to ${esc(c.name)}`}</div>
-                  <div style="font-size:12.5px;max-width:320px;margin:0 auto">Send a message below to start chatting with Mumbai IST timestamps! 💬</div>
+                  <div style="font-size:12.5px;max-width:320px;margin:0 auto">Send a message below to start chatting! 💬</div>
                 </div>
               `;
             }
             let lastDateLabel = null;
             return (c.msgs || []).map((m, idx) => {
-              const isMe = (m.from && ME) ? (m.from.toLowerCase() === ME.toLowerCase()) : false;
-              const myName = (PEOPLE[ME]?.name) || (ME ? ME.toUpperCase() : 'You');
-              const senderId = m.from || (isMe ? ME : 'member');
-              const senderName = isMe ? `${myName} (You)` : ((PEOPLE[m.from]?.name) || m.from || 'Member');
-              const reactions = m.reactions || {};
-              const rxEntries = Object.entries(reactions);
-
-              const curDateLabel = getMsgDateLabel(m);
-              let dateDividerHtml = '';
-              if (curDateLabel !== lastDateLabel) {
-                lastDateLabel = curDateLabel;
-                dateDividerHtml = `
-                  <div class="chat-date-divider">
-                    <span class="chat-date-pill">📅 ${esc(curDateLabel)}</span>
-                  </div>
-                `;
-              }
-
-              const msgTime = formatMsgTime(m.time);
-
-              return `
-              ${dateDividerHtml}
-              <div class="msg ${isMe ? 'me' : ''}" id="msg-item-${idx}" data-msg-idx="${idx}">
-                ${av(senderId, 's36')}
-                <div class="msg-content-wrap">
-                  <div class="who">
-                    <span style="font-weight:600;color:${isMe ? 'var(--gold)' : '#60a5fa'}">${esc(senderName)}</span>
-                    ${userModeIcon(senderId, 'xs')}
-                    <span class="time-tag" style="${isMe ? 'margin-right:4px' : 'margin-left:auto'}">${msgTime}</span>
-                  </div>
-
-                  <div class="bubble-container">
-                    <div class="bubble">
-                      ${isMe ? `<div class="meta">${msgTime} ${icon('checks', 'xs')}</div>` : ''}
-
-                    <!-- Quoted Message (WhatsApp Style Reply Preview) -->
-                    ${m.reply_to ? `
-                      <div class="msg-quote-card" data-action="jump-quoted-msg" data-quoted-text="${esc(m.reply_to.text || '')}" title="Click to view quoted message">
-                        <div class="msg-quote-name">${esc(m.reply_to.from_name || (PEOPLE[m.reply_to.from]?.name) || m.reply_to.from || 'Member')}</div>
-                        <div class="msg-quote-snippet">${esc(m.reply_to.text || '')}</div>
-                      </div>
-                    ` : ''}
-
-                    <!-- Voice Note Player (WhatsApp style) or Text Message -->
-                    ${(m.voice || (m.file_info && m.file_info.type === 'voice')) ? renderVoicePlayer(m.voice || m.file_info, idx, isMe) : `
-                      <div class="msg-text">${esc(m.text || '').replace(/\n/g, '<br>')}</div>
-                    `}
-
-                    ${m.file ? `
-                      <div class="attach">
-                        <span style="color:var(--text-2)">${icon('file')}</span>
-                        <div><div class="n">${esc(m.file.name)}</div><div class="z">${m.file.size}</div></div>
-                        <button type="button" data-action="download" title="Download">${icon('download', 'sm')}</button>
-                      </div>` : ''}
-                  </div>
-
-                  <!-- WhatsApp Style Message Actions (Hover / Tap) -->
-                  <div class="msg-actions-pill">
-                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="👍" data-msg-idx="${idx}" title="Thumbs Up">👍</button>
-                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="❤️" data-msg-idx="${idx}" title="Heart">❤️</button>
-                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="😂" data-msg-idx="${idx}" title="Laugh">😂</button>
-                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="😮" data-msg-idx="${idx}" title="Surprised">😮</button>
-                    <button type="button" class="msg-act-btn" data-action="quick-react" data-emoji="🙏" data-msg-idx="${idx}" title="Thanks">🙏</button>
-                    <button type="button" class="msg-act-btn" data-action="open-more-emojis" data-msg-idx="${idx}" title="More emojis">➕</button>
-                    <button type="button" class="msg-act-btn reply-act" data-action="reply-to-msg" data-msg-idx="${idx}" title="Reply to this message">
-                      ${icon('reply', 'xs')} <span>Reply</span>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Emoji Reactions Display Under Bubble -->
-                ${rxEntries.length ? `
-                  <div class="msg-rx-row">
-                    ${rxEntries.map(([emoji, users]) => {
-                      const userList = Array.isArray(users) ? users : [];
-                      const hasReacted = userList.includes(ME || 'raja');
-                      const names = userList.map(u => (PEOPLE[u]?.name) || u).join(', ');
-                      return `
-                        <button type="button" class="msg-rx-pill ${hasReacted ? 'active' : ''}" data-action="quick-react" data-emoji="${emoji}" data-msg-idx="${idx}" title="${esc(names)}">
-                          <span>${emoji}</span>
-                          <span class="rx-cnt">${userList.length}</span>
-                        </button>
-                      `;
-                    }).join('')}
-                    <button type="button" class="msg-rx-add" data-action="open-more-emojis" data-msg-idx="${idx}" title="Add reaction">+</button>
-                  </div>
-                ` : ''}
-              </div>
-            </div>`;
-          }).join('');
-        })()}
+              const res = renderChatMessageHtml(m, idx, lastDateLabel);
+              lastDateLabel = res.dateLabel || lastDateLabel;
+              return res.html;
+            }).join('');
+          })()}
         </div>
 
         <!-- WhatsApp Reply Preview Banner -->
@@ -2014,11 +2112,29 @@ function sendMessage(text, file, voice) {
     reactions: {}
   };
   c.msgs = c.msgs || [];
+  const newIdx = c.msgs.length;
   c.msgs.push(newMsg);
   saveChatsToCache();
-  rerender();
 
-  // Send via active WebSocket if open
+  // Clear input and reply banner directly without wiping the DOM
+  const msgInput = $('#msgInput');
+  if (msgInput) {
+    msgInput.value = '';
+    msgInput.focus();
+  }
+  const replyBanner = $('.reply-banner');
+  if (replyBanner) replyBanner.remove();
+
+  // Append smoothly into the DOM if currently viewing this chat in Messenger
+  if (location.hash.startsWith('#/messenger') && state.chatId === c.id) {
+    appendSingleMsgToBox(newMsg, newIdx);
+    updateChatListPreview(c.id, newMsg);
+  } else {
+    rerender();
+  }
+
+  // Transport: If WebSocket is open, send via WebSocket ONLY (backend saves to DB and broadcasts).
+  // If WebSocket is not open (e.g. serverless fallback), fall back to REST API.
   if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN) {
     try {
       activeChatSocket.send(JSON.stringify({
@@ -2029,23 +2145,40 @@ function sendMessage(text, file, voice) {
         voice: voice || null,
         reply_to: replyTo
       }));
-    } catch (_) {}
-  }
-
-  // Always persist to backend REST API so it is guaranteed saved to PostgreSQL
-  apiSendMessage(c.id, {
-    from_member: currentSender,
-    text: msgContent,
-    file_info: voice || file || null,
-    time_label: nowTime(),
-    reply_to: replyTo,
-    reactions: {}
-  }).then(saved => {
-    if (saved && saved.id) {
-      newMsg.id = saved.id;
-      saveChatsToCache();
+    } catch (_) {
+      apiSendMessage(c.id, {
+        from_member: currentSender,
+        text: msgContent,
+        file_info: voice || file || null,
+        time_label: nowTime(),
+        reply_to: replyTo,
+        reactions: {}
+      }).then(saved => {
+        if (saved && saved.id) {
+          newMsg.id = saved.id;
+          saveChatsToCache();
+          const el = $(`#msg-item-${newIdx}`);
+          if (el) el.setAttribute('data-msg-id', saved.id);
+        }
+      });
     }
-  });
+  } else {
+    apiSendMessage(c.id, {
+      from_member: currentSender,
+      text: msgContent,
+      file_info: voice || file || null,
+      time_label: nowTime(),
+      reply_to: replyTo,
+      reactions: {}
+    }).then(saved => {
+      if (saved && saved.id) {
+        newMsg.id = saved.id;
+        saveChatsToCache();
+        const el = $(`#msg-item-${newIdx}`);
+        if (el) el.setAttribute('data-msg-id', saved.id);
+      }
+    });
+  }
 
   const box = $('#msgs');
   if (box) {
@@ -2073,7 +2206,12 @@ async function toggleMessageReaction(c, msgIdx, emoji) {
     m.reactions[emoji] = users;
   }
   saveChatsToCache();
-  rerender();
+  
+  if (m.id) {
+    updateReactionPillsDOM(m.id, m.reactions);
+  } else {
+    rerender();
+  }
 
   if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN && m.id) {
     try {
@@ -4065,10 +4203,19 @@ function startRealtimePolling() {
         if (hasNewMessages) {
           saveChatsToCache();
           if (location.hash.startsWith('#/messenger')) {
-            const main = $('#main');
-            if (main) {
-              main.innerHTML = renderMessenger();
-              afterMessenger();
+            const curChat = chats.find(x => x.id === state.chatId);
+            const box = $('#msgs');
+            if (box && curChat) {
+              const currentRendered = box.querySelectorAll('.msg').length;
+              if (curChat.msgs && curChat.msgs.length > currentRendered) {
+                for (let i = currentRendered; i < curChat.msgs.length; i++) {
+                  appendSingleMsgToBox(curChat.msgs[i], i);
+                }
+                const lastM = curChat.msgs[curChat.msgs.length - 1];
+                if (lastM) updateChatListPreview(curChat.id, lastM);
+              }
+            } else {
+              rerender();
             }
           } else {
             updateMsgDot();
@@ -4265,21 +4412,26 @@ function handleNewSocketMessage(msg) {
   if (!c) return;
 
   c.msgs = c.msgs || [];
-  const existingIdx = c.msgs.findIndex(m => m.id === msg.id || (m.from === msg.from && m.text === msg.text && typeof m.id === 'number' && Date.now() - m.id < 15000));
+  const existingIdx = c.msgs.findIndex(m => m.id === msg.id || (m.from === msg.from && m.text === msg.text && typeof m.id === 'number' && Date.now() - m.id < 20000));
   if (existingIdx >= 0) {
     c.msgs[existingIdx] = { ...c.msgs[existingIdx], ...msg };
-  } else {
-    c.msgs.push(msg);
+    saveChatsToCache();
+    const el = $(`#msg-item-${existingIdx}`);
+    if (el && msg.id) el.setAttribute('data-msg-id', msg.id);
+    return;
   }
+
+  const newIdx = c.msgs.length;
+  c.msgs.push(msg);
   saveChatsToCache();
-  if (state.chatId === c.id) {
-    rerender();
-    const box = $('#msgs');
-    if (box) setTimeout(() => { box.scrollTop = box.scrollHeight; }, 40);
+
+  if (state.chatId === c.id && location.hash.startsWith('#/messenger')) {
+    appendSingleMsgToBox(msg, newIdx);
+    updateChatListPreview(c.id, msg);
   } else {
     c.unread = (c.unread || 0) + 1;
     updateMsgDot();
-    rerender();
+    updateChatListPreview(c.id, msg);
   }
 }
 
@@ -4326,7 +4478,7 @@ function handleReactionUpdate(msgId, emoji, reactions) {
   if (m) {
     m.reactions = reactions || {};
     saveChatsToCache();
-    rerender();
+    updateReactionPillsDOM(msgId, m.reactions);
   }
 }
 
