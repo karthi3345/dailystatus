@@ -92,11 +92,9 @@ const THUMBS = {
 };
 
 /* ---------------- Dynamic Data store ---------------- */
-const BUILD_VERSION = 'v6.3_clean';
+const BUILD_VERSION = 'v6.4_live';
 if (localStorage.getItem('kathir_build_version') !== BUILD_VERSION) {
   try {
-    localStorage.removeItem('kathir_auth_token');
-    localStorage.removeItem('kathir_auth_user');
     localStorage.removeItem('kathir_cached_projects');
     localStorage.removeItem('kathir_cached_chats');
     localStorage.removeItem('kathir_cached_worklogs');
@@ -535,7 +533,12 @@ function route() {
   } else if (parts[0] === 'worklog') {
     main.innerHTML = renderWorkLog();
   } else if (parts[0] === 'messenger') {
-    if (parts[1] && chats.find(c => c.id === parts[1])) state.chatId = parts[1];
+    if (parts[1] && chats.find(c => c.id === parts[1])) {
+      state.chatId = parts[1];
+    } else if (!state.chatId || !chats.some(c => c.id === state.chatId)) {
+      const visible = chats.filter(ch => canAccessChat(ch, ME));
+      if (visible.length) state.chatId = visible[0].id;
+    }
     main.innerHTML = renderMessenger();
     afterMessenger();
   } else {
@@ -1682,7 +1685,11 @@ function renderMessenger() {
   const visibleChats = chats.filter(ch => canAccessChat(ch, ME));
   const q = state.chatQuery.toLowerCase();
   const list = visibleChats.filter(c => !q || c.name.toLowerCase().includes(q) || (c.msgs && c.msgs.some(m => (m.text || '').toLowerCase().includes(q))));
-  const c = visibleChats.find(x => x.id === state.chatId) || visibleChats[0];
+  let c = visibleChats.find(x => x.id === state.chatId);
+  if (!c && visibleChats.length) {
+    c = visibleChats[0];
+    state.chatId = c.id;
+  }
   if (c) c.unread = 0;
   const chatAv = ch => ch.kind === 'dm' ? av(ch.person, 's36', PEOPLE[ch.person]?.availability === 'available' ? '<i class="online"></i>' : (PEOPLE[ch.person]?.availability === 'absent' ? '<i class="absent-dot"></i>' : '')) : `<span class="group-av">${icon('users', 'sm')}</span>`;
   const preview = ch => {
@@ -1977,8 +1984,18 @@ function updateMsgDot() {
   if (!location.hash.startsWith('#/messenger')) $('#main').style.overflow = '';
 }
 function sendMessage(text, file, voice) {
-  const c = chats.find(x => x.id === state.chatId);
-  if (!c) return;
+  let c = chats.find(x => x.id === state.chatId);
+  if (!c) {
+    const visible = chats.filter(ch => canAccessChat(ch, ME));
+    if (visible.length) {
+      c = visible[0];
+      state.chatId = c.id;
+    }
+  }
+  if (!c) {
+    toast('Please select or start a chat first.');
+    return;
+  }
   const msgContent = text || (voice ? `🎤 Voice message (${voice.duration || '0:05'})` : file ? 'Shared a file' : '');
   const replyTo = state.replyingTo ? { ...state.replyingTo } : null;
   state.replyingTo = null;
@@ -2001,7 +2018,7 @@ function sendMessage(text, file, voice) {
   saveChatsToCache();
   rerender();
 
-  // Send via active WebSocket if open, otherwise REST API fallback
+  // Send via active WebSocket if open
   if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN) {
     try {
       activeChatSocket.send(JSON.stringify({
@@ -2013,21 +2030,22 @@ function sendMessage(text, file, voice) {
         reply_to: replyTo
       }));
     } catch (_) {}
-  } else {
-    apiSendMessage(c.id, {
-      from_member: currentSender,
-      text: msgContent,
-      file_info: voice || file || null,
-      time_label: nowTime(),
-      reply_to: replyTo,
-      reactions: {}
-    }).then(saved => {
-      if (saved && saved.id) {
-        newMsg.id = saved.id;
-        saveChatsToCache();
-      }
-    });
   }
+
+  // Always persist to backend REST API so it is guaranteed saved to PostgreSQL
+  apiSendMessage(c.id, {
+    from_member: currentSender,
+    text: msgContent,
+    file_info: voice || file || null,
+    time_label: nowTime(),
+    reply_to: replyTo,
+    reactions: {}
+  }).then(saved => {
+    if (saved && saved.id) {
+      newMsg.id = saved.id;
+      saveChatsToCache();
+    }
+  });
 
   const box = $('#msgs');
   if (box) {
@@ -4014,6 +4032,44 @@ function initGlobalEventSocket() {
   }
 }
 
+let realtimePollTimer = null;
+function startRealtimePolling() {
+  if (realtimePollTimer) return;
+  realtimePollTimer = setInterval(async () => {
+    if (!AUTH_TOKEN) return;
+    try {
+      const freshChats = await fetchFromAPI('/chats/');
+      if (Array.isArray(freshChats) && freshChats.length) {
+        let hasChanges = false;
+        freshChats.forEach(fc => {
+          const localChat = chats.find(x => x.id === fc.id);
+          if (localChat) {
+            const localMsgs = localChat.msgs || [];
+            const freshMsgs = fc.msgs || [];
+            if (freshMsgs.length > localMsgs.length || freshMsgs.length !== localMsgs.length) {
+              localChat.msgs = freshMsgs;
+              hasChanges = true;
+            }
+          } else {
+            chats.push(fc);
+            hasChanges = true;
+          }
+        });
+        if (hasChanges) {
+          saveChatsToCache();
+          if (location.hash.startsWith('#/messenger')) {
+            rerender();
+            const box = $('#msgs');
+            if (box) setTimeout(() => { box.scrollTop = box.scrollHeight; }, 30);
+          } else {
+            updateMsgDot();
+          }
+        }
+      }
+    } catch (_) {}
+  }, 2500);
+}
+
 function broadcastGlobalEventSocket(event, data) {
   if (globalEventSocket && globalEventSocket.readyState === WebSocket.OPEN) {
     try {
@@ -5152,18 +5208,13 @@ async function loadInitialData() {
         if (!PEOPLE[ME]) {
           PEOPLE[ME] = { name: meRes.user.name, role: meRes.user.role, availability: meRes.user.availability, mode: meRes.user.mode };
         }
-      } else {
+      } else if (meRes && meRes.authenticated === false) {
         AUTH_TOKEN = null;
         ME = null;
         localStorage.removeItem('kathir_auth_token');
         localStorage.removeItem('kathir_auth_user');
       }
-    } catch (_) {
-      AUTH_TOKEN = null;
-      ME = null;
-      localStorage.removeItem('kathir_auth_token');
-      localStorage.removeItem('kathir_auth_user');
-    }
+    } catch (_) {}
   } else {
     ME = null;
     localStorage.removeItem('kathir_auth_user');
@@ -5251,6 +5302,7 @@ async function loadInitialData() {
   refreshSide();
   rerender();
   initGlobalEventSocket();
+  startRealtimePolling();
 }
 
 /* ---------------- Drag and Drop for Kanban Board ---------------- */
@@ -5328,9 +5380,11 @@ function checkInitialAuthView() {
   if (!loginSection || !appSection) return;
 
   if (AUTH_TOKEN) {
+    document.documentElement.classList.add('is-authenticated');
     loginSection.hidden = true;
     appSection.hidden = false;
   } else {
+    document.documentElement.classList.remove('is-authenticated');
     loginSection.hidden = false;
     appSection.hidden = true;
   }

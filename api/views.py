@@ -139,6 +139,33 @@ class RegisterView(APIView):
 
         token, _ = Token.objects.get_or_create(user=user)
 
+        # Create DM threads with all other members
+        try:
+            other_members = Member.objects.exclude(id=username)
+            for om in other_members:
+                dm_cid = get_canonical_dm_id(username, om.id)
+                ChatThread.objects.get_or_create(
+                    id=dm_cid,
+                    defaults={
+                        'name': om.name or om.id.capitalize(),
+                        'kind': 'dm',
+                        'person': om.id,
+                        'members': [username, om.id],
+                        'created_by': username,
+                        'starred': False
+                    }
+                )
+        except Exception:
+            pass
+
+        broadcast_global_event('member_updated', {
+            'id': member.id,
+            'name': member.name,
+            'availability': member.availability,
+            'mode': member.mode,
+            'today': member.today
+        })
+
         return Response({
             'success': True,
             'message': 'Account registered successfully!',
@@ -189,6 +216,33 @@ class LoginView(APIView):
             return Response({'error': 'This account has been disabled. Please contact support.'}, status=status.HTTP_403_FORBIDDEN)
 
         token, _ = Token.objects.get_or_create(user=user)
+
+        # Create DM threads with all other members
+        try:
+            other_members = Member.objects.exclude(id=username)
+            for om in other_members:
+                dm_cid = get_canonical_dm_id(username, om.id)
+                ChatThread.objects.get_or_create(
+                    id=dm_cid,
+                    defaults={
+                        'name': om.name or om.id.capitalize(),
+                        'kind': 'dm',
+                        'person': om.id,
+                        'members': [username, om.id],
+                        'created_by': username,
+                        'starred': False
+                    }
+                )
+        except Exception:
+            pass
+
+        broadcast_global_event('member_updated', {
+            'id': member.id,
+            'name': member.name,
+            'availability': member.availability,
+            'mode': member.mode,
+            'today': member.today
+        })
         member = Member.objects.filter(id=user.username.lower()).first()
         if not member:
             member = Member.objects.create(
@@ -584,33 +638,7 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
 
         chat_id = msg.chat_id
 
-        broadcast_chat_event(chat_id, {
-            'type': 'chat_message_broadcast',
-            'message': {
-                'id': msg.id,
-                'chat_id': chat_id,
-                'from': msg.from_member,
-                'text': msg.text,
-                'time': msg.time_label,
-                'date': msg.created_at.strftime('%d %b %Y') if msg.created_at else '',
-                'file': msg.file,
-                'voice': msg.voice,
-                'reply_to': msg.reply_to or {},
-                'reactions': msg.reactions or {},
-                'person': target_person,
-                'members': [creator, target_person] if target_person else []
-            }
-        })
-        broadcast_global_event('new_message', {
-            'id': msg.id,
-            'chat_id': chat_id,
-            'from': msg.from_member,
-            'text': msg.text,
-            'time': msg.time_label,
-            'person': target_person,
-            'members': [creator, target_person] if target_person else []
-        })
-
+        # Always ensure the ChatThread exists before broadcasting
         if not ChatThread.objects.filter(id=chat_id).exists():
             if chat_id.startswith('proj-grp-'):
                 proj_id = chat_id.replace('proj-grp-', '')
@@ -646,6 +674,33 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                     created_by=creator
                 )
 
+        broadcast_chat_event(chat_id, {
+            'type': 'chat_message_broadcast',
+            'message': {
+                'id': msg.id,
+                'chat_id': chat_id,
+                'from': msg.from_member,
+                'text': msg.text,
+                'time': msg.time_label,
+                'date': msg.created_at.strftime('%d %b %Y') if msg.created_at else '',
+                'file': msg.file,
+                'voice': msg.voice,
+                'reply_to': msg.reply_to or {},
+                'reactions': msg.reactions or {},
+                'person': target_person,
+                'members': [creator, target_person] if target_person else []
+            }
+        })
+        broadcast_global_event('new_message', {
+            'id': msg.id,
+            'chat_id': chat_id,
+            'from': msg.from_member,
+            'text': msg.text,
+            'time': msg.time_label,
+            'person': target_person,
+            'members': [creator, target_person] if target_person else []
+        })
+
 
 class ChatThreadsView(APIView):
     """Returns all chat threads grouped with their messages, and allows creating new groups or DMs."""
@@ -653,6 +708,65 @@ class ChatThreadsView(APIView):
         user = request.user
         member_param = request.query_params.get('member')
         user_id = (user.username.lower() if (user and user.is_authenticated) else (member_param or '')).lower().strip()
+
+        # 1. Ensure any orphan chat messages have a ChatThread
+        orphan_chat_ids = list(ChatMessage.objects.values_list('chat_id', flat=True).distinct())
+        for cid in orphan_chat_ids:
+            if not ChatThread.objects.filter(id=cid).exists():
+                if cid.startswith('dm-'):
+                    parts = cid.replace('dm-', '').split('-')
+                    if len(parts) >= 2:
+                        u1, u2 = parts[0].lower().strip(), parts[1].lower().strip()
+                        canonical_cid = get_canonical_dm_id(u1, u2)
+                        p_name = u2.capitalize()
+                        mem = Member.objects.filter(id=u2).first()
+                        if mem:
+                            p_name = mem.name
+                        ChatThread.objects.get_or_create(
+                            id=canonical_cid,
+                            defaults={
+                                'name': p_name,
+                                'kind': 'dm',
+                                'person': u2,
+                                'members': [u1, u2],
+                                'created_by': u1,
+                                'starred': False
+                            }
+                        )
+                elif cid.startswith('proj-grp-'):
+                    proj_id = cid.replace('proj-grp-', '')
+                    proj = Project.objects.filter(id=proj_id).first()
+                    p_name = proj.name if proj else cid
+                    members = list(proj.team or []) if proj else []
+                    ChatThread.objects.get_or_create(
+                        id=cid,
+                        defaults={
+                            'name': p_name,
+                            'kind': 'group',
+                            'project': proj_id,
+                            'members': members,
+                            'created_by': (proj.owner if proj else 'admin'),
+                            'starred': False
+                        }
+                    )
+
+        # 2. Ensure all registered members have a DM thread
+        all_member_ids = list(Member.objects.values_list('id', flat=True))
+        for i in range(len(all_member_ids)):
+            for j in range(i + 1, len(all_member_ids)):
+                m1, m2 = all_member_ids[i].lower().strip(), all_member_ids[j].lower().strip()
+                dm_cid = get_canonical_dm_id(m1, m2)
+                if not ChatThread.objects.filter(id=dm_cid).exists():
+                    target_mem = Member.objects.filter(id=m2).first()
+                    ChatThread.objects.create(
+                        id=dm_cid,
+                        name=target_mem.name if target_mem else m2.capitalize(),
+                        kind='dm',
+                        person=m2,
+                        members=[m1, m2],
+                        created_by=m1,
+                        starred=False
+                    )
 
         threads = ChatThread.objects.all().order_by('created_at')
         result = []

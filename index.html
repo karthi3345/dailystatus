@@ -8,6 +8,20 @@
   <meta http-equiv="Expires" content="0" />
   <title>Volgo Updates – Workspace</title>
   <link rel="stylesheet" href="styles.css?v=4.1" />
+  <script>
+    (function() {
+      try {
+        var token = localStorage.getItem('kathir_auth_token');
+        if (token) {
+          document.documentElement.classList.add('is-authenticated');
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    html.is-authenticated #login { display: none !important; }
+    html:not(.is-authenticated) #app { display: none !important; }
+  </style>
 </head>
 <body>
   <!-- Fullscreen Login & Register Screen -->
@@ -231,6 +245,6 @@
       }
     };
   </script>
-  <script src="app.js?v=6.3"></script>
+  <script src="app.js?v=6.4"></script>
 </body>
 </html>
