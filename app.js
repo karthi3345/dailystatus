@@ -5343,9 +5343,9 @@ function openRegisterModal() {
             <input type="email" id="modalRegEmail" required placeholder="e.g. yourname@gmail.com" autocomplete="email" />
           </div>
           <div class="field" style="position:relative">
-            <label>Password (min 6 characters)</label>
+            <label>Password (min 8 characters, 1 caps, 1 letter, 1 symbol)</label>
             <div style="position:relative;display:flex;align-items:center">
-              <input type="password" id="modalRegPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
+              <input type="password" id="modalRegPassword" required minlength="8" placeholder="e.g. Pass@1234" style="width:100%;padding-right:38px" autocomplete="new-password" />
               <button type="button" onclick="togglePwdVis(this, 'modalRegPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
                 <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
@@ -5354,7 +5354,7 @@ function openRegisterModal() {
           <div class="field" style="position:relative">
             <label>Confirm Password</label>
             <div style="position:relative;display:flex;align-items:center">
-              <input type="password" id="modalRegConfirmPassword" required minlength="6" placeholder="••••••••" style="width:100%;padding-right:38px" autocomplete="new-password" />
+              <input type="password" id="modalRegConfirmPassword" required minlength="8" placeholder="Re-enter password" style="width:100%;padding-right:38px" autocomplete="new-password" />
               <button type="button" onclick="togglePwdVis(this, 'modalRegConfirmPassword')" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;display:flex;align-items:center;padding:4px" title="Show password">
                 <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
@@ -5430,8 +5430,23 @@ function openRegisterModal() {
       errBox.style.display = 'block';
       return;
     }
-    if (!password || password.length < 6) {
-      errBox.textContent = 'Password must be at least 6 characters.';
+    if (!password || password.length < 8) {
+      errBox.textContent = 'Password must be at least 8 characters long.';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!/[A-Z]/.test(password)) {
+      errBox.textContent = 'Password must contain at least one uppercase letter (A-Z).';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!/[a-z]/.test(password)) {
+      errBox.textContent = 'Password must contain at least one letter (a-z).';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!/[@$!%*?&#^()_\-+=\[\]{}|\\:;"'<>,./`~]/.test(password)) {
+      errBox.textContent = 'Password must contain at least one special symbol (e.g. !@#$%^&*).';
       errBox.style.display = 'block';
       return;
     }
@@ -6035,7 +6050,10 @@ function initAuthScreen() {
         if (!specRole) return fieldErr('regOtherRole', 'regOtherRoleErr', 'Please specify your role');
         role = specRole;
       }
-      if (password.length < 6) return fieldErr('regPass', 'regPassErr', 'Password must be at least 6 characters');
+      if (password.length < 8) return fieldErr('regPass', 'regPassErr', 'Password must be at least 8 characters');
+      if (!/[A-Z]/.test(password)) return fieldErr('regPass', 'regPassErr', 'Password must contain at least 1 uppercase letter (A-Z)');
+      if (!/[a-z]/.test(password)) return fieldErr('regPass', 'regPassErr', 'Password must contain at least 1 letter (a-z)');
+      if (!/[@$!%*?&#^()_\-+=\[\]{}|\\:;"'<>,./`~]/.test(password)) return fieldErr('regPass', 'regPassErr', 'Password must contain at least 1 special symbol (e.g. !@#$%^&*)');
       if (password !== confirm_password) return fieldErr('regConfirm', 'regConfirmErr', 'Passwords do not match');
       if (!terms) {
         $('#regTermsErr').textContent = 'Please accept the terms to continue';

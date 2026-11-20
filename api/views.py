@@ -82,16 +82,7 @@ class RegisterView(APIView):
             return Response({'error': 'Please enter a valid email address (e.g. yourname@gmail.com).'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not username:
-            base_user = re.sub(r'[^a-zA-Z0-9_]', '', email.split('@')[0])
-            if len(base_user) < 3:
-                base_user = f"user_{base_user}"
-            username = base_user[:25]
-            cand = username
-            counter = 1
-            while User.objects.filter(username__iexact=cand).exists():
-                cand = f"{username[:22]}_{counter}"
-                counter += 1
-            username = cand
+            return Response({'error': 'Please choose a username.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if len(username) < 3 or len(username) > 30:
             return Response({'error': 'Username must be between 3 and 30 characters.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -99,24 +90,34 @@ class RegisterView(APIView):
         if not re.match(r'^[a-zA-Z0-9_]+$', username):
             return Response({'error': 'Username can only contain letters, numbers, and underscores.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Unique checks: Username and Email CANNOT be duplicates
+        if User.objects.filter(username__iexact=username).exists() or Member.objects.filter(id__iexact=username).exists():
+            return Response({'error': 'Username already exists. Please choose a different username.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(email__iexact=email).exists():
+            return Response({'error': 'Email address already exists. Please use a different email or sign in.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Password and Confirm Password validations
         if not password:
             return Response({'error': 'Please enter a password.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if len(password) < 6:
-            return Response({'error': 'Password must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(password) < 8:
+            return Response({'error': 'Password must be at least 8 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not re.search(r'[A-Z]', password):
+            return Response({'error': 'Password must contain at least one uppercase letter (A-Z).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not re.search(r'[a-z]', password):
+            return Response({'error': 'Password must contain at least one letter (a-z).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not re.search(r'[@$!%*?&#^()_\-+=\[\]{}|\\:;"\'<>,./`~]', password):
+            return Response({'error': 'Password must contain at least one special symbol (e.g. !@#$%^&*).'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not confirm_password:
             return Response({'error': 'Please confirm your password.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if password != confirm_password:
             return Response({'error': 'Passwords do not match. Please verify and re-enter.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Unique checks
-        if User.objects.filter(username__iexact=username).exists():
-            return Response({'error': 'This username is already taken. Please choose another username.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if User.objects.filter(email__iexact=email).exists():
-            return Response({'error': 'An account with this email address already exists. Please sign in.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create user
         user = User.objects.create_user(
