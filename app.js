@@ -2576,8 +2576,31 @@ function sendMessage(text, file, voice) {
     rerender();
   }
 
-  // Transport: If WebSocket is open, send via WebSocket ONLY (backend saves to DB and broadcasts).
-  // If WebSocket is not open (e.g. serverless fallback), fall back to REST API.
+  // 1. Instant real-time broadcast via Supabase Realtime (latency < 100ms)
+  if (realtimeChannel && isSupabaseConnected) {
+    try {
+      realtimeChannel.send({
+        type: 'broadcast',
+        event: 'new_message',
+        payload: {
+          id: newMsg.id,
+          chat_id: c.id,
+          from: currentSender,
+          text: msgContent,
+          time: newMsg.time,
+          date: newMsg.date,
+          file_info: newMsg.file_info,
+          file: newMsg.file,
+          voice: newMsg.voice,
+          reply_to: newMsg.reply_to,
+          reactions: {}
+        }
+      });
+    } catch (_) {}
+  }
+
+  // 2. Transport: If Django WebSocket is open, send via WebSocket (saves to DB and broadcasts locally).
+  // Otherwise, persist to database via REST API.
   if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN) {
     try {
       activeChatSocket.send(JSON.stringify({
@@ -2654,6 +2677,21 @@ async function toggleMessageReaction(c, msgIdx, emoji) {
     updateReactionPillsDOM(m.id, m.reactions);
   } else {
     rerender();
+  }
+
+  // Broadcast reaction instantly via Supabase
+  if (realtimeChannel && isSupabaseConnected && m.id) {
+    try {
+      realtimeChannel.send({
+        type: 'broadcast',
+        event: 'reaction_update',
+        payload: {
+          msg_id: m.id,
+          emoji: emoji,
+          reactions: m.reactions
+        }
+      });
+    } catch (_) {}
   }
 
   if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN && m.id) {
@@ -4576,11 +4614,78 @@ async function fetchFromAPI(endpoint, options = {}) {
   }
 }
 
-/* ---------------- Django Channels & Redis WebSocket Integration ---------------- */
+/* ---------------- Supabase Realtime & WebSocket Integration ---------------- */
+const SUPABASE_REALTIME_URL = "https://fxzaxavtwvnkrsyacpyg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_QKHHiltTGVUZuF4eUeFilg_h9-K7uN3";
+let supabaseClient = null;
+let realtimeChannel = null;
+let isSupabaseConnected = false;
+
+function initSupabaseRealtime() {
+  if (realtimeChannel && isSupabaseConnected) return;
+  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+    startRealtimePolling();
+    return;
+  }
+  try {
+    if (!supabaseClient) {
+      supabaseClient = window.supabase.createClient(SUPABASE_REALTIME_URL, SUPABASE_ANON_KEY);
+    }
+    if (realtimeChannel) {
+      try { supabaseClient.removeChannel(realtimeChannel); } catch (_) {}
+    }
+    realtimeChannel = supabaseClient.channel('volgo-realtime', {
+      config: { broadcast: { self: false } }
+    });
+
+    realtimeChannel
+      .on('broadcast', { event: 'new_message' }, (evt) => {
+        if (evt && evt.payload) {
+          handleNewSocketMessage(evt.payload);
+        }
+      })
+      .on('broadcast', { event: 'reaction_update' }, (evt) => {
+        if (evt && evt.payload) {
+          const p = evt.payload;
+          handleReactionUpdate(p.msg_id, p.emoji, p.reactions);
+        }
+      })
+      .on('broadcast', { event: 'typing' }, (evt) => {
+        if (evt && evt.payload) {
+          handleTypingEvent(evt.payload.user, evt.payload.is_typing);
+        }
+      })
+      .on('broadcast', { event: 'global_event' }, (evt) => {
+        if (evt && evt.payload) {
+          handleGlobalRealtimeEvent(evt.payload.event, evt.payload.data);
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('⚡ Connected to Supabase Realtime (Instant live messaging)');
+          isSupabaseConnected = true;
+          stopRealtimePolling();
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          isSupabaseConnected = false;
+          startRealtimePolling();
+        }
+      });
+  } catch (err) {
+    console.error('Supabase Realtime init error:', err);
+    startRealtimePolling();
+  }
+}
+
 let globalEventSocket = null;
 let globalEventRetryTimer = null;
 
 function initGlobalEventSocket() {
+  initSupabaseRealtime();
+  if (location.hostname.includes('vercel.app')) {
+    if (!isSupabaseConnected) startRealtimePolling();
+    return;
+  }
+
   if (globalEventSocket && (globalEventSocket.readyState === WebSocket.OPEN || globalEventSocket.readyState === WebSocket.CONNECTING)) {
     return;
   }
@@ -4592,7 +4697,7 @@ function initGlobalEventSocket() {
 
     globalEventSocket.onopen = () => {
       console.log('⚡ Django Channels Global Event WebSocket connected');
-      stopRealtimePolling(); // WebSockets are handling real-time push!
+      stopRealtimePolling();
       if (globalEventRetryTimer) {
         clearTimeout(globalEventRetryTimer);
         globalEventRetryTimer = null;
@@ -4607,7 +4712,6 @@ function initGlobalEventSocket() {
     };
 
     globalEventSocket.onclose = () => {
-      // WebSocket lost: activate low-frequency fallback polling
       startRealtimePolling();
       if (!globalEventRetryTimer) {
         globalEventRetryTimer = setTimeout(() => {
@@ -4641,20 +4745,18 @@ function stopRealtimePolling() {
 }
 
 function startRealtimePolling() {
-  // If WebSocket is alive and working, skip polling completely
-  if (globalEventSocket && globalEventSocket.readyState === WebSocket.OPEN) {
+  if (isSupabaseConnected) {
     stopRealtimePolling();
     return;
   }
   if (realtimePollTimer) return;
 
-  // Bandwidth-safe interval: 20 seconds fallback (only runs if WebSocket is disconnected)
+  const pollInterval = location.hash.startsWith('#/messenger') ? 5000 : 25000;
   realtimePollTimer = setInterval(async () => {
-    if (globalEventSocket && globalEventSocket.readyState === WebSocket.OPEN) {
+    if (isSupabaseConnected) {
       stopRealtimePolling();
       return;
     }
-    // Skip polling if user minimized or switched tab to save Vercel bandwidth
     if (document && document.hidden) return;
     if (!AUTH_TOKEN) return;
 
@@ -4709,17 +4811,24 @@ function startRealtimePolling() {
                 if (lastM) updateChatListPreview(curChat.id, lastM);
                 markChatAsSeen(curChat.id);
               }
-            } else {
-              rerender();
             }
           }
         }
       }
     } catch (_) {}
-  }, 20000);
+  }, pollInterval);
 }
 
 function broadcastGlobalEventSocket(event, data) {
+  if (realtimeChannel && isSupabaseConnected) {
+    try {
+      realtimeChannel.send({
+        type: 'broadcast',
+        event: 'global_event',
+        payload: { event, data }
+      });
+    } catch (_) {}
+  }
   if (globalEventSocket && globalEventSocket.readyState === WebSocket.OPEN) {
     try {
       globalEventSocket.send(JSON.stringify({ event, data }));
@@ -4831,6 +4940,10 @@ let typingTimeout = null;
 
 function connectChatSocket(chatId) {
   if (!chatId) return;
+  if (location.hostname.includes('vercel.app')) {
+    // Vercel serverless does not support persistent WebSockets; Supabase Realtime handles live messaging.
+    return;
+  }
   if (currentChatSocketId === chatId && activeChatSocket && (activeChatSocket.readyState === WebSocket.OPEN || activeChatSocket.readyState === WebSocket.CONNECTING)) {
     return;
   }
@@ -4959,6 +5072,18 @@ function updateTypingIndicatorUI() {
 }
 
 function sendTypingSignal(isTyping) {
+  if (realtimeChannel && isSupabaseConnected) {
+    try {
+      realtimeChannel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+          user: (PEOPLE[ME] && PEOPLE[ME].name) || ME || 'User',
+          is_typing: isTyping
+        }
+      });
+    } catch (_) {}
+  }
   if (activeChatSocket && activeChatSocket.readyState === WebSocket.OPEN) {
     try {
       activeChatSocket.send(JSON.stringify({
@@ -5874,7 +5999,7 @@ async function apiSendMessage(chatId, messageData) {
   });
 }
 
-async function loadInitialData() {
+async function loadInitialData(skipRerender = false) {
   AUTH_TOKEN = localStorage.getItem('kathir_auth_token') || null;
   ME = localStorage.getItem('kathir_auth_user') || null;
   checkInitialAuthView();
@@ -5981,7 +6106,9 @@ async function loadInitialData() {
   deduplicateChats();
   calculateUnreadCounts();
   refreshSide();
-  route();
+  if (!skipRerender) {
+    route();
+  }
   initGlobalEventSocket();
   startRealtimePolling();
 }
@@ -6271,7 +6398,7 @@ function initAuthScreen() {
 
         refreshSide();
         toast(`Welcome back, ${data.user.name}! 👋`);
-        await loadInitialData();
+        await loadInitialData(true);
         go('#/projects');
       } catch (err) {
         // Fallback for demo login
@@ -6372,7 +6499,7 @@ function initAuthScreen() {
 
         refreshSide();
         toast(`Account created! Welcome to Volgo Updates, ${name}! 🎉`);
-        await loadInitialData();
+        await loadInitialData(true);
         go('#/projects');
       } catch (err) {
         regAlert.textContent = (err && err.message) ? err.message : 'Server error during registration. Please try again.';
@@ -6437,4 +6564,4 @@ window.addEventListener('hashchange', () => {
 if (AUTH_TOKEN) {
   route();
 }
-loadInitialData();
+loadInitialData(true);

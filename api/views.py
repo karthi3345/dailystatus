@@ -1,3 +1,7 @@
+import os
+import json
+import urllib.request
+import logging
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework import viewsets, status
@@ -15,7 +19,38 @@ from .serializers import (
     DailyWorkLogSerializer, ChatMessageSerializer
 )
 
+logger = logging.getLogger(__name__)
+
+def broadcast_to_supabase(event_name, payload):
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_SECRET_KEY') or os.getenv('SUPABASE_PUBLISHABLE_KEY')
+    if not supabase_url or not supabase_key:
+        return
+    try:
+        url = f"{supabase_url.rstrip('/')}/realtime/v1/api/broadcast"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({
+                'messages': [
+                    {
+                        'topic': 'realtime:volgo-chat',
+                        'event': event_name,
+                        'payload': payload
+                    }
+                ]
+            }).encode('utf-8'),
+            headers={
+                'apikey': supabase_key,
+                'Authorization': f'Bearer {supabase_key}',
+                'Content-Type': 'application/json'
+            }
+        )
+        urllib.request.urlopen(req, timeout=3)
+    except Exception as e:
+        logger.debug(f"Supabase broadcast notice: {e}")
+
 def broadcast_global_event(event_name, data):
+    broadcast_to_supabase('global_event', {'event': event_name, 'data': data})
     try:
         channel_layer = get_channel_layer()
         if channel_layer:
@@ -37,6 +72,14 @@ def get_canonical_dm_id(u1, u2):
     return f"dm-{sorted_users[0]}-{sorted_users[1]}"
 
 def broadcast_chat_event(chat_id, event_dict):
+    ev_type = event_dict.get('type')
+    if ev_type == 'chat_message_broadcast':
+        broadcast_to_supabase('new_message', event_dict.get('message'))
+    elif ev_type == 'chat_reaction_broadcast':
+        broadcast_to_supabase('reaction_update', event_dict)
+    elif ev_type == 'chat_typing_broadcast':
+        broadcast_to_supabase('typing', event_dict)
+
     try:
         channel_layer = get_channel_layer()
         if channel_layer:
