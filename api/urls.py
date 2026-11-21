@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     RegisterView, LoginView, MeView, LogoutView,
     MemberViewSet, ProjectViewSet, TaskViewSet,
-    DailyWorkLogViewSet, ChatMessageViewSet, ChatThreadsView, AddChatMemberView, StatsView
+    DailyWorkLogViewSet, ChatMessageViewSet, ChatThreadsView, AddChatMemberView, StatsView,
+    ChatMediaUploadView
 )
 
 router = DefaultRouter()
@@ -20,6 +21,7 @@ urlpatterns = [
     path('auth/logout/', LogoutView.as_view(), name='auth-logout'),
     path('chats/', ChatThreadsView.as_view(), name='chat-threads'),
     path('chats/<str:chat_id>/add-member/', AddChatMemberView.as_view(), name='chat-add-member'),
+    path('upload/', ChatMediaUploadView.as_view(), name='chat-media-upload'),
     path('stats/', StatsView.as_view(), name='api-stats'),
     path('', include(router.urls)),
 ]

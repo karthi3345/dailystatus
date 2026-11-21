@@ -1146,3 +1146,23 @@ class StatsView(APIView):
             'completed_tasks': completed_tasks,
             'total_members': members_count,
         })
+
+
+class ChatMediaUploadView(APIView):
+    """Handles documents, images, and audio uploads to Google Drive or media storage."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        if 'file' not in request.FILES:
+            return Response({'error': 'No file uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        uploaded = request.FILES['file']
+        if uploaded.size > 25 * 1024 * 1024:
+            return Response({'error': 'File size exceeds 25MB limit.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from api.storage_service import handle_chat_media_upload
+        res = handle_chat_media_upload(uploaded)
+        if not res or not res.get('success'):
+            return Response({'error': 'Failed to process media upload.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(res, status=status.HTTP_201_CREATED)

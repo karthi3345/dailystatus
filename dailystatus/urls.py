@@ -14,4 +14,5 @@ urlpatterns = [
     path('volgo-logo.png', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'volgo-logo.png'}),
     path('volgo-icon.png', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'volgo-icon.png'}),
     path('favicon.ico', never_cache(serve), {'document_root': settings.BASE_DIR, 'path': 'favicon.ico'}),
+    path('media/<path:path>', serve, {'document_root': settings.BASE_DIR / 'media'}),
 ]

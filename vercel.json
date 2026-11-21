@@ -12,6 +12,31 @@
   ],
   "routes": [
     {
+      "src": "/(styles\\.css|app\\.js|volgo-logo\\.png|volgo-icon\\.png|favicon\\.ico)",
+      "dest": "/$1",
+      "headers": {
+        "cache-control": "public, max-age=86400, stale-while-revalidate=604800"
+      }
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/staticfiles/$1",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "dailystatus/wsgi.py",
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "dailystatus/wsgi.py"
+    },
+    {
       "src": "/(.*)",
       "dest": "dailystatus/wsgi.py",
       "headers": {

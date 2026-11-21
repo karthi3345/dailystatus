@@ -1523,6 +1523,33 @@ function cancelVoiceRecording() {
   rerender();
 }
 
+async function uploadMediaBlob(blob, filename) {
+  try {
+    const fd = new FormData();
+    fd.append('file', blob, filename || 'upload');
+    const headers = {};
+    if (AUTH_TOKEN) headers['Authorization'] = `Token ${AUTH_TOKEN}`;
+    const res = await fetch(`${API_BASE}/upload/`, {
+      method: 'POST',
+      headers,
+      body: fd
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.url) return data.url;
+    }
+  } catch (e) {
+    console.warn('Upload endpoint error, falling back:', e);
+  }
+  // Fallback to DataURL only if upload endpoint is unreachable
+  return await new Promise(r => {
+    const reader = new FileReader();
+    reader.onloadend = () => r(reader.result || '');
+    reader.onerror = () => r('');
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function finishVoiceRecording() {
   clearInterval(voiceTimerInterval);
   const totalSecs = Math.max(1, voiceRecordSeconds || 1);
@@ -1530,31 +1557,21 @@ async function finishVoiceRecording() {
   const s = String(totalSecs % 60).padStart(2, '0');
   const durStr = `${m}:${s}`;
 
-  let audioUrl = '';
+  let audioBlob = null;
   if (voiceMediaRecorder && voiceMediaRecorder.state !== 'inactive') {
-    audioUrl = await new Promise((resolve) => {
+    audioBlob = await new Promise((resolve) => {
       voiceMediaRecorder.onstop = () => {
         if (voiceAudioChunks.length) {
           const mimeType = voiceMediaRecorder.mimeType || 'audio/webm';
-          const blob = new Blob(voiceAudioChunks, { type: mimeType });
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result || '');
-          reader.onerror = () => resolve('');
-          reader.readAsDataURL(blob);
+          resolve(new Blob(voiceAudioChunks, { type: mimeType }));
         } else {
-          resolve('');
+          resolve(null);
         }
       };
-      try { voiceMediaRecorder.stop(); } catch (e) { resolve(''); }
+      try { voiceMediaRecorder.stop(); } catch (e) { resolve(null); }
     });
   } else if (voiceAudioChunks.length) {
-    audioUrl = await new Promise((resolve) => {
-      const blob = new Blob(voiceAudioChunks, { type: 'audio/webm' });
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result || '');
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(blob);
-    });
+    audioBlob = new Blob(voiceAudioChunks, { type: 'audio/webm' });
   }
 
   if (state.voiceAudioStream) {
@@ -1566,6 +1583,12 @@ async function finishVoiceRecording() {
 
   state.isRecordingVoice = false;
   state.voiceSeconds = 0;
+
+  let audioUrl = '';
+  if (audioBlob) {
+    toast('Uploading voice note... 🎙️');
+    audioUrl = await uploadMediaBlob(audioBlob, `voice_${Date.now()}.webm`);
+  }
 
   sendMessage('', null, {
     type: 'voice',
@@ -1845,27 +1868,24 @@ function downloadAttachment(msgIdx) {
   toast(`Downloading ${fileName}...`);
 }
 
-function handleChatFileDrop(files) {
+async function handleChatFileDrop(files) {
   if (!files || !files.length) return;
-  Array.from(files).forEach(f => {
-    if (f.size > 15 * 1024 * 1024) {
-      toast(`File "${f.name}" exceeds 15MB limit`);
-      return;
+  for (const f of Array.from(files)) {
+    if (f.size > 25 * 1024 * 1024) {
+      toast(`File "${f.name}" exceeds 25MB limit`);
+      continue;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const sizeStr = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB';
-      sendMessage('', {
-        name: f.name,
-        size: sizeStr,
-        type: f.type || 'application/octet-stream',
-        url: dataUrl
-      });
-      toast(`Sent "${f.name}"`);
-    };
-    reader.readAsDataURL(f);
-  });
+    toast(`Uploading "${f.name}"... ⏳`);
+    const sizeStr = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB';
+    const uploadedUrl = await uploadMediaBlob(f, f.name);
+    sendMessage('', {
+      name: f.name,
+      size: sizeStr,
+      type: f.type || 'application/octet-stream',
+      url: uploadedUrl
+    });
+    toast(`Sent "${f.name}" ✅`);
+  }
 }
 
 function renderChatMessageHtml(m, idx, lastDateLabel = null) {
@@ -4572,6 +4592,7 @@ function initGlobalEventSocket() {
 
     globalEventSocket.onopen = () => {
       console.log('⚡ Django Channels Global Event WebSocket connected');
+      stopRealtimePolling(); // WebSockets are handling real-time push!
       if (globalEventRetryTimer) {
         clearTimeout(globalEventRetryTimer);
         globalEventRetryTimer = null;
@@ -4586,11 +4607,13 @@ function initGlobalEventSocket() {
     };
 
     globalEventSocket.onclose = () => {
+      // WebSocket lost: activate low-frequency fallback polling
+      startRealtimePolling();
       if (!globalEventRetryTimer) {
         globalEventRetryTimer = setTimeout(() => {
           globalEventRetryTimer = null;
           initGlobalEventSocket();
-        }, 3000);
+        }, 5000);
       }
     };
 
@@ -4598,20 +4621,43 @@ function initGlobalEventSocket() {
       try { globalEventSocket.close(); } catch (_) {}
     };
   } catch (err) {
+    startRealtimePolling();
     if (!globalEventRetryTimer) {
       globalEventRetryTimer = setTimeout(() => {
         globalEventRetryTimer = null;
         initGlobalEventSocket();
-      }, 5000);
+      }, 7000);
     }
   }
 }
 
 let realtimePollTimer = null;
+
+function stopRealtimePolling() {
+  if (realtimePollTimer) {
+    clearInterval(realtimePollTimer);
+    realtimePollTimer = null;
+  }
+}
+
 function startRealtimePolling() {
+  // If WebSocket is alive and working, skip polling completely
+  if (globalEventSocket && globalEventSocket.readyState === WebSocket.OPEN) {
+    stopRealtimePolling();
+    return;
+  }
   if (realtimePollTimer) return;
+
+  // Bandwidth-safe interval: 20 seconds fallback (only runs if WebSocket is disconnected)
   realtimePollTimer = setInterval(async () => {
+    if (globalEventSocket && globalEventSocket.readyState === WebSocket.OPEN) {
+      stopRealtimePolling();
+      return;
+    }
+    // Skip polling if user minimized or switched tab to save Vercel bandwidth
+    if (document && document.hidden) return;
     if (!AUTH_TOKEN) return;
+
     try {
       const freshChats = await fetchFromAPI('/chats/');
       if (Array.isArray(freshChats) && freshChats.length) {
@@ -4670,7 +4716,7 @@ function startRealtimePolling() {
         }
       }
     } catch (_) {}
-  }, 1800);
+  }, 20000);
 }
 
 function broadcastGlobalEventSocket(event, data) {
