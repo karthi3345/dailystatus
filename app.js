@@ -2444,12 +2444,13 @@ function calculateUnreadCounts() {
       return;
     }
 
-    if (lastSeenId === undefined) {
+    if (lastSeenId === undefined || lastSeenId === null) {
+      // User has not explicitly opened this chat on this device: count all messages from others
       const fromOthers = c.msgs.filter(m => {
         const f = (m.from || '').toLowerCase().trim();
         return f && f !== myId;
       }).length;
-      c.unread = c.unread !== undefined ? c.unread : fromOthers;
+      c.unread = fromOthers;
     } else {
       let count = 0;
       let found = false;
@@ -2462,7 +2463,8 @@ function calculateUnreadCounts() {
         const f = (m.from || '').toLowerCase().trim();
         if (f && f !== myId) count++;
       }
-      c.unread = found ? count : (c.unread || 0);
+      // If found, unread count is the exact diff. If lastSeenId not found (stale ID), count from others.
+      c.unread = found ? count : c.msgs.filter(m => (m.from || '').toLowerCase().trim() !== myId).length;
     }
   });
 
@@ -2504,11 +2506,20 @@ function markChatAsSeen(chatId) {
 
 function updateMsgDot() {
   const dot = $('#msgDot');
-  if (!dot) return;
   const totalUnread = chats.reduce((sum, c) => {
     if (!c || !canAccessChat(c, ME)) return sum;
     return sum + (Number(c.unread) || 0);
   }, 0);
+
+  // Update browser tab document title e.g. "(3) Volgo Updates – Workspace"
+  const baseTitle = 'Volgo Updates – Workspace';
+  if (totalUnread > 0) {
+    document.title = `(${totalUnread}) ${baseTitle}`;
+  } else {
+    document.title = baseTitle;
+  }
+
+  if (!dot) return;
 
   if (totalUnread > 0) {
     dot.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
@@ -5040,7 +5051,10 @@ function handleNewSocketMessage(msg) {
     markChatAsSeen(c.id);
   } else {
     if (!isMe) {
-      c.unread = (c.unread || 0) + 1;
+      c.unread = (Number(c.unread) || 0) + 1;
+      const senderName = (PEOPLE[sender] && PEOPLE[sender].name) || sender || 'Teammate';
+      const previewText = (msg.text || (msg.file ? 'Sent an attachment' : 'Sent a voice note') || '').split('\n')[0].slice(0, 50);
+      toast(`💬 ${esc(senderName)}: ${esc(previewText)}`);
     }
     updateChatListPreview(c.id, msg);
     updateMsgDot();

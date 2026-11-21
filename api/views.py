@@ -33,7 +33,7 @@ def broadcast_to_supabase(event_name, payload):
             data=json.dumps({
                 'messages': [
                     {
-                        'topic': 'realtime:volgo-chat',
+                        'topic': 'realtime:volgo-realtime',
                         'event': event_name,
                         'payload': payload
                     }
